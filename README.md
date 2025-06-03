@@ -108,4 +108,8 @@ __pycache__/
 
 ## Author
 
-@your-team
+@VitalySemenov
+
+![MIT License](https://img.shields.io/badge/license-MIT-green)
+![Docker](https://img.shields.io/badge/docker-ready-blue)
+![Helm](https://img.shields.io/badge/helm-chart-blue)
