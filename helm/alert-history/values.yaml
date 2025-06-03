@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: ipiton/alertanalize
+  tag: 0.0.5
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources: {}
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
