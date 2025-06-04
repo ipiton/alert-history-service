@@ -7,6 +7,18 @@ Helm-чарт для деплоя Alertmanager Alert History Webhook Receiver
 - Хранение истории алертов в SQLite (stateful PVC)
 - Выдача истории по HTTP (`/history`)
 
+## Мониторинг и метрики
+
+- Сервис экспортирует метрики Prometheus на эндпоинте `/metrics` (порт 8080).
+- Включён ServiceMonitor для автоматического сбора метрик (если установлен kube-prometheus-stack).
+- Экспортируются метрики:
+  - `alert_history_webhook_events_total` — события webhook (по статусу, alertname, namespace)
+  - `alert_history_webhook_errors_total` — ошибки обработки webhook
+  - `alert_history_history_queries_total` — запросы к истории
+  - `alert_history_report_queries_total` — запросы к аналитике
+  - `alert_history_db_alerts` — количество алертов в базе
+  - `alert_history_request_latency_seconds` — время обработки запросов (гистограмма)
+
 ## Быстрый старт
 
 1. Соберите Docker-образ:
@@ -55,6 +67,27 @@ curl 'http://localhost:8080/history?alertname=CPUThrottlingHigh&status=firing&si
 
 ## PVC
 История алертов хранится в `/data/alert_history.sqlite3` (persistent volume).
+
+## Пример ServiceMonitor
+
+ServiceMonitor создаётся автоматически:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: <release>-alert-history
+spec:
+  selector:
+    matchLabels:
+      app: alert-history
+      release: <release>
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+```
 
 ---
 
