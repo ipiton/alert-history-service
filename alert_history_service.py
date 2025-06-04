@@ -19,6 +19,10 @@ from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi import Form
 from fastapi.responses import HTMLResponse
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+import threading
+import time
 
 DB_PATH = os.environ.get("ALERT_HISTORY_DB", "alert_history.sqlite3")
 
@@ -83,33 +87,67 @@ def event_is_duplicate(conn, alertname, fingerprint, status, labels, startsAt, e
     ''', (alertname, fingerprint, status, labels, startsAt, endsAt))
     return c.fetchone() is not None
 
+# --- PROMETHEUS METRICS ---
+WEBHOOK_EVENTS = Counter('alert_history_webhook_events_total', 'Всего принятых событий webhook', ['status', 'alertname', 'namespace'])
+WEBHOOK_ERRORS = Counter('alert_history_webhook_errors_total', 'Ошибки обработки webhook')
+HISTORY_QUERIES = Counter('alert_history_history_queries_total', 'Запросы к истории')
+REPORT_QUERIES = Counter('alert_history_report_queries_total', 'Запросы к аналитике')
+DB_ALERTS = Gauge('alert_history_db_alerts', 'Количество алертов в базе')
+REQUEST_LATENCY = Histogram('alert_history_request_latency_seconds', 'Время обработки запроса', ['endpoint'])
+
+# --- PATCH DB INIT ---
+def count_alerts():
+    try:
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT COUNT(*) FROM alert_history')
+            cnt = c.fetchone()[0]
+            DB_ALERTS.set(cnt)
+    except Exception:
+        pass
+
+def prometheus_updater():
+    while True:
+        count_alerts()
+        import time
+        time.sleep(30)
+
+threading.Thread(target=prometheus_updater, daemon=True).start()
+
 # --- WEBHOOK ENDPOINT ---
 @app.post("/webhook")
 async def webhook(request: Request):
-    payload = await request.json()
-    now = datetime.utcnow().isoformat()
-    alerts = payload.get("alerts", [])
-    saved = 0
-    with get_db() as conn:
-        for alert in alerts:
-            alertname = alert.get("labels", {}).get("alertname")
-            namespace = alert.get("labels", {}).get("namespace", "")
-            fingerprint = alert.get("fingerprint") or alert.get("generatorURL") or ""
-            status = alert.get("status")
-            labels = json.dumps(alert.get("labels", {}), sort_keys=True)
-            startsAt = alert.get("startsAt")
-            endsAt = alert.get("endsAt")
-            raw_json = json.dumps(alert, ensure_ascii=False)
-            # Не пишем полностью идентичные подряд
-            if event_is_duplicate(conn, alertname, fingerprint, status, labels, startsAt, endsAt):
-                continue
-            conn.execute('''
-                INSERT INTO alert_history (alertname, fingerprint, status, labels, startsAt, endsAt, updatedAt, raw_json, namespace)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (alertname, fingerprint, status, labels, startsAt, endsAt, now, raw_json, namespace))
-            saved += 1
-        conn.commit()
-    return {"result": "ok", "saved": saved}
+    start = time.time()
+    try:
+        payload = await request.json()
+        now = datetime.utcnow().isoformat()
+        alerts = payload.get("alerts", [])
+        saved = 0
+        with get_db() as conn:
+            for alert in alerts:
+                alertname = alert.get("labels", {}).get("alertname", "unknown")
+                namespace = alert.get("labels", {}).get("namespace", "")
+                fingerprint = alert.get("fingerprint") or alert.get("generatorURL") or ""
+                status = alert.get("status", "unknown")
+                labels = json.dumps(alert.get("labels", {}), sort_keys=True)
+                startsAt = alert.get("startsAt")
+                endsAt = alert.get("endsAt")
+                raw_json = json.dumps(alert, ensure_ascii=False)
+                if event_is_duplicate(conn, alertname, fingerprint, status, labels, startsAt, endsAt):
+                    continue
+                conn.execute('''
+                    INSERT INTO alert_history (alertname, fingerprint, status, labels, startsAt, endsAt, updatedAt, raw_json, namespace)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (alertname, fingerprint, status, labels, startsAt, endsAt, now, raw_json, namespace))
+                saved += 1
+                WEBHOOK_EVENTS.labels(status=status, alertname=alertname, namespace=namespace).inc()
+            conn.commit()
+        REQUEST_LATENCY.labels(endpoint="/webhook").observe(time.time() - start)
+        return {"result": "ok", "saved": saved}
+    except Exception as e:
+        WEBHOOK_ERRORS.inc()
+        REQUEST_LATENCY.labels(endpoint="/webhook").observe(time.time() - start)
+        raise
 
 # --- HISTORY ENDPOINT ---
 @app.get("/history")
@@ -123,6 +161,8 @@ async def history(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
+    start = time.time()
+    HISTORY_QUERIES.inc()
     q = "SELECT alertname, fingerprint, status, labels, startsAt, endsAt, updatedAt, namespace FROM alert_history WHERE 1=1"
     params = []
     if alertname:
@@ -162,6 +202,7 @@ async def history(
         }
         for r in rows
     ]
+    REQUEST_LATENCY.labels(endpoint="/history").observe(time.time() - start)
     return JSONResponse(result)
 
 # --- REPORT ENDPOINT ---
@@ -180,6 +221,8 @@ async def report(
     - Flapping (кол-во смен статуса)
     - Суммарная статистика
     """
+    start = time.time()
+    REPORT_QUERIES.inc()
     q = "SELECT alertname, status, updatedAt, namespace FROM alert_history WHERE 1=1"
     params = []
     if alertname:
@@ -224,6 +267,7 @@ async def report(
         "top_alerts": [ {"alertname": k[0], "namespace": k[1], "events": v} for k, v in event_counter.most_common(top) ],
         "flapping_alerts": flapping[:top],
     }
+    REQUEST_LATENCY.labels(endpoint="/report").observe(time.time() - start)
     return summary
 
 # --- DASHBOARD ENDPOINT ---
@@ -384,3 +428,7 @@ def fill_namespaces():
                 continue
         conn.commit()
     return {"updated": updated}
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
