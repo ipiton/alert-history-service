@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
@@ -25,6 +25,7 @@ import threading
 import time
 
 DB_PATH = os.environ.get("ALERT_HISTORY_DB", "alert_history.sqlite3")
+RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", "30"))
 
 app = FastAPI(title="Alertmanager Alert History Service")
 
@@ -432,3 +433,23 @@ def fill_namespaces():
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+# --- CLEANUP FUNCTION ---
+def cleanup_old_data():
+    """Удаляет данные старше RETENTION_DAYS дней"""
+    while True:
+        try:
+            cutoff_date = (datetime.utcnow() - timedelta(days=RETENTION_DAYS)).isoformat()
+            with get_db() as conn:
+                c = conn.cursor()
+                c.execute("DELETE FROM alert_history WHERE updatedAt < ?", (cutoff_date,))
+                deleted = c.rowcount
+                conn.commit()
+                if deleted > 0:
+                    print(f"Cleaned up {deleted} old records")
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        time.sleep(3600)  # Проверяем каждый час
+
+# Запускаем очистку в отдельном потоке
+threading.Thread(target=cleanup_old_data, daemon=True).start()

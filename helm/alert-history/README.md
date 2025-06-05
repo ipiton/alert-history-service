@@ -64,9 +64,10 @@ curl 'http://localhost:8080/history?alertname=CPUThrottlingHigh&status=firing&si
 - `persistence.enabled` — включить PVC
 - `persistence.size` — размер PVC
 - `service.port` — порт сервиса
+- `retentionDays` — период хранения истории алертов в днях (по умолчанию 30)
 
 ## PVC
-История алертов хранится в `/data/alert_history.sqlite3` (persistent volume).
+История алертов хранится в `/data/alert_history.sqlite3` (persistent volume). Старые записи автоматически удаляются через `retentionDays` дней.
 
 ## Пример ServiceMonitor
 
