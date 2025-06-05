@@ -1,50 +1,50 @@
 # alert-history
 
-Helm-чарт для деплоя Alertmanager Alert History Webhook Receiver
+Helm-chart for deploying Alertmanager Alert History Webhook Receiver
 
-## Возможности
-- Приём webhook событий от Alertmanager (`/webhook`)
-- Хранение истории алертов в SQLite (stateful PVC)
-- Выдача истории по HTTP (`/history`)
+## Features
+- Receiving webhook events from Alertmanager (`/webhook`)
+- Storing alert history in SQLite (stateful PVC)
+- Providing history via HTTP (`/history`)
 
-## Мониторинг и метрики
+## Monitoring and Metrics
 
-- Сервис экспортирует метрики Prometheus на эндпоинте `/metrics` (порт 8080).
-- Включён ServiceMonitor для автоматического сбора метрик (если установлен kube-prometheus-stack).
-- Экспортируются метрики:
-  - `alert_history_webhook_events_total` — события webhook (по статусу, alertname, namespace)
-  - `alert_history_webhook_errors_total` — ошибки обработки webhook
-  - `alert_history_history_queries_total` — запросы к истории
-  - `alert_history_report_queries_total` — запросы к аналитике
-  - `alert_history_db_alerts` — количество алертов в базе
-  - `alert_history_request_latency_seconds` — время обработки запросов (гистограмма)
+- Service exports Prometheus metrics on the `/metrics` endpoint (port 8080).
+- ServiceMonitor is enabled for automatic metric collection (if kube-prometheus-stack is installed).
+- Metrics exported:
+  - `alert_history_webhook_events_total` — webhook events (by status, alertname, namespace)
+  - `alert_history_webhook_errors_total` — webhook processing errors
+  - `alert_history_history_queries_total` — history queries
+  - `alert_history_report_queries_total` — report queries
+  - `alert_history_db_alerts` — number of alerts in the database
+  - `alert_history_request_latency_seconds` — request processing time (histogram)
 
-## Быстрый старт
+## Quick Start
 
-1. Соберите Docker-образ:
+1. Build Docker image:
    ```bash
    docker build -t alert-history:latest .
    ```
 
-2. Залейте образ в ваш реестр (если нужно):
+2. Push image to your registry (if needed):
    ```bash
    docker tag alert-history:latest <your-registry>/alert-history:latest
    docker push <your-registry>/alert-history:latest
    ```
 
-3. Установите Helm-чарт:
+3. Install Helm chart:
    ```bash
    helm install alert-history ./helm/alert-history \
      --set image.repository=<your-registry>/alert-history \
      --set image.tag=latest
    ```
 
-4. Пробросьте порт для локального теста:
+4. Forward port for local test:
    ```bash
    kubectl port-forward svc/alert-history-alert-history 8080:8080
    ```
 
-5. Настройте Alertmanager webhook:
+5. Configure Alertmanager webhook:
    ```yaml
    receivers:
      - name: 'alert-history'
@@ -52,25 +52,26 @@ Helm-чарт для деплоя Alertmanager Alert History Webhook Receiver
          - url: 'http://alert-history-alert-history:8080/webhook'
    ```
 
-## Пример запроса истории
+## Example History Query
 
 ```bash
 curl 'http://localhost:8080/history?alertname=CPUThrottlingHigh&status=firing&since=2024-06-01T00:00:00'
 ```
 
-## Переменные values.yaml
-- `image.repository` — имя образа
-- `image.tag` — тег образа
-- `persistence.enabled` — включить PVC
-- `persistence.size` — размер PVC
-- `service.port` — порт сервиса
+## values.yaml Variables
+- `image.repository` — image name
+- `image.tag` — image tag
+- `persistence.enabled` — enable PVC
+- `persistence.size` — PVC size
+- `service.port` — service port
+- `retentionDays` — alert history retention period in days (default: 30)
 
 ## PVC
-История алертов хранится в `/data/alert_history.sqlite3` (persistent volume).
+Alert history is stored in `/data/alert_history.sqlite3` (persistent volume). Old records are automatically deleted after `retentionDays` days.
 
-## Пример ServiceMonitor
+## ServiceMonitor Example
 
-ServiceMonitor создаётся автоматически:
+ServiceMonitor is created automatically:
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -91,4 +92,4 @@ spec:
 
 ---
 
-**Автор:** @your-team
+**Author:** @your-team

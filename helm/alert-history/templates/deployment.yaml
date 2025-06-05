@@ -28,6 +28,8 @@ spec:
           env:
             - name: ALERT_HISTORY_DB
               value: "/data/alert_history.sqlite3"
+            - name: RETENTION_DAYS
+              value: {{ .Values.retentionDays | quote }}
           volumeMounts:
             - name: data
               mountPath: /data
