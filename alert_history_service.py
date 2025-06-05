@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Alert History Service для Alertmanager webhook:
-- POST /webhook — приём событий алертов (firing/resolved)
-- GET /history — выдача истории алертов (фильтры: alertname, status, fingerprint, время)
-- GET /report — аналитика по истории алертов
-- Хранение истории в SQLite (stateful)
+Alert History Service for Alertmanager webhook:
+- POST /webhook — receive alert events (firing/resolved)
+- GET /history — get alert history (filters: alertname, status, fingerprint, time)
+- GET /report — get alert analytics
+- SQLite storage (stateful)
 """
 
 import os
@@ -436,7 +436,7 @@ def metrics():
 
 # --- CLEANUP FUNCTION ---
 def cleanup_old_data():
-    """Удаляет данные старше RETENTION_DAYS дней"""
+    """Delete data older than RETENTION_DAYS"""
     while True:
         try:
             cutoff_date = (datetime.utcnow() - timedelta(days=RETENTION_DAYS)).isoformat()
@@ -449,7 +449,7 @@ def cleanup_old_data():
                     print(f"Cleaned up {deleted} old records")
         except Exception as e:
             print(f"Error during cleanup: {e}")
-        time.sleep(3600)  # Проверяем каждый час
+        time.sleep(3600)  # Check every hour
 
-# Запускаем очистку в отдельном потоке
+# Start cleanup in a separate thread
 threading.Thread(target=cleanup_old_data, daemon=True).start()
