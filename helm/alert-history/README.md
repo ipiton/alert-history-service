@@ -1,11 +1,12 @@
 # alert-history
 
-Helm-chart for deploying Alertmanager Alert History Webhook Receiver
+Helm chart для деплоя Alert History Service (Intelligent Alert Proxy)
 
 ## Features
-- Receiving webhook events from Alertmanager (`/webhook`)
-- Storing alert history in SQLite (stateful PVC)
-- Providing history via HTTP (`/history`)
+- Intelligent Alert Proxy (`POST /webhook/proxy`)
+- Enrichment Mode Toggle (`GET/POST /enrichment/mode`)
+- Dynamic Target Discovery (Rootly, PagerDuty, Slack)
+- Prometheus метрики и ServiceMonitor
 
 ## Monitoring and Metrics
 
@@ -36,7 +37,9 @@ Helm-chart for deploying Alertmanager Alert History Webhook Receiver
    ```bash
    helm install alert-history ./helm/alert-history \
      --set image.repository=<your-registry>/alert-history \
-     --set image.tag=latest
+      --set image.tag=latest \
+      --set postgresql.enabled=true \
+      --set redis.enabled=true
    ```
 
 4. Forward port for local test:
@@ -49,7 +52,7 @@ Helm-chart for deploying Alertmanager Alert History Webhook Receiver
    receivers:
      - name: 'alert-history'
        webhook_configs:
-         - url: 'http://alert-history-alert-history:8080/webhook'
+          - url: 'http://alert-history-alert-history:8080/webhook/proxy'
    ```
 
 ## Example History Query

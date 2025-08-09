@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert History - HTML5 Dashboard</title>
+
+    <!-- CSS Grid и Flexbox Dashboard -->
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --info-color: #0891b2;
+            --dark-color: #1f2937;
+            --light-color: #f9fafb;
+            --border-color: #e5e7eb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--light-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-color), #3b82f6);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .nav-links a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Main Layout */
+        main {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            display: grid;
+            gap: 2rem;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            text-align: center;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .metric-primary { color: var(--primary-color); }
+        .metric-danger { color: var(--danger-color); }
+        .metric-success { color: var(--success-color); }
+        .metric-info { color: var(--info-color); }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(to right, #f8fafc, #f1f5f9);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        /* Status Indicators */
+        .status-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 0.5rem;
+            border-left: 4px solid var(--border-color);
+        }
+
+        .status-item.healthy { border-left-color: var(--success-color); }
+        .status-item.unhealthy { border-left-color: var(--danger-color); }
+        .status-item.degraded { border-left-color: var(--warning-color); }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-healthy { background-color: var(--success-color); }
+        .status-unhealthy { background-color: var(--danger-color); }
+        .status-degraded { background-color: var(--warning-color); }
+        .status-unknown { background-color: var(--text-secondary); }
+
+        /* Charts Section */
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        /* CSS-only Bar Chart */
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1rem 0;
+        }
+
+        .bar-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .bar-label {
+            min-width: 120px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .bar-container {
+            flex: 1;
+            height: 24px;
+            background: var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 1s ease;
+            background: linear-gradient(90deg, var(--primary-color), #60a5fa);
+        }
+
+        .bar-value {
+            min-width: 40px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        /* Timeline Chart CSS */
+        .timeline-chart {
+            height: 200px;
+            background: linear-gradient(to top, #f0f9ff 0%, white 100%);
+            border-radius: 0.5rem;
+            position: relative;
+            padding: 1rem;
+            overflow: hidden;
+        }
+
+        .timeline-line {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            height: 2px;
+            background: var(--primary-color);
+            border-radius: 1px;
+        }
+
+        .timeline-points {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 1rem;
+            right: 1rem;
+            height: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .timeline-point {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Alert List */
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--info-color);
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .alert-item:hover {
+            box-shadow: var(--shadow);
+            transform: translateX(4px);
+        }
+
+        .alert-item.critical { border-left-color: var(--danger-color); }
+        .alert-item.warning { border-left-color: var(--warning-color); }
+        .alert-item.info { border-left-color: var(--info-color); }
+
+        .alert-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .alert-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .alert-namespace {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .alert-badges {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-critical { background: #fef2f2; color: var(--danger-color); }
+        .badge-warning { background: #fffbeb; color: var(--warning-color); }
+        .badge-info { background: #ecfeff; color: var(--info-color); }
+        .badge-firing { background: #fef2f2; color: var(--danger-color); }
+        .badge-resolved { background: #f0fdf4; color: var(--success-color); }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            margin-top: 4rem;
+        }
+
+        .update-info {
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        /* Refresh Button */
+        .refresh-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 56px;
+            height: 56px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1.25rem;
+        }
+
+        .refresh-button:hover {
+            transform: scale(1.1);
+            background: #1d4ed8;
+        }
+
+        .refresh-button:active {
+            transform: scale(0.95);
+        }
+
+        /* Loading State */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .loading::after {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            margin: -20px 0 0 -20px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            z-index: 1000;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            main {
+                padding: 0 1rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-value {
+                font-size: 2rem;
+            }
+
+            .refresh-button {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Focus and accessibility */
+        button:focus, a:focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <span>📊</span>
+                Alert History Dashboard
+            </div>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="/dashboard">Legacy Dashboard</a></li>
+                    <li><a href="/metrics">Prometheus Metrics</a></li>
+                    <li><a href="/api/docs">API Docs</a></li>
+                    <li><a id="nav-publishing" href="/dashboard/publishing">Publishing</a></li>
+                    <li><a id="nav-targets" href="/dashboard/targets">Targets</a></li>
+                    <li><a id="nav-llm" href="/dashboard/llm-metrics">LLM Metrics</a></li>
+                    <li><span id="last-updated">Loading...</span></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Metrics Overview -->
+        <section class="metrics-grid" id="metrics-section">
+            <article class="metric-card">
+                <div class="metric-value metric-primary" id="total-alerts">-</div>
+                <div class="metric-label">Total Alerts</div>
+            </article>
+
+            <article class="metric-card">
+                <div class="metric-value metric-danger" id="active-alerts">-</div>
+                <div class="metric-label">Active Alerts</div>
+            </article>
+
+            <article class="metric-card">
+                <div class="metric-value metric-success" id="resolved-alerts">-</div>
+                <div class="metric-label">Resolved Alerts</div>
+            </article>
+
+            <article class="metric-card">
+                <div class="metric-value metric-info" id="alerts-24h">-</div>
+                <div class="metric-label">Last 24 Hours</div>
+            </article>
+        </section>
+
+        <!-- Dashboard Grid -->
+        <section class="dashboard-grid">
+            <!-- System Status -->
+            <article class="card">
+                <header class="card-header">
+                    <h2 class="card-title">
+                        <span>🏥</span>
+                        System Health
+                    </h2>
+                </header>
+                <div class="card-content">
+                    <div class="status-grid" id="system-health">
+                        <div class="status-item">
+                            <span>Loading system health...</span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Service Status -->
+            <article class="card">
+                <header class="card-header">
+                    <h2 class="card-title">
+                        <span>⚙️</span>
+                        Service Status
+                    </h2>
+                </header>
+                <div class="card-content">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span>
+                                <strong>Publishing Targets:</strong>
+                                <span id="publishing-targets">-</span>
+                            </span>
+                            <span class="badge" id="publishing-mode">Unknown</span>
+                        </div>
+                        <div class="status-item">
+                            <span>
+                                <strong>Cache Hit Rate:</strong>
+                                <span id="cache-hit-rate">-%</span>
+                            </span>
+                            <span class="badge" id="classification-status">Unknown</span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="charts-section">
+            <!-- Alert Timeline -->
+            <article class="card">
+                <header class="card-header">
+                    <h2 class="card-title">
+                        <span>📈</span>
+                        Alert Timeline (24h)
+                    </h2>
+                </header>
+                <div class="card-content">
+                    <div class="timeline-chart">
+                        <div class="timeline-line"></div>
+                        <div class="timeline-points" id="timeline-points">
+                            <!-- Timeline points will be generated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Top Alerts -->
+            <article class="card">
+                <header class="card-header">
+                    <h2 class="card-title">
+                        <span>🔥</span>
+                        Top Alerts by Frequency
+                    </h2>
+                </header>
+                <div class="card-content">
+                    <div class="bar-chart" id="top-alerts-chart">
+                        <div class="bar-item">
+                            <div class="bar-label">Loading...</div>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="bar-value">-</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <!-- Recent Alerts -->
+        <section class="card">
+            <header class="card-header">
+                <h2 class="card-title">
+                    <span>🕒</span>
+                    Recent Alerts
+                </h2>
+            </header>
+            <div class="card-content">
+                <div class="alert-list" id="recent-alerts">
+                    <div class="alert-item">
+                        <div class="alert-header">
+                            <div class="alert-name">Loading recent alerts...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Publishing Overview -->
+        <section class="card" id="section-publishing" style="display:none;">
+            <header class="card-header">
+                <h2 class="card-title">
+                    <span>🚀</span>
+                    Publishing Overview
+                </h2>
+            </header>
+            <div class="card-content">
+                <div class="status-grid" id="publishing-overview">
+                    <div class="status-item"><span>Loading publishing stats...</span></div>
+                </div>
+                <div class="status-grid" style="margin-top:1rem;">
+                    <div class="status-item">
+                        <span><strong>Enrichment Mode</strong></span>
+                        <span>
+                            <button id="btn-transparent" class="badge">Transparent</button>
+                            <button id="btn-enriched" class="badge">Enriched</button>
+                            <span id="enrichment-current" class="badge">-</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Targets Management -->
+        <section class="card" id="section-targets" style="display:none;">
+            <header class="card-header">
+                <h2 class="card-title">
+                    <span>🎯</span>
+                    Targets
+                </h2>
+            </header>
+            <div class="card-content">
+                <div class="alert-list" id="targets-list">
+                    <div class="alert-item">Loading targets...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- LLM Metrics -->
+        <section class="card" id="section-llm" style="display:none;">
+            <header class="card-header">
+                <h2 class="card-title">
+                    <span>🤖</span>
+                    LLM Metrics
+                </h2>
+            </header>
+            <div class="card-content">
+                <div class="status-grid" id="llm-metrics">
+                    <div class="status-item"><span>Loading LLM metrics...</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recommendations -->
+        <section class="card">
+            <header class="card-header">
+                <h2 class="card-title">
+                    <span>🧠</span>
+                    Recommendations
+                </h2>
+            </header>
+            <div class="card-content">
+                <div class="alert-list" id="recommendations">
+                    <div class="alert-item">
+                        <div class="alert-header">
+                            <div class="alert-name">Loading recommendations...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div>Alert History Service - HTML5 Dashboard</div>
+        <div class="update-info">
+            Auto-refresh every 30 seconds
+        </div>
+    </footer>
+
+    <!-- Refresh Button -->
+    <button class="refresh-button" id="refresh-btn" title="Refresh Dashboard" aria-label="Refresh Dashboard">
+        🔄
+    </button>
+
+    <!-- Minimal JavaScript for data loading -->
+    <script>
+        class HTML5Dashboard {
+            constructor() {
+                this.refreshInterval = null;
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.loadData();
+                this.startAutoRefresh();
+            }
+
+            bindEvents() {
+                document.getElementById('refresh-btn').addEventListener('click', () => {
+                    this.loadData();
+                });
+                // Apply section view based on path
+                this.applyPathSection();
+            }
+
+            async loadData() {
+                document.body.classList.add('loading');
+
+                try {
+                    await Promise.all([
+                        this.loadOverview(),
+                        this.loadHealth(),
+                        this.loadTopAlerts(),
+                        this.loadRecentAlerts(),
+                        this.loadRecommendations()
+                    ]);
+                    // Load section-specific data if needed
+                    this.loadSectionDataByPath();
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                } finally {
+                    document.body.classList.remove('loading');
+                    this.updateTimestamp();
+                }
+            }
+
+            applyPathSection(){
+                const path = window.location.pathname || '';
+                const show = (id) => {
+                    ['section-publishing','section-targets','section-llm'].forEach(s => {
+                        const el = document.getElementById(s);
+                        if (el) el.style.display = s===id ? 'block' : 'none';
+                    });
+                    if (id){ document.getElementById(id)?.scrollIntoView({behavior:'smooth'}); }
+                };
+                if (path.endsWith('/dashboard/publishing')) { show('section-publishing'); }
+                else if (path.endsWith('/dashboard/targets')) { show('section-targets'); }
+                else if (path.endsWith('/dashboard/llm-metrics')) { show('section-llm'); }
+            }
+
+            loadSectionDataByPath(){
+                const path = window.location.pathname || '';
+                if (path.endsWith('/dashboard/publishing')) { this.loadPublishing(); }
+                else if (path.endsWith('/dashboard/targets')) { this.loadTargets(); }
+                else if (path.endsWith('/dashboard/llm-metrics')) { this.loadLlmMetrics(); }
+            }
+
+            async loadOverview() {
+                try {
+                    const response = await fetch('/api/dashboard/overview');
+                    const data = await response.json();
+
+                    document.getElementById('total-alerts').textContent = data.total_alerts || 0;
+                    document.getElementById('active-alerts').textContent = data.active_alerts || 0;
+                    document.getElementById('resolved-alerts').textContent = data.resolved_alerts || 0;
+                    document.getElementById('alerts-24h').textContent = data.alerts_last_24h || 0;
+
+                    document.getElementById('publishing-targets').textContent = data.publishing_targets || 0;
+                    document.getElementById('cache-hit-rate').textContent =
+                        `${Math.round(data.classification_cache_hit_rate * 100)}%`;
+
+                    const modeEl = document.getElementById('publishing-mode');
+                    modeEl.textContent = data.publishing_mode || 'Unknown';
+                    modeEl.className = `badge badge-${data.publishing_mode === 'intelligent' ? 'info' : 'warning'}`;
+
+                    const classEl = document.getElementById('classification-status');
+                    classEl.textContent = data.classification_enabled ? 'Enabled' : 'Disabled';
+                    classEl.className = `badge badge-${data.classification_enabled ? 'info' : 'warning'}`;
+
+                } catch (error) {
+                    console.error('Error loading overview:', error);
+                }
+            }
+
+            async loadHealth() {
+                try {
+                    const response = await fetch('/api/dashboard/health');
+                    const healthData = await response.json();
+
+                    const container = document.getElementById('system-health');
+                    container.innerHTML = '';
+
+                    healthData.forEach(component => {
+                        const statusClass = component.status.replace('_', '-');
+                        const item = document.createElement('div');
+                        item.className = `status-item ${statusClass}`;
+                        item.innerHTML = `
+                            <span>
+                                <span class="status-indicator status-${statusClass}"></span>
+                                <strong>${this.capitalize(component.component)}:</strong>
+                                ${this.capitalize(component.status.replace('_', ' '))}
+                            </span>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading health:', error);
+                }
+            }
+
+            async loadTopAlerts() {
+                try {
+                    const response = await fetch('/api/dashboard/charts');
+                    const data = await response.json();
+
+                    const container = document.getElementById('top-alerts-chart');
+                    container.innerHTML = '';
+
+                    if (data.top_alerts_by_frequency.length === 0) {
+                        container.innerHTML = '<div>No alerts found</div>';
+                        return;
+                    }
+
+                    const maxCount = Math.max(...data.top_alerts_by_frequency.map(a => a.count));
+
+                    data.top_alerts_by_frequency.slice(0, 5).forEach(alert => {
+                        const percentage = (alert.count / maxCount) * 100;
+                        const item = document.createElement('div');
+                        item.className = 'bar-item';
+                        item.innerHTML = `
+                            <div class="bar-label">${alert.alert_name}</div>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: ${percentage}%"></div>
+                            </div>
+                            <div class="bar-value">${alert.count}</div>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading top alerts:', error);
+                }
+            }
+
+            async loadRecentAlerts() {
+                try {
+                    const response = await fetch('/api/dashboard/alerts/recent?limit=10&include_classification=true&min_confidence=0.3');
+                    const data = await response.json();
+
+                    const container = document.getElementById('recent-alerts');
+                    container.innerHTML = '';
+
+                    if (data.alerts.length === 0) {
+                        container.innerHTML = '<div class="alert-item">No recent alerts</div>';
+                        return;
+                    }
+
+                    data.alerts.forEach(alert => {
+                        const item = document.createElement('div');
+                        item.className = `alert-item ${alert.severity}`;
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <div class="alert-name">${alert.alert_name}</div>
+                                <div class="alert-namespace">${alert.namespace || 'No namespace'}</div>
+                            </div>
+                            <div class="alert-badges">
+                                <span class="badge badge-${alert.severity}">${alert.severity}</span>
+                                <span class="badge badge-${alert.status}">${alert.status}</span>
+                                ${alert.classified_severity ? `<span class=\"badge\">AI: ${alert.classified_severity} (${Math.round((alert.classified_confidence||0)*100)}%)</span>` : ''}
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading recent alerts:', error);
+                }
+            }
+
+            async loadRecommendations() {
+                try {
+                    const response = await fetch('/api/dashboard/recommendations?limit=10&min_confidence=0.3');
+                    const data = await response.json();
+
+                    const container = document.getElementById('recommendations');
+                    container.innerHTML = '';
+
+                    if (!data.items || data.items.length === 0) {
+                        container.innerHTML = '<div class="alert-item">No recommendations</div>';
+                        return;
+                    }
+
+                    data.items.forEach(rec => {
+                        const item = document.createElement('div');
+                        item.className = 'alert-item info';
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <div class="alert-name">${rec.alert_name || rec.fingerprint}</div>
+                                <div class="alert-namespace">${rec.severity} • ${Math.round(rec.confidence*100)}%</div>
+                            </div>
+                            <div class="alert-badges">
+                                ${(rec.recommendations||[]).slice(0,2).map(r=>`<span class=\"badge\">${r}</span>`).join('')}
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                } catch (e) {
+                    console.error('Error loading recommendations:', e);
+                }
+            }
+
+            async loadPublishing() {
+                try {
+                    const [modeResp, statsResp, enrResp] = await Promise.all([
+                        fetch('/publishing/mode'),
+                        fetch('/publishing/stats'),
+                        fetch('/enrichment/mode')
+                    ]);
+                    const mode = await modeResp.json();
+                    const stats = await statsResp.json();
+                    const enrich = await enrResp.json();
+                    const el = document.getElementById('publishing-overview');
+                    el.innerHTML = '';
+                    el.innerHTML = `
+                        <div class="status-item">
+                            <span><strong>Mode:</strong> ${mode.mode} • Targets: ${mode.targets_count}</span>
+                            <span class="badge">${mode.targets_available? 'Available':'Metrics-only'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span><strong>Total Publishes:</strong> ${stats.total_publishes||0}</span>
+                            <span><strong>Success:</strong> ${stats.successful_publishes||0} • <strong>Failed:</strong> ${stats.failed_publishes||0}</span>
+                        </div>
+                    `;
+                    document.getElementById('enrichment-current').textContent = enrich.mode;
+                    // Bind buttons once
+                    const setMode = async (m) => {
+                        try{ const r=await fetch('/enrichment/mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode:m})}); const d=await r.json(); document.getElementById('enrichment-current').textContent=d.mode; }catch(e){ console.error('set mode', e) }
+                    };
+                    document.getElementById('btn-transparent').onclick=()=>setMode('transparent');
+                    document.getElementById('btn-enriched').onclick=()=>setMode('enriched');
+                } catch(e){ console.error('loadPublishing', e); }
+            }
+
+            async loadTargets(){
+                try{
+                    const resp = await fetch('/publishing/targets');
+                    const data = await resp.json();
+                    const el = document.getElementById('targets-list');
+                    el.innerHTML = '';
+                    if (!data || data.length===0){ el.innerHTML = '<div class="alert-item">No targets</div>'; return; }
+                    data.forEach(t => {
+                        const item = document.createElement('div');
+                        item.className = 'alert-item';
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <div class="alert-name">${t.name} (${t.format})</div>
+                                <div class="alert-namespace">${t.url}</div>
+                            </div>
+                            <div class="alert-badges">
+                                <span class="badge">${t.enabled? 'enabled':'disabled'}</span>
+                                <span class="badge">ok: ${t.successful_publishes}</span>
+                                <span class="badge">fail: ${t.failed_publishes}</span>
+                            </div>
+                        `;
+                        el.appendChild(item);
+                    })
+                } catch(e){ console.error('loadTargets', e); }
+            }
+
+            async loadLlmMetrics(){
+                try{
+                    const resp = await fetch('/classification/stats');
+                    const s = await resp.json();
+                    const el = document.getElementById('llm-metrics');
+                    el.innerHTML = '';
+                    el.innerHTML = `
+                        <div class="status-item"><span>Total Requests: ${s.total_requests||0}</span></div>
+                        <div class="status-item"><span>Cache Hits: ${s.cache_hits||0} (${Math.round((s.cache_hit_rate||0)*100)}%)</span></div>
+                        <div class="status-item"><span>LLM Requests: ${s.llm_requests||0} • Fallback: ${s.fallback_used||0}</span></div>
+                        <div class="status-item"><span>Errors: ${s.errors||0}</span></div>
+                    `;
+                } catch(e){ console.error('loadLlmMetrics', e); }
+            }
+
+            updateTimestamp() {
+                const now = new Date();
+                document.getElementById('last-updated').textContent =
+                    `Updated: ${now.toLocaleTimeString()}`;
+            }
+
+            startAutoRefresh() {
+                this.refreshInterval = setInterval(() => {
+                    this.loadData();
+                }, 30000); // 30 seconds
+            }
+
+            capitalize(str) {
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new HTML5Dashboard();
+        });
+    </script>
+</body>
+</html>

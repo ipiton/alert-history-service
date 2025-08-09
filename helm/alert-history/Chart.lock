@@ -1,0 +1,9 @@
+dependencies:
+- name: cloudnative-pg
+  repository: https://cloudnative-pg.github.io/charts
+  version: 0.22.1
+- name: keydb
+  repository: https://enapter.github.io/charts
+  version: 0.48.0
+digest: sha256:c5031fb2e915f1f81d304afe56d998864749e7838debae44e4dbca190ab3d105
+generated: "2025-08-07T16:08:28.091784+04:00"

@@ -1,0 +1,81 @@
+# Development dependencies for alert-history-llm
+# Install with: pip install -r requirements-dev.txt
+
+# Code formatting and style
+black>=23.12.1                 # Code formatter (PEP8 compliant)
+isort>=5.13.2                  # Import sorting
+flake8>=6.1.0                  # Style guide enforcement
+flake8-docstrings>=1.7.0       # Docstring style checking
+flake8-import-order>=0.18.2    # Import order checking
+flake8-bugbear>=23.12.2        # Additional flake8 checks
+
+# Type checking
+mypy>=1.8.0                    # Static type checker
+types-requests>=2.31.0         # Type stubs for requests
+types-PyYAML>=6.0.12          # Type stubs for PyYAML
+types-redis>=4.6.0            # Type stubs for redis
+
+# Security and quality
+pylint>=3.0.3                  # Comprehensive code analysis
+bandit>=1.7.5                  # Security vulnerability scanner
+safety>=2.3.5                  # Known security vulnerabilities checker
+semgrep>=1.50.0               # Static analysis for security
+
+# Testing framework
+pytest>=7.4.3                 # Testing framework
+pytest-asyncio>=0.21.1        # Async testing support
+pytest-cov>=4.1.0             # Coverage reporting
+pytest-mock>=3.12.0           # Mocking utilities
+pytest-xdist>=3.5.0          # Parallel test execution
+pytest-benchmark>=4.0.0       # Performance benchmarking
+pytest-timeout>=2.2.0         # Test timeout control
+
+# Test utilities
+factory-boy>=3.3.0            # Test data generation
+faker>=21.0.0                 # Fake data generation
+responses>=0.24.1             # HTTP request mocking
+aioresponses>=0.7.6           # Async HTTP mocking
+
+# Development tools
+pre-commit>=3.6.0             # Git hooks framework
+commitizen>=3.13.0            # Conventional commits
+tox>=4.11.4                   # Testing across Python versions
+coverage>=7.3.4               # Coverage measurement
+
+# Documentation
+sphinx>=7.2.6                 # Documentation generator
+sphinx-rtd-theme>=2.0.0       # ReadTheDocs theme
+sphinx-autodoc-typehints>=1.25.2  # Type hints in docs
+myst-parser>=2.0.0            # Markdown support for Sphinx
+
+# Debugging and profiling
+ipdb>=0.13.13                 # Enhanced debugger
+line-profiler>=4.1.1          # Line-by-line profiling
+memory-profiler>=0.61.0       # Memory usage profiling
+py-spy>=0.3.14                # Sampling profiler
+
+# Database tools
+alembic>=1.13.1               # Database migrations
+sqlalchemy-stubs>=0.4         # SQLAlchemy type stubs
+
+# Kubernetes tools
+kubernetes>=28.1.0            # Kubernetes API client
+kopf>=1.37.1                  # Kubernetes operator framework (if needed)
+
+# API documentation
+httpx>=0.25.2                 # HTTP client for testing
+openapi-spec-validator>=0.7.1 # OpenAPI validation
+
+# Local development utilities
+python-dotenv>=1.0.0          # Environment variable loading
+watchdog>=3.0.0               # File system monitoring
+uvicorn[standard]>=0.24.0     # ASGI server with reloading
+
+# Jupyter notebooks (for data analysis)
+jupyter>=1.0.0                # Jupyter notebook
+notebook>=7.0.6               # Notebook interface
+ipykernel>=6.27.1             # Python kernel for Jupyter
+
+# Performance monitoring
+psutil>=5.9.6                 # System and process monitoring
+py-cpuinfo>=9.0.0            # CPU information
