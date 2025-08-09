@@ -12,11 +12,11 @@ API endpoints для работы с классификацией алертов
 from typing import List, Optional
 
 # Third-party imports
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 # Local imports
-from ..core.interfaces import Alert, AlertSeverity, ClassificationResult
+from ..core.interfaces import ClassificationResult
 from ..logging_config import get_performance_logger
 from ..services.alert_classifier import AlertClassificationService
 
@@ -93,7 +93,9 @@ def get_classification_service(request) -> AlertClassificationService:
     Получает сервис из app.state, инициализированного в main.py
     """
     if not hasattr(request.app.state, "classification_service"):
-        raise HTTPException(status_code=503, detail="Classification service not available")
+        raise HTTPException(
+            status_code=503, detail="Classification service not available"
+        )
 
     service = request.app.state.classification_service
     if service is None:
@@ -119,7 +121,9 @@ def get_classification_service(request) -> AlertClassificationService:
 async def get_classification(
     fingerprint: str,
     request: Request,
-    classification_service: AlertClassificationService = Depends(get_classification_service),
+    classification_service: AlertClassificationService = Depends(
+        get_classification_service
+    ),
 ) -> ClassificationResponse:
     """Получить классификацию алерта по fingerprint."""
 
@@ -175,7 +179,9 @@ async def get_classification(
 )
 async def refresh_classification(
     fingerprint: str,
-    classification_service: AlertClassificationService = Depends(get_classification_service),
+    classification_service: AlertClassificationService = Depends(
+        get_classification_service
+    ),
 ) -> ClassificationResponse:
     """Принудительно обновить классификацию алерта."""
 
@@ -193,7 +199,9 @@ async def refresh_classification(
             )
 
         # Принудительная классификация
-        result = await classification_service.classify_alert(alert=alert, force_refresh=True)
+        result = await classification_service.classify_alert(
+            alert=alert, force_refresh=True
+        )
 
         response = ClassificationResponse.from_classification_result(
             fingerprint=fingerprint, result=result, cached=False
@@ -233,7 +241,9 @@ async def refresh_classification(
 )
 async def bulk_classification(
     request: BulkClassificationRequest,
-    classification_service: AlertClassificationService = Depends(get_classification_service),
+    classification_service: AlertClassificationService = Depends(
+        get_classification_service
+    ),
 ) -> BulkClassificationResponse:
     """Массовая классификация алертов."""
 
@@ -246,10 +256,14 @@ async def bulk_classification(
         for fingerprint in request.fingerprints:
             try:
                 # Получаем алерт
-                alert = await classification_service.storage.get_alert_by_fingerprint(fingerprint)
+                alert = await classification_service.storage.get_alert_by_fingerprint(
+                    fingerprint
+                )
 
                 if not alert:
-                    errors.append({"fingerprint": fingerprint, "error": "Alert not found"})
+                    errors.append(
+                        {"fingerprint": fingerprint, "error": "Alert not found"}
+                    )
                     continue
 
                 # Классификация
@@ -260,12 +274,16 @@ async def bulk_classification(
                     cached = False
                 else:
                     # Сначала пробуем из истории
-                    result = await classification_service.get_classification_history(fingerprint)
+                    result = await classification_service.get_classification_history(
+                        fingerprint
+                    )
                     cached = True
 
                     # Если нет - делаем новую классификацию
                     if not result:
-                        result = await classification_service.classify_alert(alert=alert)
+                        result = await classification_service.classify_alert(
+                            alert=alert
+                        )
                         cached = False
 
                 # Убираем рекомендации если не нужны
@@ -327,7 +345,9 @@ async def bulk_classification(
     """,
 )
 async def get_classification_stats(
-    classification_service: AlertClassificationService = Depends(get_classification_service),
+    classification_service: AlertClassificationService = Depends(
+        get_classification_service
+    ),
 ) -> ClassificationStatsResponse:
     """Получить статистику классификации."""
 
@@ -356,7 +376,9 @@ async def get_classification_stats(
     description="Проверить доступность LLM сервиса и кэша",
 )
 async def classification_health(
-    classification_service: AlertClassificationService = Depends(get_classification_service),
+    classification_service: AlertClassificationService = Depends(
+        get_classification_service
+    ),
 ) -> dict:
     """Проверка здоровья сервиса классификации."""
 

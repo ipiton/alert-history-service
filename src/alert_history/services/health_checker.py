@@ -6,12 +6,13 @@ Health checker для проверки состояния всех внешни�
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict
 
-import asyncpg
 import aioredis
+import asyncpg
 
 from config import get_config
+
 from ..logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -35,8 +36,9 @@ class HealthChecker:
         }
 
         try:
-            if self.config.database.database_url and self.config.database.database_url.startswith(
-                "postgresql"
+            if (
+                self.config.database.database_url
+                and self.config.database.database_url.startswith("postgresql")
             ):
                 # PostgreSQL health check
                 conn = await asyncpg.connect(self.config.database.postgres_url)
@@ -118,7 +120,9 @@ class HealthChecker:
                 }
             else:
                 result["status"] = "warning"
-                result["details"] = {"message": "Redis responding but read/write test failed"}
+                result["details"] = {
+                    "message": "Redis responding but read/write test failed"
+                }
 
             await redis.close()
 
@@ -239,8 +243,12 @@ class HealthChecker:
             "summary": {
                 "healthy": len([c for c in health_checks if c["status"] == "healthy"]),
                 "warning": len([c for c in health_checks if c["status"] == "warning"]),
-                "unhealthy": len([c for c in health_checks if c["status"] == "unhealthy"]),
-                "disabled": len([c for c in health_checks if c["status"] == "disabled"]),
+                "unhealthy": len(
+                    [c for c in health_checks if c["status"] == "unhealthy"]
+                ),
+                "disabled": len(
+                    [c for c in health_checks if c["status"] == "disabled"]
+                ),
                 "total": len(health_checks),
             },
         }

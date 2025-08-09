@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class AlertSeverity(Enum):
@@ -133,12 +133,16 @@ class IClassificationStorage(ABC):
     """Interface for classification storage operations."""
 
     @abstractmethod
-    async def save_classification(self, fingerprint: str, result: ClassificationResult) -> bool:
+    async def save_classification(
+        self, fingerprint: str, result: ClassificationResult
+    ) -> bool:
         """Save classification result."""
         pass
 
     @abstractmethod
-    async def get_classification(self, fingerprint: str) -> Optional[ClassificationResult]:
+    async def get_classification(
+        self, fingerprint: str
+    ) -> Optional[ClassificationResult]:
         """Get classification by fingerprint."""
         pass
 
@@ -248,7 +252,9 @@ class IAlertPublisher(ABC):
     """Interface for alert publishing."""
 
     @abstractmethod
-    async def publish_alert(self, enriched_alert: EnrichedAlert, target: PublishingTarget) -> bool:
+    async def publish_alert(
+        self, enriched_alert: EnrichedAlert, target: PublishingTarget
+    ) -> bool:
         """Publish alert to target."""
         pass
 
@@ -257,7 +263,9 @@ class IFilterEngine(ABC):
     """Interface for alert filtering."""
 
     @abstractmethod
-    async def should_publish(self, enriched_alert: EnrichedAlert, target: PublishingTarget) -> bool:
+    async def should_publish(
+        self, enriched_alert: EnrichedAlert, target: PublishingTarget
+    ) -> bool:
         """Check if alert should be published to target."""
         pass
 
@@ -339,12 +347,16 @@ class IMetricsCollector(ABC):
     """Interface for metrics collection."""
 
     @abstractmethod
-    def increment_counter(self, name: str, labels: Optional[Dict[str, str]] = None) -> None:
+    def increment_counter(
+        self, name: str, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Increment counter metric."""
         pass
 
     @abstractmethod
-    def set_gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def set_gauge(
+        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+    ) -> None:
         """Set gauge metric."""
         pass
 

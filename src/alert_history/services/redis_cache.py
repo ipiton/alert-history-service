@@ -14,8 +14,8 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 # Third-party imports
 import aioredis
@@ -24,7 +24,7 @@ from aioredis import Redis
 # Local imports
 from ..core.interfaces import AlertSeverity, ClassificationResult, ICache
 from ..logging_config import get_logger, get_performance_logger
-from ..utils.common import parse_duration, safe_json_dumps
+from ..utils.common import safe_json_dumps
 
 logger = get_logger(__name__)
 performance_logger = get_performance_logger()
@@ -122,13 +122,17 @@ class RedisCache(ICache):
                 self._cache_hits += 1
                 result = json.loads(value)
 
-                performance_logger.debug("Cache hit", key=key, duration=time.time() - start_time)
+                performance_logger.debug(
+                    "Cache hit", key=key, duration=time.time() - start_time
+                )
 
                 return result
             else:
                 self._cache_misses += 1
 
-                performance_logger.debug("Cache miss", key=key, duration=time.time() - start_time)
+                performance_logger.debug(
+                    "Cache miss", key=key, duration=time.time() - start_time
+                )
 
                 return None
 
@@ -314,7 +318,9 @@ class RedisCache(ICache):
 
         return await self.set(cache_key, cache_data, ttl)
 
-    async def get_cached_classification(self, fingerprint: str) -> Optional[ClassificationResult]:
+    async def get_cached_classification(
+        self, fingerprint: str
+    ) -> Optional[ClassificationResult]:
         """Get cached LLM classification."""
         cache_key = f"classification:{fingerprint}"
 
@@ -369,7 +375,9 @@ class RedisCache(ICache):
 
             while True:
                 # Atomic set with expiration
-                acquired = await self.redis.set(lock_key, lock_value, ex=int(timeout), nx=True)
+                acquired = await self.redis.set(
+                    lock_key, lock_value, ex=int(timeout), nx=True
+                )
 
                 if acquired:
                     logger.debug(f"Acquired distributed lock: {lock_name}")
@@ -424,7 +432,9 @@ class RedisCache(ICache):
     # Session Management
     # ===============================
 
-    async def create_session(self, session_id: str, data: Dict[str, Any], ttl: int = 3600) -> bool:
+    async def create_session(
+        self, session_id: str, data: Dict[str, Any], ttl: int = 3600
+    ) -> bool:
         """Create or update session data."""
         session_key = f"session:{session_id}"
 
@@ -470,7 +480,9 @@ class RedisCache(ICache):
             info = await self.redis.info()
 
             total_requests = self._cache_hits + self._cache_misses
-            hit_rate = (self._cache_hits / total_requests * 100) if total_requests > 0 else 0
+            hit_rate = (
+                (self._cache_hits / total_requests * 100) if total_requests > 0 else 0
+            )
 
             return {
                 "cache_hits": self._cache_hits,

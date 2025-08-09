@@ -2,12 +2,10 @@
 """
 Тест для Dynamic Secrets Management (T5.4) с фокусом на Rootly интеграцию.
 """
-import sys
-import os
 import asyncio
 import base64
-import json
-from typing import Dict, Any
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -28,7 +26,7 @@ async def test_rootly_secret_structure():
             "alert-history.io/target-type": "webhook",
             "alert-history.io/target-format": "rootly",
             "alert-history.io/priority": "high",
-            "alert-history.io/managed-by": "helm"
+            "alert-history.io/managed-by": "helm",
         }
 
         for label, expected_value in required_labels.items():
@@ -46,7 +44,7 @@ async def test_rootly_secret_structure():
             "api-key",
             "filter-severity",
             "exclude-noise",
-            "min-confidence"
+            "min-confidence",
         ]
 
         for field in required_secret_fields:
@@ -62,7 +60,7 @@ async def test_rootly_secret_structure():
             "incident-tags",
             "incident-types",
             "target-services",
-            "target-environments"
+            "target-environments",
         ]
 
         for field in rootly_specific_fields:
@@ -74,6 +72,7 @@ async def test_rootly_secret_structure():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -91,7 +90,7 @@ async def test_secret_encoding_decoding():
             "org-id": "org_xyz789",
             "filter-severity": "critical,warning",
             "min-confidence": "0.8",
-            "exclude-noise": "true"
+            "exclude-noise": "true",
         }
 
         encoded_data = {}
@@ -112,21 +111,21 @@ async def test_secret_encoding_decoding():
         print("3. Testing filter configuration parsing...")
 
         # Test severity list parsing
-        severity_encoded = base64.b64encode("critical,warning".encode()).decode()
+        severity_encoded = base64.b64encode(b"critical,warning").decode()
         severity_decoded = base64.b64decode(severity_encoded.encode()).decode()
         severity_list = severity_decoded.split(",")
         assert severity_list == ["critical", "warning"]
         print(f"   ✅ Severity list: {severity_list}")
 
         # Test boolean parsing
-        bool_encoded = base64.b64encode("true".encode()).decode()
+        bool_encoded = base64.b64encode(b"true").decode()
         bool_decoded = base64.b64decode(bool_encoded.encode()).decode()
         bool_value = bool_decoded.lower() == "true"
         assert bool_value == True
         print(f"   ✅ Boolean value: {bool_value}")
 
         # Test float parsing
-        float_encoded = base64.b64encode("0.8".encode()).decode()
+        float_encoded = base64.b64encode(b"0.8").decode()
         float_decoded = base64.b64decode(float_encoded.encode()).decode()
         float_value = float(float_decoded)
         assert float_value == 0.8
@@ -138,6 +137,7 @@ async def test_secret_encoding_decoding():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -149,13 +149,16 @@ async def test_target_discovery_integration():
     try:
         print("1. Testing DynamicTargetManager configuration...")
 
-        from src.alert_history.services.target_discovery import TargetDiscoveryConfig, DynamicTargetManager
+        from src.alert_history.services.target_discovery import (
+            DynamicTargetManager,
+            TargetDiscoveryConfig,
+        )
 
         # Test configuration for Rootly label discovery
         config = TargetDiscoveryConfig(
             enabled=True,
             secret_labels=["alert-history.io/target=true"],
-            secret_namespaces=["default", "monitoring", "alert-history"]
+            secret_namespaces=["default", "monitoring", "alert-history"],
         )
 
         assert config.enabled == True
@@ -175,7 +178,7 @@ async def test_target_discovery_integration():
         rootly_labels = {
             "alert-history.io/target": "true",
             "alert-history.io/target-name": "rootly-production",
-            "alert-history.io/target-format": "rootly"
+            "alert-history.io/target-format": "rootly",
         }
 
         # Simulate label matching logic
@@ -187,9 +190,9 @@ async def test_target_discovery_integration():
         print("4. Testing target discovery methods...")
 
         # Test manager methods exist
-        assert hasattr(manager, 'get_active_targets')
-        assert hasattr(manager, 'get_discovery_stats')
-        assert hasattr(manager, 'refresh_targets')
+        assert hasattr(manager, "get_active_targets")
+        assert hasattr(manager, "get_discovery_stats")
+        assert hasattr(manager, "refresh_targets")
         print("   ✅ All required methods present")
 
         print("\n🎉 Target discovery integration test passed!")
@@ -198,6 +201,7 @@ async def test_target_discovery_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -209,8 +213,8 @@ async def test_publishing_integration():
     try:
         print("1. Testing AlertPublisher with Rootly target...")
 
+        from src.alert_history.core.interfaces import PublishingFormat, PublishingTarget
         from src.alert_history.services.alert_publisher import AlertPublisher
-        from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat
 
         # Create a Rootly publishing target
         rootly_target = PublishingTarget(
@@ -223,8 +227,8 @@ async def test_publishing_integration():
             filter_config={
                 "severity": ["critical", "warning"],
                 "exclude_noise": True,
-                "min_confidence": 0.8
-            }
+                "min_confidence": 0.8,
+            },
         )
 
         assert rootly_target.name == "rootly-production"
@@ -245,14 +249,14 @@ async def test_publishing_integration():
 
         # Check that stats structure is valid
         assert len(stats) >= 0  # Just check it's a dict
-        print(f"   ✅ Stats structure valid")
+        print("   ✅ Stats structure valid")
 
         print("4. Testing AlertFormatter for Rootly...")
 
         from src.alert_history.services.alert_formatter import AlertFormatter
 
         formatter = AlertFormatter()
-        assert hasattr(formatter, 'format_alert')
+        assert hasattr(formatter, "format_alert")
         print("   ✅ AlertFormatter ready for Rootly formatting")
 
         print("\n🎉 Publishing integration test passed!")
@@ -261,6 +265,7 @@ async def test_publishing_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -299,7 +304,7 @@ async def test_rbac_configuration():
         # We rely on label selectors to filter secrets
         label_selectors = [
             "alert-history.io/target=true",
-            "app.kubernetes.io/component=publishing-target"
+            "app.kubernetes.io/component=publishing-target",
         ]
 
         for selector in label_selectors:
@@ -310,7 +315,7 @@ async def test_rbac_configuration():
         sa_config = {
             "create": True,
             "rbac.create": True,
-            "rbac.crossNamespace": False  # Can be enabled for multi-namespace
+            "rbac.crossNamespace": False,  # Can be enabled for multi-namespace
         }
 
         for config, value in sa_config.items():
@@ -322,6 +327,7 @@ async def test_rbac_configuration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -345,7 +351,7 @@ async def test_helm_values_validation():
                 "autoCreate": bool,
                 "severity": str,
                 "assignTeam": str,
-                "tags": list
+                "tags": list,
             },
             "filterConfig": {
                 "severity": list,
@@ -355,8 +361,8 @@ async def test_helm_values_validation():
                 "alertNamePattern": str,
                 "incidentTypes": list,
                 "services": list,
-                "environments": list
-            }
+                "environments": list,
+            },
         }
 
         def validate_structure(structure, path="rootly"):
@@ -365,7 +371,9 @@ async def test_helm_values_validation():
                     print(f"   ✅ Config section: {path}.{key}")
                     validate_structure(expected_type, f"{path}.{key}")
                 else:
-                    print(f"   ✅ Config field: {path}.{key} ({expected_type.__name__})")
+                    print(
+                        f"   ✅ Config field: {path}.{key} ({expected_type.__name__})"
+                    )
 
         validate_structure(rootly_config_structure)
 
@@ -374,10 +382,7 @@ async def test_helm_values_validation():
         secrets_config = {
             "jwtSecret": str,
             "encryptionKey": str,
-            "externalSecrets": {
-                "enabled": bool,
-                "secretStore": str
-            }
+            "externalSecrets": {"enabled": bool, "secretStore": str},
         }
 
         validate_structure(secrets_config, "secrets")
@@ -388,7 +393,7 @@ async def test_helm_values_validation():
             "enabled": bool,
             "crossNamespace": bool,
             "labelSelectors": list,
-            "namespaces": list
+            "namespaces": list,
         }
 
         validate_structure(discovery_config, "targetDiscovery")
@@ -399,6 +404,7 @@ async def test_helm_values_validation():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -415,7 +421,9 @@ if __name__ == "__main__":
     success5 = asyncio.run(test_rbac_configuration())
     success6 = asyncio.run(test_helm_values_validation())
 
-    overall_success = success1 and success2 and success3 and success4 and success5 and success6
+    overall_success = (
+        success1 and success2 and success3 and success4 and success5 and success6
+    )
 
     if overall_success:
         print("\n" + "=" * 70)

@@ -84,7 +84,9 @@ class LLMProxyClient(ILLMClient):
             "User-Agent": "AlertHistory-LLM/1.0",
         }
 
-        self._session = aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers)
+        self._session = aiohttp.ClientSession(
+            connector=connector, timeout=timeout, headers=headers
+        )
 
     async def _close_session(self) -> None:
         """Close HTTP session."""
@@ -412,7 +414,9 @@ Provide a confidence score (0.0-1.0) and clear reasoning for your classification
                 metadata={"error": str(e)},
             )
 
-    def _parse_recommendation_response(self, response_data: Dict[str, Any]) -> List[str]:
+    def _parse_recommendation_response(
+        self, response_data: Dict[str, Any]
+    ) -> List[str]:
         """Parse recommendation response from LLM."""
         try:
             content = response_data["choices"][0]["message"]["content"]

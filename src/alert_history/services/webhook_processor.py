@@ -11,7 +11,7 @@ Webhook processor с интеграцией LLM классификации.
 # Standard library imports
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Local imports
 from ..api.metrics import LegacyMetrics
@@ -95,7 +95,9 @@ class WebhookProcessor:
                     processed_count += 1
 
                     # Update legacy metrics
-                    self.metrics.increment_alerts_received(alert.alert_name, alert.status.value)
+                    self.metrics.increment_alerts_received(
+                        alert.alert_name, alert.status.value
+                    )
 
                     # Automatic classification (new functionality - optional)
                     if self.enable_auto_classification:

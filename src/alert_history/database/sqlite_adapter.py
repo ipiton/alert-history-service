@@ -12,13 +12,12 @@ Maintains 100% compatibility with existing SQLite database:
 import json
 import sqlite3
 import threading
-import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 # Local imports
 from ..core.interfaces import Alert, AlertStatus, ClassificationResult, IAlertStorage
-from ..utils.common import generate_fingerprint, parse_timestamp
+from ..utils.common import parse_timestamp
 
 
 class SQLiteLegacyStorage(IAlertStorage):
@@ -63,7 +62,9 @@ class SQLiteLegacyStorage(IAlertStorage):
             )
 
             # Create indexes (same as original)
-            c.execute("CREATE INDEX IF NOT EXISTS idx_fingerprint ON alerts(fingerprint)")
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fingerprint ON alerts(fingerprint)"
+            )
             c.execute("CREATE INDEX IF NOT EXISTS idx_alertname ON alerts(alertname)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_status ON alerts(status)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_starts_at ON alerts(starts_at)")
@@ -279,7 +280,9 @@ class SQLiteLegacyStorage(IAlertStorage):
             annotations = json.loads(annotations_json) if annotations_json else {}
 
             # Parse timestamps
-            starts_at_dt = parse_timestamp(starts_at) if starts_at else datetime.utcnow()
+            starts_at_dt = (
+                parse_timestamp(starts_at) if starts_at else datetime.utcnow()
+            )
             ends_at_dt = parse_timestamp(ends_at) if ends_at else None
 
             # Parse status
@@ -304,7 +307,9 @@ class SQLiteLegacyStorage(IAlertStorage):
 
     # Additional methods for LLM classification storage
 
-    async def save_classification(self, fingerprint: str, result: ClassificationResult) -> bool:
+    async def save_classification(
+        self, fingerprint: str, result: ClassificationResult
+    ) -> bool:
         """Save classification result."""
         try:
             with self._lock:
@@ -339,7 +344,9 @@ class SQLiteLegacyStorage(IAlertStorage):
             print(f"Error saving classification: {e}")
             return False
 
-    async def get_classification(self, fingerprint: str) -> Optional[ClassificationResult]:
+    async def get_classification(
+        self, fingerprint: str
+    ) -> Optional[ClassificationResult]:
         """Get classification result by fingerprint."""
         try:
             with self._lock:

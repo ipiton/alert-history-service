@@ -2,13 +2,14 @@
 """
 Базовый тест migration infrastructure.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
 sys.path.insert(0, project_root)
+
 
 async def test_migration_infrastructure():
     """Test basic migration infrastructure components."""
@@ -18,14 +19,18 @@ async def test_migration_infrastructure():
         # Test config loading
         print("1. Testing config loading...")
         from config import get_config
+
         config = get_config()
-        print(f"   ✅ Config loaded")
+        print("   ✅ Config loaded")
         print(f"   ✅ SQLite path: {config.database.sqlite_path}")
-        print(f"   ✅ PostgreSQL URL configured: {config.database.postgres_url.split('@')[-1]}")
+        print(
+            f"   ✅ PostgreSQL URL configured: {config.database.postgres_url.split('@')[-1]}"
+        )
 
         # Test logging setup
         print("2. Testing logging setup...")
-        from logging_config import setup_logging, get_logger
+        from logging_config import get_logger, setup_logging
+
         setup_logging()
         logger = get_logger(__name__)
         logger.info("Test log entry")
@@ -34,6 +39,7 @@ async def test_migration_infrastructure():
         # Test SQLite adapter (should work without external dependencies)
         print("3. Testing SQLite adapter...")
         from src.alert_history.database.sqlite_adapter import SQLiteLegacyStorage
+
         sqlite_storage = SQLiteLegacyStorage(config.database.sqlite_path)
         # SQLite adapter initializes automatically in constructor
         print("   ✅ SQLite adapter initialized")
@@ -41,9 +47,10 @@ async def test_migration_infrastructure():
         # Test that migration SQL files exist
         print("4. Testing migration SQL files...")
         import os
+
         migration_dir = "src/alert_history/database/migrations"
         if os.path.exists(migration_dir):
-            sql_files = [f for f in os.listdir(migration_dir) if f.endswith('.sql')]
+            sql_files = [f for f in os.listdir(migration_dir) if f.endswith(".sql")]
             print(f"   ✅ Found {len(sql_files)} migration SQL files")
         else:
             print("   ⚠️ Migration directory not found, will be created when needed")
@@ -69,8 +76,10 @@ async def test_migration_infrastructure():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = asyncio.run(test_migration_infrastructure())

@@ -16,10 +16,7 @@ Usage:
 """
 
 import os
-import signal
-import subprocess
 import sys
-import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -40,15 +37,15 @@ class Test12FactorCompliance(unittest.TestCase):
 
         # Test environment variables that should be configurable
         test_configs = {
-            'ENVIRONMENT': 'test',
-            'LOG_LEVEL': 'debug',
-            'DATABASE_URL': 'sqlite:///test_12factor.db',
-            'REDIS_URL': 'redis://localhost:6379/1',
-            'ENRICHMENT_MODE': 'transparent',
-            'PUBLISHING_ENABLED': 'true',
-            'TARGET_DISCOVERY_ENABLED': 'false',
-            'LLM_ENABLED': 'false',
-            'PORT': '8003'
+            "ENVIRONMENT": "test",
+            "LOG_LEVEL": "debug",
+            "DATABASE_URL": "sqlite:///test_12factor.db",
+            "REDIS_URL": "redis://localhost:6379/1",
+            "ENRICHMENT_MODE": "transparent",
+            "PUBLISHING_ENABLED": "true",
+            "TARGET_DISCOVERY_ENABLED": "false",
+            "LLM_ENABLED": "false",
+            "PORT": "8003",
         }
 
         try:
@@ -64,13 +61,15 @@ class Test12FactorCompliance(unittest.TestCase):
                 print(f"✅ Publishing enabled: {config.publishing.enabled}")
 
                 # Verify configuration is read from environment
-                self.assertEqual(config.environment, 'test')
+                self.assertEqual(config.environment, "test")
                 self.assertTrue(config.publishing.enabled)
 
                 # Test that no hardcoded values override environment
                 hardcoded_checks = []
-                if config.database.url != test_configs['DATABASE_URL']:
-                    hardcoded_checks.append(f"DATABASE_URL: expected {test_configs['DATABASE_URL']}, got {config.database.url}")
+                if config.database.url != test_configs["DATABASE_URL"]:
+                    hardcoded_checks.append(
+                        f"DATABASE_URL: expected {test_configs['DATABASE_URL']}, got {config.database.url}"
+                    )
 
                 if hardcoded_checks:
                     print(f"⚠️  Potential hardcoded values: {hardcoded_checks}")
@@ -105,11 +104,16 @@ class Test12FactorCompliance(unittest.TestCase):
             print(f"✅ Instance ID 2: {instance_id2[:8]}...")
 
             # Instance IDs should be different
-            self.assertNotEqual(instance_id1, instance_id2, "Instance IDs should be unique")
+            self.assertNotEqual(
+                instance_id1, instance_id2, "Instance IDs should be unique"
+            )
 
             # Check that no local state is persistent across instances
-            self.assertNotEqual(id(manager._operation_registry), id(manager2._operation_registry),
-                              "Operation registries should be separate")
+            self.assertNotEqual(
+                id(manager._operation_registry),
+                id(manager2._operation_registry),
+                "Operation registries should be separate",
+            )
 
             print("✅ Stateless design verified - no shared state between instances")
 
@@ -131,6 +135,7 @@ class Test12FactorCompliance(unittest.TestCase):
             # Import should not start servers or create persistent connections
             start_time = time.time()
             from alert_history.main import create_app
+
             import_time = time.time() - start_time
 
             print(f"✅ Main module import time: {import_time:.3f}s")
@@ -159,10 +164,10 @@ class Test12FactorCompliance(unittest.TestCase):
         print("\n=== T7.4.4: Port Binding ===")
 
         # Test that port is configurable via environment
-        test_ports = ['8004', '9000', '3000']
+        test_ports = ["8004", "9000", "3000"]
 
         for test_port in test_ports:
-            with patch.dict(os.environ, {'PORT': test_port}):
+            with patch.dict(os.environ, {"PORT": test_port}):
                 try:
                     sys.path.insert(0, str(self.src_path))
                     from alert_history.config import get_config
@@ -172,7 +177,7 @@ class Test12FactorCompliance(unittest.TestCase):
                     # Check if port configuration is respected
                     # Note: Our config might not have a direct port field,
                     # so we check if PORT env var can be read
-                    env_port = os.getenv('PORT')
+                    env_port = os.getenv("PORT")
                     print(f"✅ Port configured via ENV: {env_port}")
 
                     self.assertEqual(env_port, test_port)
@@ -191,25 +196,32 @@ class Test12FactorCompliance(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.logging_config import setup_logging, get_logger
+            from alert_history.logging_config import get_logger, setup_logging
 
             # Setup logging
-            setup_logging('debug', 'test')
-            logger = get_logger('test_12factor')
+            setup_logging("debug", "test")
+            logger = get_logger("test_12factor")
 
             # Check that logger is configured
             self.assertIsNotNone(logger)
 
             # Verify no file handlers are configured by default
-            file_handlers = [h for h in logger.handlers if hasattr(h, 'stream') and
-                           hasattr(h.stream, 'name') and h.stream.name != '<stdout>']
+            file_handlers = [
+                h
+                for h in logger.handlers
+                if hasattr(h, "stream")
+                and hasattr(h.stream, "name")
+                and h.stream.name != "<stdout>"
+            ]
 
             print(f"✅ Logger configured: {logger.name}")
             print(f"✅ Handlers count: {len(logger.handlers)}")
             print(f"✅ File handlers: {len(file_handlers)}")
 
             # Should primarily log to stdout, not files
-            self.assertLessEqual(len(file_handlers), 1, "Should not have many file handlers by default")
+            self.assertLessEqual(
+                len(file_handlers), 1, "Should not have many file handlers by default"
+            )
 
         except ImportError as e:
             print(f"⚠️  Logging import failed: {e}")
@@ -223,20 +235,20 @@ class Test12FactorCompliance(unittest.TestCase):
 
         # Test that backing services (database, Redis) are configurable via URLs
         backing_services = {
-            'database': {
-                'env_var': 'DATABASE_URL',
-                'test_urls': [
-                    'sqlite:///test.db',
-                    'postgresql://user:pass@localhost:5432/test',
-                ]
+            "database": {
+                "env_var": "DATABASE_URL",
+                "test_urls": [
+                    "sqlite:///test.db",
+                    "postgresql://user:pass@localhost:5432/test",
+                ],
             },
-            'redis': {
-                'env_var': 'REDIS_URL',
-                'test_urls': [
-                    'redis://localhost:6379/0',
-                    'redis://user:pass@redis-host:6380/1',
-                ]
-            }
+            "redis": {
+                "env_var": "REDIS_URL",
+                "test_urls": [
+                    "redis://localhost:6379/0",
+                    "redis://user:pass@redis-host:6380/1",
+                ],
+            },
         }
 
         try:
@@ -246,21 +258,23 @@ class Test12FactorCompliance(unittest.TestCase):
             for service_name, service_config in backing_services.items():
                 print(f"\n🔍 Testing {service_name} service configuration:")
 
-                for test_url in service_config['test_urls']:
-                    with patch.dict(os.environ, {service_config['env_var']: test_url}):
+                for test_url in service_config["test_urls"]:
+                    with patch.dict(os.environ, {service_config["env_var"]: test_url}):
                         config = get_config()
 
                         # Check if the URL is configurable
-                        if service_name == 'database':
+                        if service_name == "database":
                             actual_url = config.database.url
-                        elif service_name == 'redis':
+                        elif service_name == "redis":
                             actual_url = config.redis.url
 
                         print(f"   ✅ {test_url} → {actual_url}")
 
                         # URL should be configurable (not hardcoded)
-                        self.assertTrue(test_url in actual_url or actual_url == test_url,
-                                      f"Service URL not properly configured for {service_name}")
+                        self.assertTrue(
+                            test_url in actual_url or actual_url == test_url,
+                            f"Service URL not properly configured for {service_name}",
+                        )
 
         except ImportError as e:
             print(f"⚠️  Config import failed: {e}")
@@ -273,14 +287,14 @@ class Test12FactorCompliance(unittest.TestCase):
         print("\n=== T7.4.7: Dev/Prod Parity ===")
 
         # Test that the same configuration mechanism works for both dev and prod
-        environments = ['development', 'production', 'staging', 'test']
+        environments = ["development", "production", "staging", "test"]
 
         try:
             sys.path.insert(0, str(self.src_path))
             from alert_history.config import get_config
 
             for env in environments:
-                with patch.dict(os.environ, {'ENVIRONMENT': env}):
+                with patch.dict(os.environ, {"ENVIRONMENT": env}):
                     config = get_config()
 
                     print(f"✅ Environment '{env}' → {config.environment}")
@@ -306,10 +320,12 @@ class Test12FactorCompliance(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.core.shutdown import shutdown_handler, AppState
+            from alert_history.core.shutdown import AppState, shutdown_handler
 
             # Test shutdown handler exists and is callable
-            self.assertTrue(callable(shutdown_handler), "Shutdown handler should be callable")
+            self.assertTrue(
+                callable(shutdown_handler), "Shutdown handler should be callable"
+            )
 
             # Create mock app state
             app_state = AppState()
@@ -371,13 +387,13 @@ class Test12FactorCompliance(unittest.TestCase):
 
         # Check that all major configuration is available via environment
         expected_env_vars = [
-            'ENVIRONMENT',
-            'DATABASE_URL',
-            'REDIS_URL',
-            'ENRICHMENT_MODE',
-            'PUBLISHING_ENABLED',
-            'LLM_ENABLED',
-            'LOG_LEVEL'
+            "ENVIRONMENT",
+            "DATABASE_URL",
+            "REDIS_URL",
+            "ENRICHMENT_MODE",
+            "PUBLISHING_ENABLED",
+            "LLM_ENABLED",
+            "LOG_LEVEL",
         ]
 
         try:
@@ -398,10 +414,14 @@ class Test12FactorCompliance(unittest.TestCase):
                         print(f"   ⚠️  {env_var}: {e}")
 
             coverage = len(configured_vars) / len(expected_env_vars)
-            print(f"\n📊 Environment variable coverage: {coverage:.1%} ({len(configured_vars)}/{len(expected_env_vars)})")
+            print(
+                f"\n📊 Environment variable coverage: {coverage:.1%} ({len(configured_vars)}/{len(expected_env_vars)})"
+            )
 
             # Should have good coverage of environment configuration
-            self.assertGreaterEqual(coverage, 0.7, "Environment variable coverage too low")
+            self.assertGreaterEqual(
+                coverage, 0.7, "Environment variable coverage too low"
+            )
 
         except ImportError as e:
             print(f"⚠️  Config import failed: {e}")

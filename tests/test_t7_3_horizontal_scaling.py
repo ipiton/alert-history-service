@@ -18,11 +18,10 @@ import concurrent.futures
 import os
 import sys
 import tempfile
-import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestHorizontalScaling(unittest.TestCase):
@@ -39,14 +38,16 @@ class TestHorizontalScaling(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.database.sqlite_adapter import SQLiteLegacyStorage
             import sqlite3
 
+            from alert_history.database.sqlite_adapter import SQLiteLegacyStorage
+
             # Create temporary database
-            with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_db:
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:
                 test_db_path = tmp_db.name
 
             try:
+
                 def write_alerts(instance_id, num_alerts=10):
                     """Simulate alerts writing from one instance."""
                     storage = SQLiteLegacyStorage(test_db_path)
@@ -55,13 +56,15 @@ class TestHorizontalScaling(unittest.TestCase):
                     for i in range(num_alerts):
                         try:
                             alert_data = {
-                                'alertname': f'TestAlert_{instance_id}_{i}',
-                                'namespace': f'ns_{instance_id}',
-                                'status': 'firing',
-                                'labels': {'instance_id': str(instance_id)},
-                                'annotations': {'summary': f'Test from instance {instance_id}'},
-                                'startsAt': '2024-12-28T10:00:00Z',
-                                'fingerprint': f'fp_{instance_id}_{i}'
+                                "alertname": f"TestAlert_{instance_id}_{i}",
+                                "namespace": f"ns_{instance_id}",
+                                "status": "firing",
+                                "labels": {"instance_id": str(instance_id)},
+                                "annotations": {
+                                    "summary": f"Test from instance {instance_id}"
+                                },
+                                "startsAt": "2024-12-28T10:00:00Z",
+                                "fingerprint": f"fp_{instance_id}_{i}",
                             }
 
                             storage.store_alert(alert_data)
@@ -77,13 +80,18 @@ class TestHorizontalScaling(unittest.TestCase):
                 num_instances = 3
                 alerts_per_instance = 20
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=num_instances) as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=num_instances
+                ) as executor:
                     futures = [
                         executor.submit(write_alerts, i, alerts_per_instance)
                         for i in range(num_instances)
                     ]
 
-                    results = [future.result() for future in concurrent.futures.as_completed(futures)]
+                    results = [
+                        future.result()
+                        for future in concurrent.futures.as_completed(futures)
+                    ]
 
                 # Verify results
                 total_written = sum(results)
@@ -92,7 +100,7 @@ class TestHorizontalScaling(unittest.TestCase):
                 # Count actual records in database
                 conn = sqlite3.connect(test_db_path)
                 cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM alerts')
+                cursor.execute("SELECT COUNT(*) FROM alerts")
                 actual_count = cursor.fetchone()[0]
                 conn.close()
 
@@ -104,7 +112,9 @@ class TestHorizontalScaling(unittest.TestCase):
                 success_rate = actual_count / expected_total
                 print(f"📊 Concurrency success rate: {success_rate:.1%}")
 
-                self.assertGreaterEqual(success_rate, 0.8, "Concurrency success rate too low")
+                self.assertGreaterEqual(
+                    success_rate, 0.8, "Concurrency success rate too low"
+                )
 
             finally:
                 if os.path.exists(test_db_path):
@@ -193,8 +203,12 @@ class TestHorizontalScaling(unittest.TestCase):
 
                 # In ideal distributed locking, only one instance should complete
                 # But with mock implementation, we test the interface works
-                self.assertGreaterEqual(len(results), 1, "At least one operation should complete")
-                self.assertLessEqual(len(results), 3, "Not more than instances should complete")
+                self.assertGreaterEqual(
+                    len(results), 1, "At least one operation should complete"
+                )
+                self.assertLessEqual(
+                    len(results), 3, "Not more than instances should complete"
+                )
 
             # Run async test
             loop = asyncio.new_event_loop()
@@ -216,11 +230,11 @@ class TestHorizontalScaling(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.services.webhook_processor import WebhookProcessor
             from alert_history.database.sqlite_adapter import SQLiteLegacyStorage
+            from alert_history.services.webhook_processor import WebhookProcessor
 
             # Create temporary database
-            with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_db:
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:
                 test_db_path = tmp_db.name
 
             try:
@@ -238,7 +252,7 @@ class TestHorizontalScaling(unittest.TestCase):
                     storage=storage,
                     classification_service=None,
                     metrics=metrics,
-                    enable_auto_classification=False
+                    enable_auto_classification=False,
                 )
 
                 # Simulate concurrent webhook processing
@@ -246,12 +260,14 @@ class TestHorizontalScaling(unittest.TestCase):
                     webhook_data = {
                         "receiver": "test",
                         "status": "firing",
-                        "alerts": [{
-                            "status": "firing",
-                            "labels": {"alertname": "LoadTest", "instance": "test"},
-                            "annotations": {"summary": "Load test alert"},
-                            "startsAt": "2024-12-28T10:00:00Z"
-                        }]
+                        "alerts": [
+                            {
+                                "status": "firing",
+                                "labels": {"alertname": "LoadTest", "instance": "test"},
+                                "annotations": {"summary": "Load test alert"},
+                                "startsAt": "2024-12-28T10:00:00Z",
+                            }
+                        ],
                     }
 
                     # Process multiple webhooks concurrently
@@ -286,7 +302,9 @@ class TestHorizontalScaling(unittest.TestCase):
                     print(f"📊 Throughput: {completed/duration:.1f} webhooks/sec")
 
                     success_rate = completed / num_requests
-                    self.assertGreaterEqual(success_rate, 0.9, "Load test success rate too low")
+                    self.assertGreaterEqual(
+                        success_rate, 0.9, "Load test success rate too low"
+                    )
 
                     return completed, duration
 
@@ -321,7 +339,7 @@ class TestHorizontalScaling(unittest.TestCase):
 
             # Simulate storage operation
             alert_data = webhook_data["alerts"][0]
-            alert_data['fingerprint'] = f"test_{hash(str(alert_data))}"
+            alert_data["fingerprint"] = f"test_{hash(str(alert_data))}"
 
             # Mock the storage call
             return {"status": "processed", "alerts": 1}
@@ -360,8 +378,7 @@ class TestHorizontalScaling(unittest.TestCase):
         # Start multiple simulated instances
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             futures = [
-                executor.submit(simulate_instance, f"instance_{i}", 1)
-                for i in range(3)
+                executor.submit(simulate_instance, f"instance_{i}", 1) for i in range(3)
             ]
 
             # Monitor coordination
@@ -369,18 +386,24 @@ class TestHorizontalScaling(unittest.TestCase):
             active_instances = len(instances)
 
             # Wait for completion
-            heartbeat_counts = [future.result() for future in concurrent.futures.as_completed(futures)]
+            heartbeat_counts = [
+                future.result() for future in concurrent.futures.as_completed(futures)
+            ]
 
         total_heartbeats = sum(heartbeat_counts)
         total_events = len(coordination_events)
 
-        print(f"📊 Simulated instances: 3")
+        print("📊 Simulated instances: 3")
         print(f"📊 Peak active instances: {active_instances}")
         print(f"📊 Total heartbeats: {total_heartbeats}")
         print(f"📊 Coordination events: {total_events}")
 
-        self.assertGreaterEqual(total_heartbeats, 9, "Insufficient heartbeats")  # ~3 instances * 3 heartbeats
-        self.assertGreaterEqual(total_events, 12, "Insufficient coordination events")  # heartbeats + shutdowns
+        self.assertGreaterEqual(
+            total_heartbeats, 9, "Insufficient heartbeats"
+        )  # ~3 instances * 3 heartbeats
+        self.assertGreaterEqual(
+            total_events, 12, "Insufficient coordination events"
+        )  # heartbeats + shutdowns
 
     def test_05_scaling_metrics_simulation(self):
         """Test scaling metrics simulation."""
@@ -395,12 +418,12 @@ class TestHorizontalScaling(unittest.TestCase):
             requests_per_sec = base_requests * load_factor
 
             metrics = {
-                'instance_id': instance_id,
-                'requests_per_second': requests_per_sec,
-                'cpu_usage': min(0.9, 0.2 + (load_factor * 0.3)),
-                'memory_usage': min(0.85, 0.3 + (load_factor * 0.2)),
-                'active_connections': int(50 * load_factor),
-                'response_time_p95': 0.1 + (load_factor * 0.05)
+                "instance_id": instance_id,
+                "requests_per_second": requests_per_sec,
+                "cpu_usage": min(0.9, 0.2 + (load_factor * 0.3)),
+                "memory_usage": min(0.85, 0.3 + (load_factor * 0.2)),
+                "active_connections": int(50 * load_factor),
+                "response_time_p95": 0.1 + (load_factor * 0.05),
             }
 
             instance_metrics[instance_id] = metrics
@@ -408,9 +431,9 @@ class TestHorizontalScaling(unittest.TestCase):
 
         # Simulate different load scenarios
         scenarios = [
-            ('low_load', 0.5),
-            ('normal_load', 1.0),
-            ('high_load', 2.0),
+            ("low_load", 0.5),
+            ("normal_load", 1.0),
+            ("high_load", 2.0),
         ]
 
         for scenario_name, load_factor in scenarios:
@@ -423,9 +446,13 @@ class TestHorizontalScaling(unittest.TestCase):
                 scenario_metrics.append(metrics)
 
             # Aggregate metrics
-            avg_cpu = sum(m['cpu_usage'] for m in scenario_metrics) / len(scenario_metrics)
-            avg_memory = sum(m['memory_usage'] for m in scenario_metrics) / len(scenario_metrics)
-            total_rps = sum(m['requests_per_second'] for m in scenario_metrics)
+            avg_cpu = sum(m["cpu_usage"] for m in scenario_metrics) / len(
+                scenario_metrics
+            )
+            avg_memory = sum(m["memory_usage"] for m in scenario_metrics) / len(
+                scenario_metrics
+            )
+            total_rps = sum(m["requests_per_second"] for m in scenario_metrics)
 
             print(f"   📊 Average CPU: {avg_cpu:.1%}")
             print(f"   📊 Average Memory: {avg_memory:.1%}")
@@ -442,9 +469,11 @@ class TestHorizontalScaling(unittest.TestCase):
             print(f"   🎯 Scaling decision: {scaling_decision}")
 
         # Verify metrics collection
-        self.assertEqual(len(instance_metrics), 9, "Should have metrics from 9 instance collections")  # 3 scenarios * 3 instances
+        self.assertEqual(
+            len(instance_metrics), 9, "Should have metrics from 9 instance collections"
+        )  # 3 scenarios * 3 instances
 
-        print(f"\n✅ Scaling simulation completed successfully")
+        print("\n✅ Scaling simulation completed successfully")
 
 
 def main():

@@ -2,7 +2,8 @@
 Application state management для dependency injection.
 """
 
-from typing import Optional, Any, Dict
+from typing import Any, Dict
+
 from ..logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +31,9 @@ class AppState:
     def __getattr__(self, name: str) -> Any:
         """Позволяет обращаться к state как к атрибутам."""
         if name.startswith("_"):
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+            raise AttributeError(
+                f"'{self.__class__.__name__}' object has no attribute '{name}'"
+            )
         return self._state.get(name)
 
     def __setattr__(self, name: str, value: Any) -> None:

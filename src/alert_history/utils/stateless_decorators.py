@@ -7,11 +7,10 @@ Provides:
 - @instance_tracked - track operations across instances
 """
 
-import asyncio
 import functools
 import hashlib
 import inspect
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from ..logging_config import get_logger
 
@@ -41,13 +40,21 @@ def idempotent(
             stateless_manager = None
 
             # Try to get stateless_manager from various sources
-            if args and hasattr(args[0], "state") and hasattr(args[0].state, "stateless_manager"):
+            if (
+                args
+                and hasattr(args[0], "state")
+                and hasattr(args[0].state, "stateless_manager")
+            ):
                 # FastAPI app instance
                 stateless_manager = args[0].state.stateless_manager
-            elif "request" in kwargs and hasattr(kwargs["request"].app.state, "stateless_manager"):
+            elif "request" in kwargs and hasattr(
+                kwargs["request"].app.state, "stateless_manager"
+            ):
                 # FastAPI request
                 stateless_manager = kwargs["request"].app.state.stateless_manager
-            elif hasattr(func, "__self__") and hasattr(func.__self__, "stateless_manager"):
+            elif hasattr(func, "__self__") and hasattr(
+                func.__self__, "stateless_manager"
+            ):
                 # Class method with stateless_manager attribute
                 stateless_manager = func.__self__.stateless_manager
 
@@ -66,7 +73,9 @@ def idempotent(
                 )
 
             # Check if operation can proceed (idempotency check)
-            can_proceed = await stateless_manager.ensure_idempotent_operation(operation_key, ttl)
+            can_proceed = await stateless_manager.ensure_idempotent_operation(
+                operation_key, ttl
+            )
 
             if not can_proceed:
                 logger.info(
@@ -132,7 +141,9 @@ def stateless(
             if require_redis:
                 stateless_manager = _get_stateless_manager(*args, **kwargs)
                 if not stateless_manager or not stateless_manager.redis_cache:
-                    raise RuntimeError(f"Redis required for stateless operation {func.__name__}")
+                    raise RuntimeError(
+                        f"Redis required for stateless operation {func.__name__}"
+                    )
 
             # Validate stateless operation
             stateless_manager = _get_stateless_manager(*args, **kwargs)
@@ -203,10 +214,16 @@ def instance_tracked(
 def _get_stateless_manager(*args, **kwargs):
     """Helper to extract stateless manager from various sources."""
     # Try to get stateless_manager from various sources
-    if args and hasattr(args[0], "state") and hasattr(args[0].state, "stateless_manager"):
+    if (
+        args
+        and hasattr(args[0], "state")
+        and hasattr(args[0].state, "stateless_manager")
+    ):
         # FastAPI app instance
         return args[0].state.stateless_manager
-    elif "request" in kwargs and hasattr(kwargs["request"].app.state, "stateless_manager"):
+    elif "request" in kwargs and hasattr(
+        kwargs["request"].app.state, "stateless_manager"
+    ):
         # FastAPI request
         return kwargs["request"].app.state.stateless_manager
     elif "app" in kwargs and hasattr(kwargs["app"].state, "stateless_manager"):
@@ -223,7 +240,9 @@ def _generate_operation_key(func: Callable, args: tuple, kwargs: dict) -> str:
 
     # Add args (excluding 'self' and common framework objects)
     for arg in args:
-        if not (hasattr(arg, "__dict__") and hasattr(arg, "__module__")):  # Skip complex objects
+        if not (
+            hasattr(arg, "__dict__") and hasattr(arg, "__module__")
+        ):  # Skip complex objects
             key_components.append(str(arg))
 
     # Add kwargs (excluding common framework parameters)
@@ -258,7 +277,9 @@ def idempotent_alert_processing(ttl: int = 3600):
         if fingerprint:
             return f"alert_processing:{fingerprint}"
         else:
-            return _generate_operation_key(args[0] if args else lambda: None, args, kwargs)
+            return _generate_operation_key(
+                args[0] if args else lambda: None, args, kwargs
+            )
 
     return idempotent(key_func=key_func, ttl=ttl)
 

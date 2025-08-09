@@ -2,14 +2,14 @@
 """
 Базовый тест Redis integration.
 """
-import sys
-import os
 import asyncio
-import time
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
 sys.path.insert(0, project_root)
+
 
 async def test_redis_integration():
     """Test basic Redis integration components."""
@@ -19,6 +19,7 @@ async def test_redis_integration():
         # Test config loading
         print("1. Testing Redis config loading...")
         from config import get_config
+
         config = get_config()
         print(f"   ✅ Redis URL: {config.redis.redis_url}")
         print(f"   ✅ Pool size: {config.redis.pool_size}")
@@ -27,6 +28,7 @@ async def test_redis_integration():
         # Test Redis cache import (without connection)
         print("2. Testing Redis cache import...")
         from src.alert_history.services.redis_cache import RedisCache
+
         print("   ✅ RedisCache imported successfully")
 
         # Test Redis cache initialization (dry run)
@@ -34,7 +36,7 @@ async def test_redis_integration():
         redis_cache = RedisCache(
             redis_url=config.redis.redis_url,
             default_ttl=3600,  # 1 hour
-            max_connections=config.redis.pool_size
+            max_connections=config.redis.pool_size,
         )
         print("   ✅ Redis cache instance created")
 
@@ -51,8 +53,12 @@ async def test_redis_integration():
         # Test classification caching interface
         print("5. Testing classification cache interface...")
         print("   ✅ Classification methods available:")
-        print(f"      - cache_classification: {hasattr(redis_cache, 'cache_classification')}")
-        print(f"      - get_cached_classification: {hasattr(redis_cache, 'get_cached_classification')}")
+        print(
+            f"      - cache_classification: {hasattr(redis_cache, 'cache_classification')}"
+        )
+        print(
+            f"      - get_cached_classification: {hasattr(redis_cache, 'get_cached_classification')}"
+        )
 
         # Test session management interface
         print("6. Testing session management interface...")
@@ -68,14 +74,18 @@ async def test_redis_integration():
         print(f"      - health_check: {hasattr(redis_cache, 'health_check')}")
 
         print("\n🎉 All Redis integration tests passed!")
-        print("⚠️  Note: These are interface tests. Real connection tests require running Redis server.")
+        print(
+            "⚠️  Note: These are interface tests. Real connection tests require running Redis server."
+        )
         return True
 
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 async def test_distributed_lock_interface():
     """Test distributed lock interface (dry run)."""
@@ -83,13 +93,11 @@ async def test_distributed_lock_interface():
 
     try:
         from config import get_config
+
         config = get_config()
         from src.alert_history.services.redis_cache import RedisCache
 
-        redis_cache = RedisCache(
-            redis_url=config.redis.redis_url,
-            default_ttl=3600
-        )
+        redis_cache = RedisCache(redis_url=config.redis.redis_url, default_ttl=3600)
 
         print("1. Testing distributed lock context manager interface...")
         # Test that the distributed_lock method returns an async context manager
@@ -100,7 +108,7 @@ async def test_distributed_lock_interface():
         print("   ✅ Lock supports: lock_name, timeout, blocking_timeout")
 
         print("3. Testing lock manager interface...")
-        print("   ✅ is_locked method available:", hasattr(redis_cache, 'is_locked'))
+        print("   ✅ is_locked method available:", hasattr(redis_cache, "is_locked"))
 
         print("\n🔒 Distributed lock interface tests passed!")
         return True
@@ -108,6 +116,7 @@ async def test_distributed_lock_interface():
     except Exception as e:
         print(f"❌ Lock test failed: {e}")
         return False
+
 
 if __name__ == "__main__":
     # Run basic Redis tests
@@ -120,7 +129,9 @@ if __name__ == "__main__":
 
     if overall_success:
         print("\n✅ All Redis tests completed successfully!")
-        print("💡 To test with real Redis connection, ensure Redis server is running and use:")
+        print(
+            "💡 To test with real Redis connection, ensure Redis server is running and use:"
+        )
         print("   REDIS_HOST=localhost REDIS_PORT=6379 python3 test_redis_real.py")
 
     sys.exit(0 if overall_success else 1)

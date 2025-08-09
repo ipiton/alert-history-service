@@ -9,10 +9,11 @@ Database Migration CLI для Alert History Service.
 - validate: Проверить готовность к миграции
 """
 import asyncio
-import click
 import os
 import sys
 from pathlib import Path
+
+import click
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -20,7 +21,7 @@ sys.path.insert(0, str(project_root))
 
 from src.alert_history.config import get_config
 from src.alert_history.database.migration_manager import MigrationManager
-from src.alert_history.logging_config import setup_logging, get_logger
+from src.alert_history.logging_config import get_logger, setup_logging
 
 # Setup logging
 setup_logging()
@@ -34,7 +35,9 @@ def cli():
 
 
 @cli.command()
-@click.option("--dry-run", is_flag=True, help="Show what would be migrated without applying")
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be migrated without applying"
+)
 async def schema():
     """Apply PostgreSQL schema migrations."""
     try:
@@ -49,14 +52,17 @@ async def schema():
         click.echo("🗄️ Applying PostgreSQL schema migrations...")
 
         manager = MigrationManager(
-            postgresql_url=config.database.postgres_url, sqlite_path=config.database.sqlite_path
+            postgresql_url=config.database.postgres_url,
+            sqlite_path=config.database.sqlite_path,
         )
 
         await manager.initialize()
 
         # Get current version
         current_version = await manager.get_current_schema_version()
-        click.echo(f"📋 Current schema version: {current_version or 'None (first run)'}")
+        click.echo(
+            f"📋 Current schema version: {current_version or 'None (first run)'}"
+        )
 
         # Get available migrations
         migrations = await manager.get_available_migrations()
@@ -68,7 +74,9 @@ async def schema():
                 if current_version and migration["version"] <= current_version
                 else "⏳ Pending"
             )
-            click.echo(f"   {version_status} {migration['version']}: {migration['description']}")
+            click.echo(
+                f"   {version_status} {migration['version']}: {migration['description']}"
+            )
 
         # Apply migrations
         success = await manager.apply_schema_migrations()
@@ -110,7 +118,8 @@ async def data(batch_size: int, verify: bool, backup: bool):
         click.echo(f"   💾 Backup: {'enabled' if backup else 'disabled'}")
 
         manager = MigrationManager(
-            postgresql_url=config.database.postgres_url, sqlite_path=config.database.sqlite_path
+            postgresql_url=config.database.postgres_url,
+            sqlite_path=config.database.sqlite_path,
         )
 
         await manager.initialize()
@@ -131,7 +140,9 @@ async def data(batch_size: int, verify: bool, backup: bool):
 
         click.echo("\n📊 Migration Results:")
         click.echo(f"   📝 Status: {status['status']}")
-        click.echo(f"   📄 Alerts: {status['migrated_alerts']}/{status['total_alerts']}")
+        click.echo(
+            f"   📄 Alerts: {status['migrated_alerts']}/{status['total_alerts']}"
+        )
         click.echo(
             f"   🏷️ Classifications: {status['migrated_classifications']}/{status['total_classifications']}"
         )
@@ -176,7 +187,9 @@ async def status():
             f"   SQLite exists: {'✅' if os.path.exists(config.database.sqlite_path) else '❌'}"
         )
         click.echo(f"   PostgreSQL: {config.database.postgres_url}")
-        click.echo(f"   PostgreSQL configured: {'✅' if config.database.postgres_url else '❌'}")
+        click.echo(
+            f"   PostgreSQL configured: {'✅' if config.database.postgres_url else '❌'}"
+        )
 
         if not config.database.postgres_url:
             click.echo("\n❌ PostgreSQL not configured. Migration not available.")
@@ -185,27 +198,30 @@ async def status():
         # Check PostgreSQL connection
         try:
             manager = MigrationManager(
-                postgresql_url=config.database.postgres_url, sqlite_path=config.database.sqlite_path
+                postgresql_url=config.database.postgres_url,
+                sqlite_path=config.database.sqlite_path,
             )
 
             await manager.initialize()
 
             # Get schema version
             current_version = await manager.get_current_schema_version()
-            click.echo(f"\n🗄️ Schema:")
+            click.echo("\n🗄️ Schema:")
             click.echo(f"   Current version: {current_version or 'None'}")
 
             # Get available migrations
             migrations = await manager.get_available_migrations()
             pending = [
-                m for m in migrations if not current_version or m["version"] > current_version
+                m
+                for m in migrations
+                if not current_version or m["version"] > current_version
             ]
 
             click.echo(f"   Available migrations: {len(migrations)}")
             click.echo(f"   Pending migrations: {len(pending)}")
 
             # Migration readiness
-            click.echo(f"\n🚀 Readiness:")
+            click.echo("\n🚀 Readiness:")
 
             ready_checks = [
                 ("PostgreSQL connection", True),  # We connected successfully
@@ -251,7 +267,9 @@ async def validate():
 
         # Check 2: Files
         if config.database.sqlite_path:
-            checks.append(("SQLite database exists", os.path.exists(config.database.sqlite_path)))
+            checks.append(
+                ("SQLite database exists", os.path.exists(config.database.sqlite_path))
+            )
 
         # Check 3: Migration files
         migrations_dir = Path("src/alert_history/database/migrations")
@@ -286,7 +304,7 @@ async def validate():
 
         success_rate = passed / len(checks) * 100
 
-        click.echo(f"\n📊 Validation Summary:")
+        click.echo("\n📊 Validation Summary:")
         click.echo(f"   Passed: {passed}/{len(checks)}")
         click.echo(f"   Success Rate: {success_rate:.1f}%")
 

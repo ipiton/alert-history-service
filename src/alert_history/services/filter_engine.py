@@ -14,9 +14,8 @@ Filter Engine для умной фильтрации алертов перед �
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 # Local imports
 from ..core.interfaces import (
@@ -27,7 +26,6 @@ from ..core.interfaces import (
     PublishingTarget,
 )
 from ..logging_config import get_logger
-from ..utils.common import parse_duration
 
 logger = get_logger(__name__)
 
@@ -81,7 +79,9 @@ class AlertFilterEngine(IFilterEngine):
         self._dedup_window = 300.0  # 5 minutes default
 
         # Rate limiting tracking
-        self._rate_limit_counters: Dict[str, Dict[str, int]] = {}  # target -> {window: count}
+        self._rate_limit_counters: Dict[str, Dict[str, int]] = (
+            {}
+        )  # target -> {window: count}
         self._rate_limit_windows: Dict[str, float] = {}  # target -> window_start_time
 
         self._setup_default_rules()
@@ -139,7 +139,9 @@ class AlertFilterEngine(IFilterEngine):
         # Sort rules by priority
         self.global_rules.sort(key=lambda r: r.priority)
 
-    async def should_publish(self, enriched_alert: EnrichedAlert, target: PublishingTarget) -> bool:
+    async def should_publish(
+        self, enriched_alert: EnrichedAlert, target: PublishingTarget
+    ) -> bool:
         """
         Определить должен ли алерт быть опубликован в target.
 
@@ -164,7 +166,9 @@ class AlertFilterEngine(IFilterEngine):
 
             # Check rate limiting
             if self._is_rate_limited(target):
-                logger.debug("Alert filtered out due to rate limiting", target=target.name)
+                logger.debug(
+                    "Alert filtered out due to rate limiting", target=target.name
+                )
                 return False
 
             # Apply target-specific configuration filters
@@ -271,7 +275,9 @@ class AlertFilterEngine(IFilterEngine):
 
         return True
 
-    def _apply_rules(self, enriched_alert: EnrichedAlert, rules: List[FilterRule]) -> FilterAction:
+    def _apply_rules(
+        self, enriched_alert: EnrichedAlert, rules: List[FilterRule]
+    ) -> FilterAction:
         """Применить список правил к алерту."""
         alert = enriched_alert.alert
         classification = enriched_alert.classification
@@ -394,7 +400,9 @@ class AlertFilterEngine(IFilterEngine):
         cutoff_time = current_time - self._dedup_window
 
         expired_fingerprints = [
-            fp for fp, timestamp in self._recent_alerts.items() if timestamp < cutoff_time
+            fp
+            for fp, timestamp in self._recent_alerts.items()
+            if timestamp < cutoff_time
         ]
 
         for fp in expired_fingerprints:
@@ -477,11 +485,15 @@ class AlertFilterEngine(IFilterEngine):
             if target_name in self.target_specific_rules:
                 original_count = len(self.target_specific_rules[target_name])
                 self.target_specific_rules[target_name] = [
-                    r for r in self.target_specific_rules[target_name] if r.name != rule_name
+                    r
+                    for r in self.target_specific_rules[target_name]
+                    if r.name != rule_name
                 ]
                 removed = len(self.target_specific_rules[target_name]) < original_count
                 if removed:
-                    logger.info(f"Removed target-specific rule {rule_name} for {target_name}")
+                    logger.info(
+                        f"Removed target-specific rule {rule_name} for {target_name}"
+                    )
                 return removed
         else:
             # Remove global rule
@@ -520,7 +532,8 @@ class AlertFilterEngine(IFilterEngine):
         return {
             "global_rules_count": len(self.global_rules),
             "target_specific_rules": {
-                target: len(rules) for target, rules in self.target_specific_rules.items()
+                target: len(rules)
+                for target, rules in self.target_specific_rules.items()
             },
             "deduplication": {
                 "window_seconds": self._dedup_window,

@@ -12,18 +12,15 @@ Database Migration Manager для Alert History Service.
 # Standard library imports
 import asyncio
 import hashlib
-import os
 import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Third-party imports
-import asyncpg
-
 # Local imports
-from ..core.interfaces import Alert, AlertSeverity, AlertStatus, IAlertStorage
+from ..core.interfaces import Alert, AlertSeverity, AlertStatus
 from ..database.postgresql_adapter import PostgreSQLStorage
 from ..database.sqlite_adapter import SQLiteLegacyStorage
 from ..logging_config import get_logger
@@ -237,7 +234,9 @@ class MigrationManager:
     # Data Migration (SQLite → PostgreSQL)
     # ===============================
 
-    async def migrate_data(self, batch_size: int = 1000, verify_data: bool = True) -> bool:
+    async def migrate_data(
+        self, batch_size: int = 1000, verify_data: bool = True
+    ) -> bool:
         """
         Migrate data from SQLite to PostgreSQL.
 
@@ -332,14 +331,20 @@ class MigrationManager:
                             fingerprint=row[0],
                             alert_name=row[1],
                             namespace=row[2],
-                            status=(AlertStatus(row[3]) if row[3] else AlertStatus.FIRING),
+                            status=(
+                                AlertStatus(row[3]) if row[3] else AlertStatus.FIRING
+                            ),
                             labels=eval(row[4]) if row[4] else {},
                             annotations=eval(row[5]) if row[5] else {},
-                            starts_at=(datetime.fromisoformat(row[6]) if row[6] else None),
+                            starts_at=(
+                                datetime.fromisoformat(row[6]) if row[6] else None
+                            ),
                             ends_at=datetime.fromisoformat(row[7]) if row[7] else None,
                             generator_url=row[8],
                             timestamp=(
-                                datetime.fromisoformat(row[9]) if row[9] else datetime.utcnow()
+                                datetime.fromisoformat(row[9])
+                                if row[9]
+                                else datetime.utcnow()
                             ),
                         )
                         alerts.append(alert)
@@ -360,7 +365,9 @@ class MigrationManager:
 
                 # Progress logging
                 progress = (offset + len(rows)) / total_count * 100
-                logger.info(f"Migration progress: {progress:.1f}% ({migrated_count}/{total_count})")
+                logger.info(
+                    f"Migration progress: {progress:.1f}% ({migrated_count}/{total_count})"
+                )
 
                 offset += batch_size
 
@@ -427,7 +434,9 @@ class MigrationManager:
                     from ..core.interfaces import ClassificationResult
 
                     classification = ClassificationResult(
-                        severity=(AlertSeverity(row[1]) if row[1] else AlertSeverity.INFO),
+                        severity=(
+                            AlertSeverity(row[1]) if row[1] else AlertSeverity.INFO
+                        ),
                         confidence=float(row[2]) if row[2] else 0.0,
                         reasoning=row[3] or "",
                         recommendations=eval(row[4]) if row[4] else [],
@@ -435,7 +444,9 @@ class MigrationManager:
                         metadata=eval(row[6]) if row[6] else {},
                     )
 
-                    success = await self.pg_storage.save_classification(row[0], classification)
+                    success = await self.pg_storage.save_classification(
+                        row[0], classification
+                    )
                     if success:
                         migrated_count += 1
 
@@ -447,7 +458,9 @@ class MigrationManager:
 
             conn.close()
 
-            logger.info(f"Classification migration completed: {migrated_count}/{total_count}")
+            logger.info(
+                f"Classification migration completed: {migrated_count}/{total_count}"
+            )
 
             return True
 
@@ -521,7 +534,9 @@ class MigrationManager:
 
         if status["total_classifications"] > 0:
             status["classifications_progress_percent"] = (
-                status["migrated_classifications"] / status["total_classifications"] * 100
+                status["migrated_classifications"]
+                / status["total_classifications"]
+                * 100
             )
 
         return status

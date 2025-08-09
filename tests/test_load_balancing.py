@@ -2,13 +2,10 @@
 """
 Тест для Service & Load Balancing (T5.3).
 """
-import sys
-import os
 import asyncio
-import aiohttp
+import os
+import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -38,7 +35,13 @@ async def test_health_endpoints():
         print("2. Testing health status reporting...")
         status = health_checker.get_status()
 
-        required_fields = ['ready', 'healthy', 'uptime_seconds', 'dependencies', 'timestamp']
+        required_fields = [
+            "ready",
+            "healthy",
+            "uptime_seconds",
+            "dependencies",
+            "timestamp",
+        ]
         for field in required_fields:
             assert field in status
             print(f"     ✅ Status field '{field}' present")
@@ -74,6 +77,7 @@ async def test_health_endpoints():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -90,6 +94,7 @@ async def test_graceful_shutdown():
 
         # Test cleanup task registration
         cleanup_called = []
+
         def test_cleanup_1():
             cleanup_called.append("cleanup_1")
 
@@ -131,6 +136,7 @@ async def test_graceful_shutdown():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -148,7 +154,7 @@ async def test_stateless_behavior():
         test_value = "stateless_test_" + str(time.time())
         app_state.test_stateless = test_value
 
-        assert hasattr(app_state, 'test_stateless')
+        assert hasattr(app_state, "test_stateless")
         assert app_state.test_stateless == test_value
         print("   ✅ App state works for dependency injection")
 
@@ -159,10 +165,11 @@ async def test_stateless_behavior():
         os.environ["TEST_STATELESS_CONFIG"] = "test_value_123"
 
         from src.alert_history.config import get_config
+
         config = get_config()
 
         # Configuration should be isolated and environment-based
-        assert hasattr(config, 'service_name')
+        assert hasattr(config, "service_name")
         print("   ✅ Configuration is environment-based")
 
         # Cleanup
@@ -174,12 +181,19 @@ async def test_stateless_behavior():
         print("3. Testing dependency management...")
 
         # Test that dependencies can be recreated
-        from src.alert_history.services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig
+        from src.alert_history.services.target_discovery import (
+            DynamicTargetManager,
+            TargetDiscoveryConfig,
+        )
 
-        config1 = TargetDiscoveryConfig(enabled=True, secret_labels=["test=true"], secret_namespaces=["test"])
+        config1 = TargetDiscoveryConfig(
+            enabled=True, secret_labels=["test=true"], secret_namespaces=["test"]
+        )
         manager1 = DynamicTargetManager(config1)
 
-        config2 = TargetDiscoveryConfig(enabled=True, secret_labels=["test=false"], secret_namespaces=["prod"])
+        config2 = TargetDiscoveryConfig(
+            enabled=True, secret_labels=["test=false"], secret_namespaces=["prod"]
+        )
         manager2 = DynamicTargetManager(config2)
 
         # Should be independent instances
@@ -193,6 +207,7 @@ async def test_stateless_behavior():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -208,13 +223,16 @@ async def simulate_load_balancing():
         instances = []
         for i in range(3):
             from src.alert_history.core.shutdown import HealthChecker
+
             instance_health = HealthChecker()
             instance_health.mark_ready()
-            instances.append({
-                'id': f'instance-{i}',
-                'health_checker': instance_health,
-                'requests_processed': 0
-            })
+            instances.append(
+                {
+                    "id": f"instance-{i}",
+                    "health_checker": instance_health,
+                    "requests_processed": 0,
+                }
+            )
 
         print(f"   ✅ Created {len(instances)} simulated instances")
 
@@ -228,8 +246,8 @@ async def simulate_load_balancing():
             instance = instances[instance_index]
 
             # Only process if instance is ready
-            if instance['health_checker'].is_ready():
-                instance['requests_processed'] += 1
+            if instance["health_checker"].is_ready():
+                instance["requests_processed"] += 1
 
         print("3. Checking load distribution...")
 
@@ -237,21 +255,21 @@ async def simulate_load_balancing():
             print(f"   • {instance['id']}: {instance['requests_processed']} requests")
 
         # Check that load is reasonably distributed
-        total_processed = sum(i['requests_processed'] for i in instances)
+        total_processed = sum(i["requests_processed"] for i in instances)
         assert total_processed == total_requests
 
         # Each instance should handle approximately equal load
         expected_per_instance = total_requests // len(instances)
         for instance in instances:
-            assert abs(instance['requests_processed'] - expected_per_instance) <= 1
+            assert abs(instance["requests_processed"] - expected_per_instance) <= 1
 
         print("   ✅ Load distributed evenly across instances")
 
         print("4. Simulating instance failure...")
 
         # Mark one instance as unhealthy
-        instances[1]['health_checker'].mark_unhealthy("Simulated failure")
-        healthy_instances = [i for i in instances if i['health_checker'].is_healthy()]
+        instances[1]["health_checker"].mark_unhealthy("Simulated failure")
+        healthy_instances = [i for i in instances if i["health_checker"].is_healthy()]
 
         assert len(healthy_instances) == 2
         print(f"   ✅ {len(healthy_instances)} instances remain healthy after failure")
@@ -262,6 +280,7 @@ async def simulate_load_balancing():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -297,7 +316,7 @@ async def test_service_configuration():
             "terminationGracePeriodSeconds": 30,
             "SIGTERM_handling": True,
             "cleanup_tasks": True,
-            "dependency_cleanup": True
+            "dependency_cleanup": True,
         }
 
         for config, enabled in graceful_config.items():
@@ -309,6 +328,7 @@ async def test_service_configuration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

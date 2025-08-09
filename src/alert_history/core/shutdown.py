@@ -6,9 +6,8 @@ Implements proper SIGTERM handling for Kubernetes deployments.
 
 import asyncio
 import signal
-import sys
-from typing import Callable, List, Optional
 from contextlib import asynccontextmanager
+from typing import Callable, List
 
 from ..logging_config import get_logger
 
@@ -59,16 +58,22 @@ class GracefulShutdownHandler:
             return
 
         self.is_shutting_down = True
-        logger.info(f"Starting cleanup sequence with {len(self.cleanup_tasks)} tasks...")
+        logger.info(
+            f"Starting cleanup sequence with {len(self.cleanup_tasks)} tasks..."
+        )
 
         cleanup_start = asyncio.get_event_loop().time()
 
         try:
             # Execute cleanup tasks with timeout
-            await asyncio.wait_for(self._execute_cleanup_tasks(), timeout=self.shutdown_timeout)
+            await asyncio.wait_for(
+                self._execute_cleanup_tasks(), timeout=self.shutdown_timeout
+            )
 
             cleanup_duration = asyncio.get_event_loop().time() - cleanup_start
-            logger.info(f"Cleanup completed successfully in {cleanup_duration:.2f} seconds")
+            logger.info(
+                f"Cleanup completed successfully in {cleanup_duration:.2f} seconds"
+            )
 
         except asyncio.TimeoutError:
             logger.warning(f"Cleanup timeout after {self.shutdown_timeout} seconds")
@@ -131,7 +136,9 @@ class HealthChecker:
         """Check if application is ready."""
         # Check critical dependencies only (database, redis)
         critical_deps = {
-            k: v for k, v in self.dependencies_ready.items() if k in ["database", "redis"]
+            k: v
+            for k, v in self.dependencies_ready.items()
+            if k in ["database", "redis"]
         }
         # LLM is optional, so ignore it for readiness
         return self.ready and all(critical_deps.values())
@@ -275,7 +282,9 @@ async def _initialize_llm_service():
         config = get_config()
 
         if config.llm.enabled:
-            logger.info(f"Initializing LLM service connection to {config.llm.base_url}...")
+            logger.info(
+                f"Initializing LLM service connection to {config.llm.base_url}..."
+            )
             # Add LLM service initialization here
             logger.info("LLM service initialized successfully")
         else:

@@ -2,9 +2,9 @@
 """
 Тест интеграции LLM classification с webhook endpoints.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -18,10 +18,11 @@ async def test_legacy_webhook_llm_integration():
     try:
         # Test imports
         print("1. Testing LLM integration imports...")
-        from src.alert_history.api.legacy_adapter import LegacyAPIAdapter
-        from src.alert_history.api.metrics import LegacyMetrics
-        from src.alert_history.database.sqlite_adapter import SQLiteLegacyStorage
         from fastapi import FastAPI
+
+        from src.alert_history.api.legacy_adapter import LegacyAPIAdapter
+        from src.alert_history.database.sqlite_adapter import SQLiteLegacyStorage
+
         print("   ✅ Legacy adapter and dependencies imported")
 
         # Test app and adapter initialization
@@ -33,7 +34,7 @@ async def test_legacy_webhook_llm_integration():
             app=app,
             storage=storage,
             db_path="./data/alert_history.sqlite3",
-            retention_days=30
+            retention_days=30,
         )
 
         print("   ✅ Legacy adapter initialized")
@@ -44,18 +45,24 @@ async def test_legacy_webhook_llm_integration():
 
         if classification_service:
             print("   ✅ Classification service initialized")
-            print(f"   ✅ LLM client available: {hasattr(classification_service, 'llm_client')}")
+            print(
+                f"   ✅ LLM client available: {hasattr(classification_service, 'llm_client')}"
+            )
             print(f"   ✅ Cache available: {classification_service.cache is not None}")
-            print(f"   ✅ Storage integration: {classification_service.storage is not None}")
+            print(
+                f"   ✅ Storage integration: {classification_service.storage is not None}"
+            )
         else:
-            print("   ⚠️  Classification service not initialized (LLM config not available)")
+            print(
+                "   ⚠️  Classification service not initialized (LLM config not available)"
+            )
 
         # Test classification methods
         print("4. Testing classification integration methods...")
         methods_to_check = [
-            '_maybe_classify_alert',
-            '_classify_alert_background',
-            '_init_classification_service'
+            "_maybe_classify_alert",
+            "_classify_alert_background",
+            "_init_classification_service",
         ]
 
         for method in methods_to_check:
@@ -66,8 +73,8 @@ async def test_legacy_webhook_llm_integration():
         print("5. Testing metrics integration...")
         metrics = adapter.metrics
         classification_methods = [
-            'increment_classifications',
-            'increment_classification_errors'
+            "increment_classifications",
+            "increment_classification_errors",
         ]
 
         for method in classification_methods:
@@ -80,6 +87,7 @@ async def test_legacy_webhook_llm_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -91,8 +99,9 @@ async def test_proxy_webhook_llm_integration():
     try:
         # Test proxy webhook imports
         print("1. Testing proxy webhook imports...")
-        from src.alert_history.api.proxy_endpoints import proxy_router
         from config import get_config
+        from src.alert_history.api.proxy_endpoints import proxy_router
+
         print("   ✅ Proxy endpoints imported")
 
         # Test router configuration
@@ -107,7 +116,7 @@ async def test_proxy_webhook_llm_integration():
         # Test LLM configuration
         print("3. Testing LLM configuration for proxy...")
         config = get_config()
-        if hasattr(config, 'llm') and config.llm:
+        if hasattr(config, "llm") and config.llm:
             print(f"   ✅ LLM proxy URL: {config.llm.proxy_url}")
             print(f"   ✅ LLM model: {config.llm.model}")
             print(f"   ✅ LLM enabled: {config.llm.enabled}")
@@ -117,11 +126,11 @@ async def test_proxy_webhook_llm_integration():
         # Test dependency injection structure
         print("4. Testing dependency injection structure...")
         dependencies = [
-            'get_target_manager',
-            'get_alert_publisher',
-            'get_filter_engine',
-            'get_classification_service',
-            'get_webhook_processor'
+            "get_target_manager",
+            "get_alert_publisher",
+            "get_filter_engine",
+            "get_classification_service",
+            "get_webhook_processor",
         ]
 
         # These would be available from dependency injection
@@ -135,6 +144,7 @@ async def test_proxy_webhook_llm_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -188,6 +198,7 @@ async def test_async_classification_flow():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -210,8 +221,13 @@ async def test_fallback_mechanisms():
         print("2. Testing fallback classification results...")
 
         # Test creating fallback classification results
-        from src.alert_history.core.interfaces import Alert, AlertSeverity, ClassificationResult
         from datetime import datetime
+
+        from src.alert_history.core.interfaces import (
+            Alert,
+            AlertSeverity,
+            ClassificationResult,
+        )
 
         # Mock alert for testing
         mock_alert = Alert(
@@ -222,7 +238,7 @@ async def test_fallback_mechanisms():
             annotations={"description": "Test alert"},
             starts_at=datetime.utcnow(),
             ends_at=None,
-            generator_url="http://test"
+            generator_url="http://test",
         )
 
         # Create fallback classification
@@ -232,7 +248,7 @@ async def test_fallback_mechanisms():
             reasoning="Fallback classification based on alert labels",
             recommendations=["Review alert configuration"],
             processing_time=0.001,
-            metadata={"fallback": True}
+            metadata={"fallback": True},
         )
 
         assert fallback_classification.severity == AlertSeverity.WARNING
@@ -256,6 +272,7 @@ async def test_fallback_mechanisms():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

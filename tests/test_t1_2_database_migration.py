@@ -13,7 +13,6 @@ import asyncio
 import os
 import sys
 import tempfile
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -43,7 +42,7 @@ async def test_postgresql_schema():
             "filter_rules",
             "publishing_targets",
             "system_metrics",
-            "migration_history"
+            "migration_history",
         ]
 
         for table in required_tables:
@@ -58,7 +57,7 @@ async def test_postgresql_schema():
             "idx_alerts_fingerprint",
             "idx_alerts_labels_gin",
             "idx_classifications_fingerprint",
-            "idx_publishing_history_target"
+            "idx_publishing_history_target",
         ]
 
         for index in required_indexes:
@@ -97,16 +96,13 @@ async def test_postgresql_adapter():
     print("\n🔗 Testing PostgreSQL Adapter...")
 
     try:
-        from src.alert_history.database.postgresql_adapter import PostgreSQLStorage
         from src.alert_history.core.interfaces import Alert, AlertStatus
+        from src.alert_history.database.postgresql_adapter import PostgreSQLStorage
 
         # Test adapter initialization (without actual connection)
         db_url = "postgresql://test:test@localhost:5432/test_db"
         storage = PostgreSQLStorage(
-            database_url=db_url,
-            min_pool_size=2,
-            max_pool_size=5,
-            command_timeout=30.0
+            database_url=db_url, min_pool_size=2, max_pool_size=5, command_timeout=30.0
         )
 
         # Test configuration
@@ -127,7 +123,7 @@ async def test_postgresql_adapter():
             annotations={"description": "Test alert"},
             starts_at=datetime.utcnow(),
             generator_url="http://test.local",
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
 
         # Test row conversion (simulated)
@@ -161,7 +157,7 @@ async def test_migration_manager():
         manager = MigrationManager(
             postgresql_url=pg_url,
             sqlite_path=sqlite_path,
-            migrations_dir="src/alert_history/database/migrations"
+            migrations_dir="src/alert_history/database/migrations",
         )
 
         print("   ✅ Migration manager initialization")
@@ -175,7 +171,13 @@ async def test_migration_manager():
 
             # Validate first migration
             first_migration = migrations[0]
-            required_fields = ["version", "description", "file_path", "checksum", "content"]
+            required_fields = [
+                "version",
+                "description",
+                "file_path",
+                "checksum",
+                "content",
+            ]
 
             for field in required_fields:
                 if field not in first_migration:
@@ -187,8 +189,14 @@ async def test_migration_manager():
         # Test migration status tracking
         status = manager.get_migration_status()
         required_status_fields = [
-            "start_time", "end_time", "total_alerts", "migrated_alerts",
-            "total_classifications", "migrated_classifications", "errors", "status"
+            "start_time",
+            "end_time",
+            "total_alerts",
+            "migrated_alerts",
+            "total_classifications",
+            "migrated_classifications",
+            "errors",
+            "status",
         ]
 
         for field in required_status_fields:
@@ -231,8 +239,7 @@ async def test_connection_pooling():
 
         for config in test_configs:
             storage = PostgreSQLStorage(
-                database_url="postgresql://test:test@localhost:5432/test_db",
-                **config
+                database_url="postgresql://test:test@localhost:5432/test_db", **config
             )
 
             assert storage.min_pool_size == config["min_pool_size"]
@@ -244,7 +251,7 @@ async def test_connection_pooling():
         storage = PostgreSQLStorage(
             database_url="postgresql://test:test@localhost:5432/test_db",
             command_timeout=60.0,
-            query_timeout=30.0
+            query_timeout=30.0,
         )
 
         assert storage.command_timeout == 60.0
@@ -256,7 +263,7 @@ async def test_connection_pooling():
         test_urls = [
             "postgresql://user:pass@localhost:5432/dbname",
             "postgresql://user@localhost/dbname",
-            "postgresql://localhost/dbname"
+            "postgresql://localhost/dbname",
         ]
 
         for url in test_urls:
@@ -283,10 +290,18 @@ async def test_optimistic_locking():
         schema_content = schema_file.read_text()
 
         # Check for updated_at columns
-        tables_with_locking = ["alerts", "alert_classifications", "filter_rules", "publishing_targets"]
+        tables_with_locking = [
+            "alerts",
+            "alert_classifications",
+            "filter_rules",
+            "publishing_targets",
+        ]
 
         for table in tables_with_locking:
-            if f"updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()" not in schema_content:
+            if (
+                "updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"
+                not in schema_content
+            ):
                 print(f"   ❌ Missing updated_at column pattern for {table}")
                 return False
 
@@ -339,7 +354,7 @@ async def test_production_readiness():
         performance_features = [
             "autovacuum_vacuum_scale_factor",
             "SET STATISTICS",
-            "GIN"  # For JSONB indexes
+            "GIN",  # For JSONB indexes
         ]
 
         for feature in performance_features:
@@ -410,12 +425,12 @@ async def main():
         print(f"   {status} {test_name}")
 
     success_rate = passed / total * 100
-    print(f"\n🏆 OVERALL RESULTS:")
+    print("\n🏆 OVERALL RESULTS:")
     print(f"   • Tests Passed: {passed}/{total}")
     print(f"   • Success Rate: {success_rate:.1f}%")
 
     if success_rate >= 80:
-        print(f"\n✅ T1.2 DATABASE MIGRATION TESTS PASSED!")
+        print("\n✅ T1.2 DATABASE MIGRATION TESTS PASSED!")
         if success_rate == 100:
             print("🏆 PERFECT SCORE! All tests passed!")
         print("\n🚀 Ready for:")
@@ -425,7 +440,7 @@ async def main():
         print("   • Data migration")
         return True
     else:
-        print(f"\n❌ T1.2 DATABASE MIGRATION TESTS FAILED!")
+        print("\n❌ T1.2 DATABASE MIGRATION TESTS FAILED!")
         print("   🔧 Fix failing components before proceeding")
         return False
 

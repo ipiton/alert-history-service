@@ -16,11 +16,8 @@ Alert History Service - новая версия с сохранением пол
 """
 
 # Standard library imports
-import asyncio
 import signal
 import sys
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 # Third-party imports
 from fastapi import FastAPI, HTTPException
@@ -30,10 +27,10 @@ from .api.classification_endpoints import router as classification_router
 from .api.legacy_adapter import LegacyAPIAdapter
 from .api.metrics import LegacyMetrics
 from .api.proxy_endpoints import proxy_router
-from .api.webhook_endpoints import webhook_router
 from .api.publishing_endpoints import publishing_router
+from .api.webhook_endpoints import webhook_router
 from .config import get_config, validate_config
-from .core.shutdown import lifespan_manager, health_checker, shutdown_handler
+from .core.shutdown import health_checker, lifespan_manager
 from .database.sqlite_adapter import SQLiteLegacyStorage
 from .logging_config import get_logger, get_performance_logger, setup_logging
 from .services.alert_classifier import AlertClassificationService
@@ -42,7 +39,6 @@ from .services.alert_publisher import AlertPublisher
 from .services.filter_engine import AlertFilterEngine
 from .services.graceful_shutdown import GracefulShutdownHandler
 from .services.llm_client import LLMProxyClient
-from .services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig
 from .services.webhook_processor import WebhookProcessor
 
 # Global configuration and logging
@@ -92,7 +88,9 @@ async def initialize_services() -> None:
             logger.info(
                 "Redis cache initialized",
                 redis_url=(
-                    config.redis.url.split("@")[-1] if "@" in config.redis.url else config.redis.url
+                    config.redis.url.split("@")[-1]
+                    if "@" in config.redis.url
+                    else config.redis.url
                 ),
                 pool_size=config.redis.pool_size,
             )
@@ -192,7 +190,9 @@ async def initialize_services() -> None:
         app.state.classification_service = None
 
     # Initialize Intelligent Proxy components (Phase 3)
-    logger.info("Initializing Intelligent Alert Proxy components (static publishers mode)")
+    logger.info(
+        "Initializing Intelligent Alert Proxy components (static publishers mode)"
+    )
 
     # Target Discovery disabled: use static publishers only
     class _StaticTargetManager:
@@ -287,7 +287,10 @@ async def shutdown_services() -> None:
             logger.error("Error shutting down alert publisher", error=str(e))
 
     # Shutdown classification service
-    if hasattr(app.state, "classification_service") and app.state.classification_service:
+    if (
+        hasattr(app.state, "classification_service")
+        and app.state.classification_service
+    ):
         try:
             await app.state.classification_service.shutdown()
             logger.info("Classification service shut down successfully")
@@ -393,9 +396,9 @@ Alert History Service for Alertmanager webhook processing with LLM classificatio
     app.include_router(enrichment_router)
 
     # Add modern dashboard endpoint (T6: Dashboard и UI интеграция)
+    from fastapi import Request
     from fastapi.responses import HTMLResponse
     from fastapi.templating import Jinja2Templates
-    from fastapi import Request
 
     templates = Jinja2Templates(directory="templates")
 

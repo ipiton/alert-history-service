@@ -5,8 +5,8 @@ Health check endpoints для Kubernetes readiness/liveness probes.
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from ..services.health_checker import get_health_checker
 from ..logging_config import get_logger
+from ..services.health_checker import get_health_checker
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,8 @@ async def readiness_probe():
                     "timestamp": health_result["timestamp"],
                     "response_time_ms": health_result["response_time_ms"],
                     "components": {
-                        comp["name"]: comp["status"] for comp in health_result["components"]
+                        comp["name"]: comp["status"]
+                        for comp in health_result["components"]
                     },
                 },
             )
@@ -87,7 +88,8 @@ async def readiness_probe():
                     "ready_for_traffic": False,
                     "timestamp": health_result["timestamp"],
                     "components": {
-                        comp["name"]: comp["status"] for comp in health_result["components"]
+                        comp["name"]: comp["status"]
+                        for comp in health_result["components"]
                     },
                     "message": "Service dependencies not ready",
                 },

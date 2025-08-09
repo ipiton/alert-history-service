@@ -9,15 +9,13 @@ Stateless Application Manager для T1.4: Stateless Application Design.
 - Stateless service coordination
 """
 
-import asyncio
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-from ..logging_config import get_logger
-from ..services.redis_cache import RedisCache
 from ..core.interfaces import ICache
+from ..logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -106,7 +104,9 @@ class StatelessManager:
                 return False
 
             # Set operation as executed
-            success = await self.redis_cache.set(full_key, operation_data, operation_ttl)
+            success = await self.redis_cache.set(
+                full_key, operation_data, operation_ttl
+            )
 
             if success:
                 self._register_local_operation(operation_key)
@@ -118,7 +118,8 @@ class StatelessManager:
                 return True
             else:
                 logger.warning(
-                    "Failed to register idempotent operation", operation_key=operation_key
+                    "Failed to register idempotent operation",
+                    operation_key=operation_key,
                 )
                 return False
 
@@ -132,7 +133,9 @@ class StatelessManager:
         if operation_key in self._operation_registry:
             # Check if operation is expired
             operation_time = self._operation_registry[operation_key]
-            if datetime.utcnow() - operation_time < timedelta(seconds=self.operation_ttl):
+            if datetime.utcnow() - operation_time < timedelta(
+                seconds=self.operation_ttl
+            ):
                 return False  # Operation still valid, don't duplicate
             else:
                 # Operation expired, remove from registry
@@ -154,13 +157,17 @@ class StatelessManager:
         """Cleanup expired operations from local registry."""
         cutoff_time = datetime.utcnow() - timedelta(seconds=self.operation_ttl)
         expired_keys = [
-            key for key, timestamp in self._operation_registry.items() if timestamp < cutoff_time
+            key
+            for key, timestamp in self._operation_registry.items()
+            if timestamp < cutoff_time
         ]
 
         for key in expired_keys:
             del self._operation_registry[key]
 
-        logger.debug(f"Cleaned up {len(expired_keys)} expired operations from local registry")
+        logger.debug(
+            f"Cleaned up {len(expired_keys)} expired operations from local registry"
+        )
 
     # ===============================
     # Temporary Data Management
@@ -302,7 +309,9 @@ class StatelessManager:
     # Stateless Validation
     # ===============================
 
-    def validate_stateless_operation(self, operation_name: str, **kwargs) -> Dict[str, Any]:
+    def validate_stateless_operation(
+        self, operation_name: str, **kwargs
+    ) -> Dict[str, Any]:
         """
         Validate that operation can be performed statelessly.
 
@@ -334,7 +343,9 @@ class StatelessManager:
         for indicator in stateful_indicators:
             if indicator in operation_str:
                 validation_result["stateless"] = False
-                validation_result["issues"].append(f"Potential state dependency: {indicator}")
+                validation_result["issues"].append(
+                    f"Potential state dependency: {indicator}"
+                )
                 validation_result["recommendations"].append(
                     f"Replace {indicator} with Redis/PostgreSQL storage"
                 )
@@ -344,7 +355,9 @@ class StatelessManager:
             validation_result["issues"].append(
                 "No parameters provided - may rely on implicit state"
             )
-            validation_result["recommendations"].append("Provide all required data as parameters")
+            validation_result["recommendations"].append(
+                "Provide all required data as parameters"
+            )
 
         # Check for idempotency indicators
         idempotent_indicators = ["fingerprint", "id", "uuid", "key"]

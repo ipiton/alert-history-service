@@ -14,10 +14,8 @@ Usage:
     python test_t7_1_code_quality.py
 """
 
-import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -35,10 +33,21 @@ class TestCodeQuality(unittest.TestCase):
         """Test for critical syntax errors that would break the application."""
         print("\n=== T7.1.1: Critical Syntax Errors Check ===")
 
-        result = subprocess.run([
-            sys.executable, "-m", "flake8", str(self.src_path),
-            "--count", "--select=E9,F63,F7,F82", "--show-source", "--statistics"
-        ], capture_output=True, text=True, cwd=self.project_root)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "flake8",
+                str(self.src_path),
+                "--count",
+                "--select=E9,F63,F7,F82",
+                "--show-source",
+                "--statistics",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root,
+        )
 
         print(f"Flake8 critical errors output:\n{result.stdout}")
         if result.stderr:
@@ -47,7 +56,7 @@ class TestCodeQuality(unittest.TestCase):
         # Should have 0 critical errors
         error_count = 0
         if result.stdout.strip() and result.stdout.strip()[-1].isdigit():
-            error_count = int(result.stdout.strip().split('\n')[-1])
+            error_count = int(result.stdout.strip().split("\n")[-1])
 
         print(f"✅ Critical syntax errors: {error_count}")
         self.assertEqual(error_count, 0, "Critical syntax errors found")
@@ -56,15 +65,25 @@ class TestCodeQuality(unittest.TestCase):
         """Test PEP8 compliance - tracking progress."""
         print("\n=== T7.1.2: PEP8 Compliance Progress ===")
 
-        result = subprocess.run([
-            sys.executable, "-m", "flake8", str(self.src_path),
-            "--count", "--max-line-length=100", "--ignore=E203,W503"
-        ], capture_output=True, text=True, cwd=self.project_root)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "flake8",
+                str(self.src_path),
+                "--count",
+                "--max-line-length=100",
+                "--ignore=E203,W503",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root,
+        )
 
         # Extract error count from last line
         error_count = 0
         if result.stdout.strip():
-            lines = result.stdout.strip().split('\n')
+            lines = result.stdout.strip().split("\n")
             if lines[-1].isdigit():
                 error_count = int(lines[-1])
 
@@ -75,8 +94,11 @@ class TestCodeQuality(unittest.TestCase):
         progress_ratio = max(0, 1 - (error_count / 500))  # Original ~500 errors
         print(f"📈 PEP8 Progress: {progress_ratio:.1%}")
 
-        self.assertLessEqual(error_count, self.max_flake8_errors,
-                           f"Too many PEP8 errors: {error_count} > {self.max_flake8_errors}")
+        self.assertLessEqual(
+            error_count,
+            self.max_flake8_errors,
+            f"Too many PEP8 errors: {error_count} > {self.max_flake8_errors}",
+        )
 
     def test_03_import_organization(self):
         """Test import organization (basic check)."""
@@ -93,7 +115,7 @@ class TestCodeQuality(unittest.TestCase):
         for file_path in key_files:
             full_path = self.project_root / file_path
             if full_path.exists():
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, encoding="utf-8") as f:
                     content = f.read()
 
                 # Basic checks
@@ -117,18 +139,30 @@ class TestCodeQuality(unittest.TestCase):
 
         try:
             # Run mypy on key modules
-            result = subprocess.run([
-                sys.executable, "-m", "mypy",
-                str(self.src_path / "alert_history" / "config.py"),
-                str(self.src_path / "alert_history" / "core" / "interfaces.py"),
-                "--ignore-missing-imports", "--show-error-codes"
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "mypy",
+                    str(self.src_path / "alert_history" / "config.py"),
+                    str(self.src_path / "alert_history" / "core" / "interfaces.py"),
+                    "--ignore-missing-imports",
+                    "--show-error-codes",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+            )
 
-            error_count = len([line for line in result.stdout.split('\n') if ': error:' in line])
+            error_count = len(
+                [line for line in result.stdout.split("\n") if ": error:" in line]
+            )
             print(f"📊 MyPy errors in core modules: {error_count}")
 
             # Allow some mypy errors initially, focus on critical files
-            self.assertLessEqual(error_count, 20, "Too many type annotation errors in core modules")
+            self.assertLessEqual(
+                error_count, 20, "Too many type annotation errors in core modules"
+            )
 
         except FileNotFoundError:
             print("⚠️  MyPy not available, skipping type checking")
@@ -138,25 +172,53 @@ class TestCodeQuality(unittest.TestCase):
         print("\n=== T7.1.5: Security Linting ===")
 
         try:
-            result = subprocess.run([
-                sys.executable, "-m", "bandit", "-r", str(self.src_path),
-                "-f", "json", "-ll"  # Low and low severity
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "bandit",
+                    "-r",
+                    str(self.src_path),
+                    "-f",
+                    "json",
+                    "-ll",  # Low and low severity
+                ],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+            )
 
             # Parse bandit JSON output
             import json
+
             try:
                 bandit_data = json.loads(result.stdout)
-                high_severity = len([r for r in bandit_data.get('results', [])
-                                   if r.get('issue_severity') == 'HIGH'])
-                medium_severity = len([r for r in bandit_data.get('results', [])
-                                     if r.get('issue_severity') == 'MEDIUM'])
+                high_severity = len(
+                    [
+                        r
+                        for r in bandit_data.get("results", [])
+                        if r.get("issue_severity") == "HIGH"
+                    ]
+                )
+                medium_severity = len(
+                    [
+                        r
+                        for r in bandit_data.get("results", [])
+                        if r.get("issue_severity") == "MEDIUM"
+                    ]
+                )
 
-                print(f"🔒 Security issues - High: {high_severity}, Medium: {medium_severity}")
+                print(
+                    f"🔒 Security issues - High: {high_severity}, Medium: {medium_severity}"
+                )
 
                 # Should have no high severity security issues
-                self.assertEqual(high_severity, 0, "High severity security issues found")
-                self.assertLessEqual(medium_severity, 5, "Too many medium severity security issues")
+                self.assertEqual(
+                    high_severity, 0, "High severity security issues found"
+                )
+                self.assertLessEqual(
+                    medium_severity, 5, "Too many medium severity security issues"
+                )
 
             except json.JSONDecodeError:
                 print("⚠️  Bandit output parsing failed")
@@ -181,17 +243,17 @@ class TestCodeQuality(unittest.TestCase):
         for file_path in key_files:
             full_path = self.project_root / file_path
             if full_path.exists():
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, encoding="utf-8") as f:
                     lines = f.readlines()
 
                 in_function = False
                 for i, line in enumerate(lines):
-                    if line.strip().startswith(('def ', 'class ', 'async def ')):
+                    if line.strip().startswith(("def ", "class ", "async def ")):
                         total_functions += 1
                         in_function = True
 
                         # Check next few lines for docstring
-                        for j in range(i+1, min(i+5, len(lines))):
+                        for j in range(i + 1, min(i + 5, len(lines))):
                             if '"""' in lines[j] or "'''" in lines[j]:
                                 documented_functions += 1
                                 break
@@ -199,7 +261,9 @@ class TestCodeQuality(unittest.TestCase):
 
         if total_functions > 0:
             coverage = documented_functions / total_functions
-            print(f"📚 Docstring coverage: {coverage:.1%} ({documented_functions}/{total_functions})")
+            print(
+                f"📚 Docstring coverage: {coverage:.1%} ({documented_functions}/{total_functions})"
+            )
             self.assertGreaterEqual(coverage, 0.3, "Docstring coverage too low")
         else:
             print("⚠️  No functions found for docstring analysis")
@@ -220,14 +284,28 @@ class TestCodeQuality(unittest.TestCase):
 
         # Try to run a simple test to verify test infrastructure
         try:
-            result = subprocess.run([
-                sys.executable, "-m", "unittest", "discover", "-s", ".", "-p", "test_*.py", "-v"
-            ], capture_output=True, text=True, cwd=self.project_root, timeout=30)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "discover",
+                    "-s",
+                    ".",
+                    "-p",
+                    "test_*.py",
+                    "-v",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+                timeout=30,
+            )
 
             # Count test results
             if "Ran" in result.stderr:
-                print(f"🧪 Test execution summary:")
-                for line in result.stderr.split('\n'):
+                print("🧪 Test execution summary:")
+                for line in result.stderr.split("\n"):
                     if "Ran" in line or "OK" in line or "FAILED" in line:
                         print(f"   {line.strip()}")
 
@@ -246,7 +324,7 @@ class TestCodeQuality(unittest.TestCase):
         large_files = []
         for py_file in python_files:
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding="utf-8") as f:
                     lines = len(f.readlines())
                     total_lines += lines
 

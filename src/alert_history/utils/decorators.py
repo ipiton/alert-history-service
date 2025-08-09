@@ -374,7 +374,9 @@ def deprecated(reason: str = "") -> Callable:
             warning_msg = f"Function {func.__name__} is deprecated"
             if reason:
                 warning_msg += f": {reason}"
-            print(f"WARNING: {warning_msg}")  # In real implementation, use proper logger
+            print(
+                f"WARNING: {warning_msg}"
+            )  # In real implementation, use proper logger
             return func(*args, **kwargs)
 
         return wrapper

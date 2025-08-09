@@ -18,15 +18,14 @@ from typing import Any, Dict, List, Optional
 
 # Third-party imports
 from fastapi import APIRouter, Depends, HTTPException, Path
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+from ..core.app_state import app_state
 
 # Local imports
-from ..core.interfaces import PublishingTarget, PublishingFormat
 from ..logging_config import get_logger
 from ..services.alert_publisher import AlertPublisher
 from ..services.target_discovery import DynamicTargetManager
-from ..core.app_state import app_state
 
 logger = get_logger(__name__)
 
@@ -107,8 +106,8 @@ async def get_target_manager() -> DynamicTargetManager:
     """Get target manager instance."""
     if not hasattr(app_state, "target_manager") or app_state.target_manager is None:
         from ..services.target_discovery import (
-            TargetDiscoveryConfig,
             DynamicTargetManager,
+            TargetDiscoveryConfig,
         )
 
         config = TargetDiscoveryConfig(
@@ -202,7 +201,9 @@ async def refresh_publishing_targets(
             # Get updated target count
             targets_count = target_manager.get_targets_count()
 
-            logger.info(f"Publishing targets refreshed successfully: {targets_count} targets")
+            logger.info(
+                f"Publishing targets refreshed successfully: {targets_count} targets"
+            )
 
             return {
                 "message": "Publishing targets refreshed successfully",
@@ -368,7 +369,9 @@ async def test_publishing_target(
         # Get target by name
         target = target_manager.get_target_by_name(target_name)
         if not target:
-            raise HTTPException(status_code=404, detail=f"Target '{target_name}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Target '{target_name}' not found"
+            )
 
         # Create test alert if not provided
         if not test_request.test_alert:
@@ -472,11 +475,13 @@ async def get_secret_templates():
                 },
             },
             data={
-                "url": base64.b64encode("https://api.rootly.com/v1/incidents".encode()).decode(),
-                "token": base64.b64encode("your-rootly-api-key".encode()).decode(),
-                "format": base64.b64encode("rootly".encode()).decode(),
-                "enabled": base64.b64encode("true".encode()).decode(),
-                "timeout": base64.b64encode("30".encode()).decode(),
+                "url": base64.b64encode(
+                    b"https://api.rootly.com/v1/incidents"
+                ).decode(),
+                "token": base64.b64encode(b"your-rootly-api-key").decode(),
+                "format": base64.b64encode(b"rootly").decode(),
+                "enabled": base64.b64encode(b"true").decode(),
+                "timeout": base64.b64encode(b"30").decode(),
             },
         )
         templates.append(rootly_template)
@@ -494,12 +499,12 @@ async def get_secret_templates():
             },
             data={
                 "url": base64.b64encode(
-                    "https://events.pagerduty.com/v2/enqueue".encode()
+                    b"https://events.pagerduty.com/v2/enqueue"
                 ).decode(),
-                "routing_key": base64.b64encode("your-pagerduty-routing-key".encode()).decode(),
-                "format": base64.b64encode("pagerduty".encode()).decode(),
-                "enabled": base64.b64encode("true".encode()).decode(),
-                "timeout": base64.b64encode("30".encode()).decode(),
+                "routing_key": base64.b64encode(b"your-pagerduty-routing-key").decode(),
+                "format": base64.b64encode(b"pagerduty").decode(),
+                "enabled": base64.b64encode(b"true").decode(),
+                "timeout": base64.b64encode(b"30").decode(),
             },
         )
         templates.append(pagerduty_template)
@@ -517,12 +522,12 @@ async def get_secret_templates():
             },
             data={
                 "url": base64.b64encode(
-                    "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK".encode()
+                    b"https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
                 ).decode(),
-                "format": base64.b64encode("slack".encode()).decode(),
-                "enabled": base64.b64encode("true".encode()).decode(),
-                "timeout": base64.b64encode("30".encode()).decode(),
-                "channel": base64.b64encode("#alerts".encode()).decode(),
+                "format": base64.b64encode(b"slack").decode(),
+                "enabled": base64.b64encode(b"true").decode(),
+                "timeout": base64.b64encode(b"30").decode(),
+                "channel": base64.b64encode(b"#alerts").decode(),
             },
         )
         templates.append(slack_template)
@@ -532,7 +537,9 @@ async def get_secret_templates():
 
     except Exception as e:
         logger.error(f"Failed to generate secret templates: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate templates: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate templates: {str(e)}"
+        )
 
 
 @publishing_router.get("/health")

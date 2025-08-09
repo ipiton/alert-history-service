@@ -2,9 +2,9 @@
 """
 Тест для Publishing Management API.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -19,6 +19,7 @@ async def test_publishing_endpoints():
         # Test imports
         print("1. Testing publishing endpoints imports...")
         from src.alert_history.api.publishing_endpoints import publishing_router
+
         print("   ✅ Publishing endpoints imported")
 
         # Test router setup
@@ -31,7 +32,7 @@ async def test_publishing_endpoints():
         print("3. Testing endpoint registration...")
         routes = []
         for route in publishing_router.routes:
-            if hasattr(route, 'path'):
+            if hasattr(route, "path"):
                 routes.append(route.path)
 
         print(f"   📋 Found routes: {routes}")
@@ -43,12 +44,15 @@ async def test_publishing_endpoints():
             "/stats",
             "/test/{target_name}",
             "/secrets/template",
-            "/health"
+            "/health",
         ]
 
         for endpoint in expected_endpoints:
             # Check if endpoint exists (flexible matching)
-            endpoint_found = any(endpoint.replace('{target_name}', 'target_name') in route for route in routes)
+            endpoint_found = any(
+                endpoint.replace("{target_name}", "target_name") in route
+                for route in routes
+            )
             if endpoint_found:
                 print(f"   ✅ Endpoint found: /publishing{endpoint}")
             else:
@@ -56,12 +60,8 @@ async def test_publishing_endpoints():
 
         print("4. Testing Pydantic models...")
         from src.alert_history.api.publishing_endpoints import (
-            PublishingTargetInfo,
             PublishingModeInfo,
-            PublishingStatsResponse,
-            SecretTemplate,
-            TestTargetRequest,
-            TestTargetResponse
+            PublishingTargetInfo,
         )
 
         # Test model creation
@@ -73,7 +73,7 @@ async def test_publishing_endpoints():
             total_publishes=10,
             successful_publishes=8,
             failed_publishes=2,
-            health_status="healthy"
+            health_status="healthy",
         )
 
         assert target_info.name == "test-target"
@@ -85,7 +85,7 @@ async def test_publishing_endpoints():
             targets_available=True,
             targets_count=3,
             kubernetes_available=True,
-            description="Test mode"
+            description="Test mode",
         )
 
         assert mode_info.mode == "intelligent"
@@ -98,6 +98,7 @@ async def test_publishing_endpoints():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -113,19 +114,21 @@ async def test_secret_templates():
         # Test template generation
         templates = await get_secret_templates()
 
-        assert len(templates) >= 3, "Should have at least 3 templates (Rootly, PagerDuty, Slack)"
+        assert (
+            len(templates) >= 3
+        ), "Should have at least 3 templates (Rootly, PagerDuty, Slack)"
         print(f"   ✅ Generated {len(templates)} secret templates")
 
         # Check template structure
         for template in templates:
-            assert hasattr(template, 'apiVersion')
-            assert hasattr(template, 'kind')
-            assert hasattr(template, 'metadata')
-            assert hasattr(template, 'data')
+            assert hasattr(template, "apiVersion")
+            assert hasattr(template, "kind")
+            assert hasattr(template, "metadata")
+            assert hasattr(template, "data")
 
             assert template.apiVersion == "v1"
             assert template.kind == "Secret"
-            assert "alert-history.io/target" in template.metadata.get('labels', {})
+            assert "alert-history.io/target" in template.metadata.get("labels", {})
 
             print(f"   ✅ Template validated: {template.metadata['name']}")
 
@@ -137,33 +140,33 @@ async def test_secret_templates():
         slack_template = None
 
         for template in templates:
-            name = template.metadata['name']
-            if 'rootly' in name:
+            name = template.metadata["name"]
+            if "rootly" in name:
                 rootly_template = template
-            elif 'pagerduty' in name:
+            elif "pagerduty" in name:
                 pagerduty_template = template
-            elif 'slack' in name:
+            elif "slack" in name:
                 slack_template = template
 
         # Verify Rootly template
         if rootly_template:
-            assert 'url' in rootly_template.data
-            assert 'token' in rootly_template.data
-            assert 'format' in rootly_template.data
+            assert "url" in rootly_template.data
+            assert "token" in rootly_template.data
+            assert "format" in rootly_template.data
             print("   ✅ Rootly template complete")
 
         # Verify PagerDuty template
         if pagerduty_template:
-            assert 'url' in pagerduty_template.data
-            assert 'routing_key' in pagerduty_template.data
-            assert 'format' in pagerduty_template.data
+            assert "url" in pagerduty_template.data
+            assert "routing_key" in pagerduty_template.data
+            assert "format" in pagerduty_template.data
             print("   ✅ PagerDuty template complete")
 
         # Verify Slack template
         if slack_template:
-            assert 'url' in slack_template.data
-            assert 'format' in slack_template.data
-            assert 'channel' in slack_template.data
+            assert "url" in slack_template.data
+            assert "format" in slack_template.data
+            assert "channel" in slack_template.data
             print("   ✅ Slack template complete")
 
         print("\n🎉 Secret templates test passed!")
@@ -172,6 +175,7 @@ async def test_secret_templates():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -182,20 +186,23 @@ async def test_target_testing():
 
     try:
         print("1. Testing test request/response models...")
-        from src.alert_history.api.publishing_endpoints import TestTargetRequest, TestTargetResponse
+        from src.alert_history.api.publishing_endpoints import (
+            TestTargetRequest,
+            TestTargetResponse,
+        )
 
         # Test request model
         test_request = TestTargetRequest(
             test_alert={
                 "fingerprint": "test-alert",
                 "labels": {"alertname": "TestAlert"},
-                "status": "firing"
+                "status": "firing",
             },
-            timeout_seconds=30
+            timeout_seconds=30,
         )
 
         assert test_request.timeout_seconds == 30
-        assert test_request.test_alert['fingerprint'] == 'test-alert'
+        assert test_request.test_alert["fingerprint"] == "test-alert"
         print("   ✅ TestTargetRequest model works")
 
         # Test response model
@@ -204,7 +211,7 @@ async def test_target_testing():
             success=True,
             status_code=200,
             response_time_ms=250,
-            test_timestamp="2024-12-28T10:00:00Z"
+            test_timestamp="2024-12-28T10:00:00Z",
         )
 
         assert test_response.success == True
@@ -212,7 +219,10 @@ async def test_target_testing():
         print("   ✅ TestTargetResponse model works")
 
         print("2. Testing dependency injection...")
-        from src.alert_history.api.publishing_endpoints import get_target_manager, get_alert_publisher
+        from src.alert_history.api.publishing_endpoints import (
+            get_alert_publisher,
+            get_target_manager,
+        )
 
         # Test that dependencies can be imported and called
         target_manager = await get_target_manager()
@@ -222,19 +232,25 @@ async def test_target_testing():
         print(f"   📋 Alert publisher type: {type(alert_publisher)}")
 
         # Check if they are the right type (more flexible than None check)
+        from src.alert_history.services.alert_publisher import (
+            AlertPublisher as AlertPublisherClass,
+        )
         from src.alert_history.services.target_discovery import DynamicTargetManager
-        from src.alert_history.services.alert_publisher import AlertPublisher as AlertPublisherClass
 
-        assert isinstance(target_manager, DynamicTargetManager), f"Expected DynamicTargetManager, got {type(target_manager)}"
-        assert isinstance(alert_publisher, AlertPublisherClass), f"Expected AlertPublisher, got {type(alert_publisher)}"
+        assert isinstance(
+            target_manager, DynamicTargetManager
+        ), f"Expected DynamicTargetManager, got {type(target_manager)}"
+        assert isinstance(
+            alert_publisher, AlertPublisherClass
+        ), f"Expected AlertPublisher, got {type(alert_publisher)}"
         print("   ✅ Dependency injection works")
 
         print("3. Testing app state integration...")
         from src.alert_history.core.app_state import app_state
 
         # Verify app state has the instances
-        assert hasattr(app_state, 'target_manager')
-        assert hasattr(app_state, 'alert_publisher')
+        assert hasattr(app_state, "target_manager")
+        assert hasattr(app_state, "alert_publisher")
         print("   ✅ App state integration works")
 
         print("\n🎉 Target testing functionality test passed!")
@@ -243,6 +259,7 @@ async def test_target_testing():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -257,9 +274,13 @@ async def test_publishing_integration():
         # Test that all required services can be imported
         services_available = True
         try:
-            from src.alert_history.services.target_discovery import DynamicTargetManager
+            from src.alert_history.core.interfaces import (
+                PublishingFormat,
+                PublishingTarget,
+            )
             from src.alert_history.services.alert_publisher import AlertPublisher
-            from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat
+            from src.alert_history.services.target_discovery import DynamicTargetManager
+
             print("   ✅ All required services available")
         except ImportError as e:
             print(f"   ❌ Service import failed: {e}")
@@ -272,7 +293,7 @@ async def test_publishing_integration():
             PublishingFormat.ROOTLY,
             PublishingFormat.PAGERDUTY,
             PublishingFormat.SLACK,
-            PublishingFormat.ALERTMANAGER
+            PublishingFormat.ALERTMANAGER,
         ]
 
         for fmt in formats:
@@ -285,7 +306,7 @@ async def test_publishing_integration():
         config = TargetDiscoveryConfig(
             enabled=True,
             secret_labels=["alert-history.io/target=true"],
-            secret_namespaces=["default"]
+            secret_namespaces=["default"],
         )
 
         assert config.enabled == True
@@ -301,6 +322,7 @@ async def test_publishing_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -9,7 +9,6 @@ Proxy API endpoints для intelligent alert routing.
 """
 
 # Standard library imports
-import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -20,16 +19,9 @@ from pydantic import BaseModel, Field
 
 # Local imports
 from ..api.metrics import LegacyMetrics
-from ..core.interfaces import (
-    Alert,
-    AlertSeverity,
-    AlertStatus,
-    EnrichedAlert,
-    PublishingTarget,
-)
+from ..core.interfaces import Alert, AlertStatus, EnrichedAlert, PublishingTarget
 from ..logging_config import get_logger
 from ..services.alert_classifier import AlertClassificationService
-from ..services.alert_formatter import AlertFormatter
 from ..services.alert_publisher import AlertPublisher
 from ..services.filter_engine import AlertFilterEngine, FilterAction, FilterRule
 from ..services.target_discovery import DynamicTargetManager
@@ -219,7 +211,9 @@ async def proxy_webhook(
                 # Classify alert if service available and not metrics-only mode
                 if classification_service and not metrics_only_mode:
                     try:
-                        classification = await classification_service.classify_alert(alert)
+                        classification = await classification_service.classify_alert(
+                            alert
+                        )
                         if classification:
                             enriched_alert.classification = classification
                             classification_results[alert.fingerprint] = {
@@ -230,7 +224,9 @@ async def proxy_webhook(
                                 ],  # Truncate for response
                             }
                     except Exception as e:
-                        logger.warning(f"Classification failed for alert {alert.fingerprint}: {e}")
+                        logger.warning(
+                            f"Classification failed for alert {alert.fingerprint}: {e}"
+                        )
 
                 # Publish to targets if not metrics-only mode
                 if not metrics_only_mode and active_targets:
@@ -266,7 +262,9 @@ async def proxy_webhook(
 
                     # Count published alerts (scheduled counts as published)
                     published_count = sum(
-                        1 for status in alert_publishing_results.values() if status == "scheduled"
+                        1
+                        for status in alert_publishing_results.values()
+                        if status == "scheduled"
                     )
                     published_alerts += published_count
 
@@ -281,12 +279,16 @@ async def proxy_webhook(
 
             except Exception as e:
                 logger.error(f"Error processing individual alert: {e}")
-                metrics.increment_counter("alert_proxy_errors_total", {"error": "processing"})
+                metrics.increment_counter(
+                    "alert_proxy_errors_total", {"error": "processing"}
+                )
                 continue
 
         # Record processing metrics
         processing_time = (datetime.utcnow() - start_time).total_seconds()
-        metrics.observe_histogram("alert_proxy_processing_duration_seconds", processing_time)
+        metrics.observe_histogram(
+            "alert_proxy_processing_duration_seconds", processing_time
+        )
         metrics.increment_counter(
             "alert_proxy_webhook_requests_total", {"receiver": webhook_data.receiver}
         )
@@ -312,7 +314,9 @@ async def proxy_webhook(
         logger.error(f"Proxy webhook processing failed: {e}")
         metrics.increment_counter("alert_proxy_errors_total", {"error": "general"})
 
-        raise HTTPException(status_code=500, detail=f"Proxy processing failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Proxy processing failed: {str(e)}"
+        )
 
 
 @proxy_router.get("/targets", response_model=List[TargetInfo])
@@ -328,7 +332,9 @@ async def get_publishing_targets(
         for target in targets:
             # Get publishing stats
             stats = alert_publisher.get_target_stats(target.name)
-            circuit_breaker_status = alert_publisher.get_circuit_breaker_status(target.name)
+            circuit_breaker_status = alert_publisher.get_circuit_breaker_status(
+                target.name
+            )
 
             target_info = TargetInfo(
                 name=target.name,
@@ -336,7 +342,9 @@ async def get_publishing_targets(
                 url=target.url,
                 format=target.format.value,
                 enabled=target.enabled,
-                health_status=("healthy" if (stats and stats.is_healthy) else "unhealthy"),
+                health_status=(
+                    "healthy" if (stats and stats.is_healthy) else "unhealthy"
+                ),
                 success_rate=stats.success_rate if stats else 0.0,
                 last_success_time=(
                     datetime.fromtimestamp(stats.last_success_time)
@@ -376,15 +384,23 @@ async def get_proxy_stats(
         all_publisher_stats = alert_publisher.get_all_stats()
 
         # Calculate totals
-        total_successful = sum(stats.successful_publishes for stats in all_publisher_stats.values())
-        total_failed = sum(stats.failed_publishes for stats in all_publisher_stats.values())
+        total_successful = sum(
+            stats.successful_publishes for stats in all_publisher_stats.values()
+        )
+        total_failed = sum(
+            stats.failed_publishes for stats in all_publisher_stats.values()
+        )
 
         publisher_summary = {
-            "total_attempts": sum(stats.total_attempts for stats in all_publisher_stats.values()),
+            "total_attempts": sum(
+                stats.total_attempts for stats in all_publisher_stats.values()
+            ),
             "successful_publishes": total_successful,
             "failed_publishes": total_failed,
             "targets_count": len(all_publisher_stats),
-            "healthy_targets": sum(1 for stats in all_publisher_stats.values() if stats.is_healthy),
+            "healthy_targets": sum(
+                1 for stats in all_publisher_stats.values() if stats.is_healthy
+            ),
             "per_target_stats": {
                 name: {
                     "success_rate": stats.success_rate,
@@ -432,7 +448,9 @@ async def proxy_health_check(
             "target_manager": "healthy",
             "alert_publisher": "healthy",
             "filter_engine": "healthy",
-            "classification_service": ("healthy" if classification_service else "disabled"),
+            "classification_service": (
+                "healthy" if classification_service else "disabled"
+            ),
         },
         "metrics_only_mode": target_manager.is_metrics_only_mode(),
         "active_targets": target_manager.get_targets_count(),
@@ -449,7 +467,9 @@ async def proxy_health_check(
 
     try:
         all_stats = alert_publisher.get_all_stats()
-        unhealthy_targets = sum(1 for stats in all_stats.values() if not stats.is_healthy)
+        unhealthy_targets = sum(
+            1 for stats in all_stats.values() if not stats.is_healthy
+        )
         if unhealthy_targets > 0:
             health_status["components"]["alert_publisher"] = "degraded"
     except Exception:
@@ -548,7 +568,9 @@ async def remove_filter_rule(
                 "message": f"Filter rule '{rule_name}' removed successfully",
             }
         else:
-            raise HTTPException(status_code=404, detail=f"Filter rule '{rule_name}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Filter rule '{rule_name}' not found"
+            )
 
     except Exception as e:
         logger.error(f"Error removing filter rule: {e}")
@@ -564,13 +586,17 @@ async def _convert_webhook_to_alert(alert_data: Dict[str, Any]) -> Alert:
 
     if "startsAt" in alert_data:
         try:
-            starts_at = datetime.fromisoformat(alert_data["startsAt"].replace("Z", "+00:00"))
+            starts_at = datetime.fromisoformat(
+                alert_data["startsAt"].replace("Z", "+00:00")
+            )
         except (ValueError, AttributeError):
             pass
 
     if "endsAt" in alert_data:
         try:
-            ends_at = datetime.fromisoformat(alert_data["endsAt"].replace("Z", "+00:00"))
+            ends_at = datetime.fromisoformat(
+                alert_data["endsAt"].replace("Z", "+00:00")
+            )
         except (ValueError, AttributeError):
             pass
 

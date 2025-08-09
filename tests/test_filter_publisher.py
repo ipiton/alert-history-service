@@ -2,10 +2,9 @@
 """
 Тест Filter Engine и Alert Publisher системы.
 """
-import sys
-import os
 import asyncio
-import time
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -19,8 +18,12 @@ async def test_filter_engine():
     try:
         # Test imports
         print("1. Testing filter engine imports...")
-        from src.alert_history.services.filter_engine import AlertFilterEngine, FilterRule, FilterAction
-        from src.alert_history.core.interfaces import Alert, AlertSeverity, EnrichedAlert
+        from src.alert_history.services.filter_engine import (
+            AlertFilterEngine,
+            FilterAction,
+            FilterRule,
+        )
+
         print("   ✅ Filter engine components imported")
 
         # Test FilterAction enum
@@ -35,7 +38,7 @@ async def test_filter_engine():
             action=FilterAction.ALLOW,
             conditions={"severity": ["critical"]},
             priority=1,
-            enabled=True
+            enabled=True,
         )
 
         assert rule.name == "critical-only"
@@ -49,11 +52,11 @@ async def test_filter_engine():
 
         # Test engine methods
         methods_to_check = [
-            'add_global_rule',
-            'add_target_rule',
-            'remove_rule',
-            'should_publish',
-            'get_filter_stats'
+            "add_global_rule",
+            "add_target_rule",
+            "remove_rule",
+            "should_publish",
+            "get_filter_stats",
         ]
 
         for method in methods_to_check:
@@ -79,6 +82,7 @@ async def test_filter_engine():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -89,9 +93,18 @@ async def test_alert_filtering():
 
     try:
         print("1. Testing alert filtering setup...")
-        from src.alert_history.services.filter_engine import AlertFilterEngine, FilterRule, FilterAction
-        from src.alert_history.core.interfaces import Alert, AlertSeverity, EnrichedAlert
         from datetime import datetime
+
+        from src.alert_history.core.interfaces import (
+            Alert,
+            AlertSeverity,
+            EnrichedAlert,
+        )
+        from src.alert_history.services.filter_engine import (
+            AlertFilterEngine,
+            FilterAction,
+            FilterRule,
+        )
 
         # Create filter engine with rules
         filter_engine = AlertFilterEngine()
@@ -102,20 +115,20 @@ async def test_alert_filtering():
                 name="allow-critical",
                 action=FilterAction.ALLOW,
                 conditions={"severity": ["critical"]},
-                priority=1
+                priority=1,
             ),
             FilterRule(
                 name="deny-noise",
                 action=FilterAction.DENY,
                 conditions={"severity": ["noise"]},
-                priority=2
+                priority=2,
             ),
             FilterRule(
                 name="delay-info",
                 action=FilterAction.DELAY,
                 conditions={"severity": ["info"], "delay_seconds": 300},
-                priority=3
-            )
+                priority=3,
+            ),
         ]
 
         for rule in rules:
@@ -136,12 +149,12 @@ async def test_alert_filtering():
                     annotations={"description": "CPU usage high"},
                     starts_at=datetime.utcnow(),
                     ends_at=None,
-                    generator_url="http://test"
+                    generator_url="http://test",
                 ),
                 severity=AlertSeverity.CRITICAL,
                 confidence=0.9,
                 reasoning="High confidence critical alert",
-                recommendations=["Scale up"]
+                recommendations=["Scale up"],
             ),
             EnrichedAlert(
                 alert=Alert(
@@ -152,13 +165,13 @@ async def test_alert_filtering():
                     annotations={"description": "False positive"},
                     starts_at=datetime.utcnow(),
                     ends_at=None,
-                    generator_url="http://test"
+                    generator_url="http://test",
                 ),
                 severity=AlertSeverity.NOISE,
                 confidence=0.8,
                 reasoning="Likely false positive",
-                recommendations=["Adjust threshold"]
-            )
+                recommendations=["Adjust threshold"],
+            ),
         ]
 
         print(f"   ✅ Created {len(test_alerts)} test alerts")
@@ -171,7 +184,9 @@ async def test_alert_filtering():
             should_publish, delay = await filter_engine.should_publish(alert)
             action = FilterAction.ALLOW if should_publish else FilterAction.DENY
             filtered_results.append({"action": action, "delay": delay})
-            print(f"   ✅ Alert {alert.alert.fingerprint}: {action.value} (delay: {delay}s)")
+            print(
+                f"   ✅ Alert {alert.alert.fingerprint}: {action.value} (delay: {delay}s)"
+            )
 
         # Verify filtering results
         critical_result = filtered_results[0]
@@ -187,6 +202,7 @@ async def test_alert_filtering():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -197,21 +213,27 @@ async def test_alert_publisher():
 
     try:
         print("1. Testing alert publisher imports...")
-        from src.alert_history.services.alert_publisher import AlertPublisher, CircuitBreaker, CircuitBreakerState
-        from src.alert_history.services.alert_formatter import AlertFormatter
-        from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat
+        from src.alert_history.core.interfaces import PublishingFormat, PublishingTarget
+        from src.alert_history.services.alert_publisher import (
+            AlertPublisher,
+            CircuitBreaker,
+            CircuitBreakerState,
+        )
+
         print("   ✅ Publisher components imported")
 
         # Test CircuitBreaker states
         print("2. Testing CircuitBreaker states...")
-        states = [CircuitBreakerState.CLOSED, CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN]
+        states = [
+            CircuitBreakerState.CLOSED,
+            CircuitBreakerState.OPEN,
+            CircuitBreakerState.HALF_OPEN,
+        ]
         print(f"   ✅ Circuit breaker states: {[state.value for state in states]}")
 
         # Test CircuitBreaker creation
         circuit_breaker = CircuitBreaker(
-            failure_threshold=3,
-            timeout=60.0,
-            half_open_max_calls=1
+            failure_threshold=3, timeout=60.0, half_open_max_calls=1
         )
         assert circuit_breaker.state == CircuitBreakerState.CLOSED
         print("   ✅ CircuitBreaker creation works")
@@ -220,19 +242,17 @@ async def test_alert_publisher():
 
         # Create publisher
         publisher = AlertPublisher(
-            max_concurrent_publishes=5,
-            default_timeout=30,
-            retry_attempts=3
+            max_concurrent_publishes=5, default_timeout=30, retry_attempts=3
         )
 
         # Test publisher methods
         methods_to_check = [
-            'publish_alert',
-            'publish_alerts_batch',
-            'add_target',
-            'remove_target',
-            'get_targets',
-            'get_publishing_stats'
+            "publish_alert",
+            "publish_alerts_batch",
+            "add_target",
+            "remove_target",
+            "get_targets",
+            "get_publishing_stats",
         ]
 
         for method in methods_to_check:
@@ -249,7 +269,7 @@ async def test_alert_publisher():
             enabled=True,
             headers={"Authorization": "Bearer test-token"},
             filter_config={"severity": ["critical", "warning"]},
-            format=PublishingFormat.ALERTMANAGER
+            format=PublishingFormat.ALERTMANAGER,
         )
 
         # Add target
@@ -260,7 +280,12 @@ async def test_alert_publisher():
 
         # Test publishing stats
         stats = publisher.get_publishing_stats()
-        required_stats = ['total_publishes', 'successful_publishes', 'failed_publishes', 'active_targets']
+        required_stats = [
+            "total_publishes",
+            "successful_publishes",
+            "failed_publishes",
+            "active_targets",
+        ]
         for stat in required_stats:
             assert stat in stats, f"Missing stat: {stat}"
             print(f"   ✅ Stat available: {stat} = {stats[stat]}")
@@ -271,6 +296,7 @@ async def test_alert_publisher():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -281,18 +307,23 @@ async def test_alert_formatter():
 
     try:
         print("1. Testing alert formatter imports...")
-        from src.alert_history.services.alert_formatter import AlertFormatter
-        from src.alert_history.core.interfaces import PublishingFormat, EnrichedAlert, Alert, AlertSeverity
         from datetime import datetime
+
+        from src.alert_history.core.interfaces import (
+            Alert,
+            AlertSeverity,
+            EnrichedAlert,
+            PublishingFormat,
+        )
+        from src.alert_history.services.alert_formatter import AlertFormatter
+
         print("   ✅ Formatter components imported")
 
         print("2. Testing AlertFormatter initialization...")
         formatter = AlertFormatter()
 
         # Test formatter methods
-        methods_to_check = [
-            'format_alert'
-        ]
+        methods_to_check = ["format_alert"]
 
         for method in methods_to_check:
             assert hasattr(formatter, method), f"Missing method: {method}"
@@ -309,20 +340,20 @@ async def test_alert_formatter():
                 labels={
                     "severity": "warning",
                     "instance": "server-01",
-                    "service": "web-app"
+                    "service": "web-app",
                 },
                 annotations={
                     "description": "Memory usage is above 80%",
-                    "summary": "High memory usage detected"
+                    "summary": "High memory usage detected",
                 },
                 starts_at=datetime.utcnow(),
                 ends_at=None,
-                generator_url="http://prometheus:9090/graph"
+                generator_url="http://prometheus:9090/graph",
             ),
             severity=AlertSeverity.WARNING,
             confidence=0.85,
             reasoning="Memory usage pattern indicates potential issue",
-            recommendations=["Check for memory leaks", "Consider scaling"]
+            recommendations=["Check for memory leaks", "Consider scaling"],
         )
 
         print("4. Testing different output formats...")
@@ -332,13 +363,15 @@ async def test_alert_formatter():
             (PublishingFormat.ALERTMANAGER, "Alertmanager"),
             (PublishingFormat.ROOTLY, "Rootly"),
             (PublishingFormat.PAGERDUTY, "PagerDuty"),
-            (PublishingFormat.SLACK, "Slack")
+            (PublishingFormat.SLACK, "Slack"),
         ]
 
         for format_type, format_name in formats_to_test:
             try:
                 formatted = await formatter.format_alert(test_alert, format_type)
-                assert isinstance(formatted, dict), f"{format_name} format should return dict"
+                assert isinstance(
+                    formatted, dict
+                ), f"{format_name} format should return dict"
                 print(f"   ✅ {format_name} format: {len(str(formatted))} chars")
             except Exception as e:
                 print(f"   ⚠️  {format_name} format error: {e}")
@@ -349,6 +382,7 @@ async def test_alert_formatter():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -359,13 +393,22 @@ async def test_integration_pipeline():
 
     try:
         print("1. Testing end-to-end pipeline setup...")
-        from src.alert_history.services.filter_engine import AlertFilterEngine, FilterRule, FilterAction
-        from src.alert_history.services.alert_publisher import AlertPublisher
-        from src.alert_history.services.alert_formatter import AlertFormatter
-        from src.alert_history.core.interfaces import (
-            Alert, AlertSeverity, EnrichedAlert, PublishingTarget, PublishingFormat
-        )
         from datetime import datetime
+
+        from src.alert_history.core.interfaces import (
+            Alert,
+            AlertSeverity,
+            EnrichedAlert,
+            PublishingFormat,
+            PublishingTarget,
+        )
+        from src.alert_history.services.alert_formatter import AlertFormatter
+        from src.alert_history.services.alert_publisher import AlertPublisher
+        from src.alert_history.services.filter_engine import (
+            AlertFilterEngine,
+            FilterAction,
+            FilterRule,
+        )
 
         # Setup components
         filter_engine = AlertFilterEngine()
@@ -381,7 +424,7 @@ async def test_integration_pipeline():
             name="allow-warnings-and-above",
             action=FilterAction.ALLOW,
             conditions={"severity": ["warning", "critical"]},
-            priority=1
+            priority=1,
         )
         filter_engine.add_global_rule(rule)
 
@@ -393,7 +436,7 @@ async def test_integration_pipeline():
             enabled=True,
             headers={"Content-Type": "application/json"},
             filter_config={},
-            format=PublishingFormat.ALERTMANAGER
+            format=PublishingFormat.ALERTMANAGER,
         )
         publisher.add_target(target)
 
@@ -411,12 +454,12 @@ async def test_integration_pipeline():
                 annotations={"description": "Pipeline test alert"},
                 starts_at=datetime.utcnow(),
                 ends_at=None,
-                generator_url="http://test"
+                generator_url="http://test",
             ),
             severity=AlertSeverity.WARNING,
             confidence=0.9,
             reasoning="Test alert for pipeline",
-            recommendations=["Test recommendation"]
+            recommendations=["Test recommendation"],
         )
 
         # Step 1: Apply filters
@@ -425,7 +468,9 @@ async def test_integration_pipeline():
         print("   ✅ Step 1: Alert passed filters")
 
         # Step 2: Format alert
-        formatted_alert = await formatter.format_alert(alert, PublishingFormat.ALERTMANAGER)
+        formatted_alert = await formatter.format_alert(
+            alert, PublishingFormat.ALERTMANAGER
+        )
         assert isinstance(formatted_alert, dict)
         print("   ✅ Step 2: Alert formatted")
 
@@ -449,6 +494,7 @@ async def test_integration_pipeline():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

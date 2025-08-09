@@ -11,7 +11,8 @@ Implements proper shutdown sequence to ensure:
 # Standard library imports
 import asyncio
 import time
-from typing import Awaitable, Callable, List
+from collections.abc import Awaitable
+from typing import Callable, List
 
 # Local imports
 from ..logging_config import get_logger
@@ -34,7 +35,9 @@ class GracefulShutdownHandler:
         self.shutdown_callbacks: List[Callable[[], Awaitable[None]]] = []
         self._shutdown_event = asyncio.Event()
 
-    def register_shutdown_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
+    def register_shutdown_callback(
+        self, callback: Callable[[], Awaitable[None]]
+    ) -> None:
         """Register callback to be called during shutdown."""
         self.shutdown_callbacks.append(callback)
 
@@ -60,7 +63,9 @@ class GracefulShutdownHandler:
             # Execute shutdown callbacks
             for i, callback in enumerate(self.shutdown_callbacks):
                 try:
-                    logger.info(f"Executing shutdown callback {i+1}/{len(self.shutdown_callbacks)}")
+                    logger.info(
+                        f"Executing shutdown callback {i+1}/{len(self.shutdown_callbacks)}"
+                    )
                     await asyncio.wait_for(callback(), timeout=10)
                     logger.info(f"Shutdown callback {i+1} completed")
                 except asyncio.TimeoutError:
@@ -76,7 +81,9 @@ class GracefulShutdownHandler:
             ]
 
             if pending_tasks:
-                logger.info(f"Waiting for {len(pending_tasks)} pending tasks to complete")
+                logger.info(
+                    f"Waiting for {len(pending_tasks)} pending tasks to complete"
+                )
                 done, pending = await asyncio.wait(
                     pending_tasks,
                     timeout=self.shutdown_timeout - (time.time() - start_time),
@@ -84,7 +91,9 @@ class GracefulShutdownHandler:
                 )
 
                 if pending:
-                    logger.warning(f"Forcefully cancelling {len(pending)} remaining tasks")
+                    logger.warning(
+                        f"Forcefully cancelling {len(pending)} remaining tasks"
+                    )
                     for task in pending:
                         task.cancel()
 

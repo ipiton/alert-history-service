@@ -13,18 +13,14 @@ Usage:
     python test_t7_2_integration.py
 """
 
-import asyncio
-import json
 import os
-import subprocess
+import sqlite3
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-import aiohttp
-import sqlite3
+from unittest.mock import patch
 
 
 class TestIntegration(unittest.TestCase):
@@ -42,7 +38,7 @@ class TestIntegration(unittest.TestCase):
         print("\n=== T7.2.1: Database Migration Integration ===")
 
         # Create temporary SQLite database
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_db:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:
             test_db_path = tmp_db.name
 
         try:
@@ -51,7 +47,8 @@ class TestIntegration(unittest.TestCase):
             cursor = conn.cursor()
 
             # Create alerts table
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE alerts (
                     id INTEGER PRIMARY KEY,
                     alertname TEXT,
@@ -60,17 +57,24 @@ class TestIntegration(unittest.TestCase):
                     timestamp TEXT,
                     fingerprint TEXT
                 )
-            ''')
+            """
+            )
 
             # Insert test data
             test_alerts = [
-                ('TestAlert1', 'production', 'firing', '2024-12-28T10:00:00Z', 'abc123'),
-                ('TestAlert2', 'staging', 'resolved', '2024-12-28T11:00:00Z', 'def456'),
+                (
+                    "TestAlert1",
+                    "production",
+                    "firing",
+                    "2024-12-28T10:00:00Z",
+                    "abc123",
+                ),
+                ("TestAlert2", "staging", "resolved", "2024-12-28T11:00:00Z", "def456"),
             ]
 
             cursor.executemany(
-                'INSERT INTO alerts (alertname, namespace, status, timestamp, fingerprint) VALUES (?, ?, ?, ?, ?)',
-                test_alerts
+                "INSERT INTO alerts (alertname, namespace, status, timestamp, fingerprint) VALUES (?, ?, ?, ?, ?)",
+                test_alerts,
             )
             conn.commit()
             conn.close()
@@ -78,7 +82,7 @@ class TestIntegration(unittest.TestCase):
             # Verify data was inserted
             conn = sqlite3.connect(test_db_path)
             cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM alerts')
+            cursor.execute("SELECT COUNT(*) FROM alerts")
             count = cursor.fetchone()[0]
             conn.close()
 
@@ -103,11 +107,11 @@ class TestIntegration(unittest.TestCase):
 
         # Test environment variable configuration
         test_env = {
-            'ENVIRONMENT': 'test',
-            'LOG_LEVEL': 'debug',
-            'DATABASE_URL': 'sqlite:///test.db',
-            'ENRICHMENT_MODE': 'transparent',
-            'PUBLISHING_ENABLED': 'true'
+            "ENVIRONMENT": "test",
+            "LOG_LEVEL": "debug",
+            "DATABASE_URL": "sqlite:///test.db",
+            "ENRICHMENT_MODE": "transparent",
+            "PUBLISHING_ENABLED": "true",
         }
 
         try:
@@ -123,8 +127,8 @@ class TestIntegration(unittest.TestCase):
                 print(f"✅ Config loaded - Log Level: {config.log_level}")
                 print(f"✅ Config loaded - Database URL: {config.database.url}")
 
-                self.assertEqual(config.environment, 'test')
-                self.assertEqual(config.log_level, 'debug')
+                self.assertEqual(config.environment, "test")
+                self.assertEqual(config.log_level, "debug")
                 self.assertTrue(config.publishing.enabled)
 
         except ImportError as e:
@@ -142,8 +146,10 @@ class TestIntegration(unittest.TestCase):
             sys.path.insert(0, str(self.src_path))
 
             # Test AlertClassificationService integration
-            from alert_history.services.alert_classifier import AlertClassificationService
             from alert_history.core.interfaces import Alert, AlertStatus
+            from alert_history.services.alert_classifier import (
+                AlertClassificationService,
+            )
 
             # Create test alert
             test_alert = Alert(
@@ -154,17 +160,15 @@ class TestIntegration(unittest.TestCase):
                 annotations={"summary": "Test alert"},
                 starts_at="2024-12-28T10:00:00Z",
                 ends_at=None,
-                fingerprint="test123"
+                fingerprint="test123",
             )
 
             # Test service initialization (without LLM)
             service = AlertClassificationService(
-                llm_enabled=False,
-                cache=None,
-                llm_client=None
+                llm_enabled=False, cache=None, llm_client=None
             )
 
-            print(f"✅ AlertClassificationService initialized")
+            print("✅ AlertClassificationService initialized")
             print(f"✅ LLM enabled: {service.llm_enabled}")
 
             self.assertIsNotNone(service)
@@ -188,16 +192,16 @@ class TestIntegration(unittest.TestCase):
             app = create_app()
 
             # Check that routes are registered
-            route_paths = [route.path for route in app.routes if hasattr(route, 'path')]
+            route_paths = [route.path for route in app.routes if hasattr(route, "path")]
 
             expected_routes = [
-                '/healthz',
-                '/readyz',
-                '/metrics',
-                '/webhook',
-                '/webhook/proxy',
-                '/enrichment/mode',
-                '/dashboard/modern'
+                "/healthz",
+                "/readyz",
+                "/metrics",
+                "/webhook",
+                "/webhook/proxy",
+                "/enrichment/mode",
+                "/dashboard/modern",
             ]
 
             found_routes = []
@@ -209,8 +213,11 @@ class TestIntegration(unittest.TestCase):
             for route in found_routes:
                 print(f"   - {route}")
 
-            self.assertGreaterEqual(len(found_routes), len(expected_routes) * 0.8,
-                                  "Most expected routes should be registered")
+            self.assertGreaterEqual(
+                len(found_routes),
+                len(expected_routes) * 0.8,
+                "Most expected routes should be registered",
+            )
 
         except ImportError as e:
             print(f"⚠️  App import failed: {e}")
@@ -224,28 +231,28 @@ class TestIntegration(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.services.webhook_processor import WebhookProcessor
             from alert_history.database.sqlite_adapter import SQLiteLegacyStorage
+            from alert_history.services.webhook_processor import WebhookProcessor
 
             # Create test webhook data
             webhook_data = {
                 "receiver": "test",
                 "status": "firing",
-                "alerts": [{
-                    "status": "firing",
-                    "labels": {
-                        "alertname": "TestIntegrationAlert",
-                        "namespace": "test"
-                    },
-                    "annotations": {
-                        "summary": "Integration test alert"
-                    },
-                    "startsAt": "2024-12-28T10:00:00Z"
-                }]
+                "alerts": [
+                    {
+                        "status": "firing",
+                        "labels": {
+                            "alertname": "TestIntegrationAlert",
+                            "namespace": "test",
+                        },
+                        "annotations": {"summary": "Integration test alert"},
+                        "startsAt": "2024-12-28T10:00:00Z",
+                    }
+                ],
             }
 
             # Create temporary database
-            with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_db:
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:
                 test_db_path = tmp_db.name
 
             try:
@@ -256,11 +263,13 @@ class TestIntegration(unittest.TestCase):
                 processor = WebhookProcessor(
                     storage=storage,
                     classification_service=None,
-                    enable_auto_classification=False
+                    enable_auto_classification=False,
                 )
 
-                print(f"✅ WebhookProcessor initialized")
-                print(f"✅ Auto-classification enabled: {processor.enable_auto_classification}")
+                print("✅ WebhookProcessor initialized")
+                print(
+                    f"✅ Auto-classification enabled: {processor.enable_auto_classification}"
+                )
 
                 self.assertIsNotNone(processor)
                 self.assertFalse(processor.enable_auto_classification)
@@ -281,7 +290,10 @@ class TestIntegration(unittest.TestCase):
 
         try:
             sys.path.insert(0, str(self.src_path))
-            from alert_history.api.enrichment_endpoints import EnrichmentModeRequest, EnrichmentModeResponse
+            from alert_history.api.enrichment_endpoints import (
+                EnrichmentModeRequest,
+                EnrichmentModeResponse,
+            )
 
             # Test enrichment mode data models
             request = EnrichmentModeRequest(mode="transparent")
@@ -315,7 +327,7 @@ class TestIntegration(unittest.TestCase):
             self.assertIsNotNone(metrics.webhook_events_total)
             self.assertIsNotNone(metrics.enrichment_mode_status)
 
-            print(f"✅ Metrics initialized")
+            print("✅ Metrics initialized")
             print(f"✅ Webhook events metric: {metrics.webhook_events_total}")
             print(f"✅ Enrichment mode metric: {metrics.enrichment_mode_status}")
 
@@ -323,7 +335,7 @@ class TestIntegration(unittest.TestCase):
             metrics.webhook_events_total.labels(alertname="test", status="firing").inc()
             metrics.enrichment_mode_status.set(1)
 
-            print(f"✅ Metrics recorded successfully")
+            print("✅ Metrics recorded successfully")
 
         except ImportError as e:
             print(f"⚠️  Metrics import failed: {e}")

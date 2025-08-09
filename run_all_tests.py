@@ -9,13 +9,13 @@ Runs all tests including:
 - Performance tests
 - 12-Factor compliance tests
 """
-import sys
-import os
 import asyncio
+import os
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -28,7 +28,15 @@ PARALLEL_TESTS = True
 
 class TestResult:
     """Test execution result."""
-    def __init__(self, name: str, passed: bool, duration: float, output: str = "", error: str = ""):
+
+    def __init__(
+        self,
+        name: str,
+        passed: bool,
+        duration: float,
+        output: str = "",
+        error: str = "",
+    ):
         self.name = name
         self.passed = passed
         self.duration = duration
@@ -53,7 +61,9 @@ class TestRunner:
         start_time = time.time()
         try:
             if not Path(test_file).exists():
-                return TestResult(description, False, 0.0, "", f"Test file {test_file} not found")
+                return TestResult(
+                    description, False, 0.0, "", f"Test file {test_file} not found"
+                )
 
             # Run the test
             result = subprocess.run(
@@ -61,7 +71,7 @@ class TestRunner:
                 capture_output=True,
                 text=True,
                 timeout=TEST_TIMEOUT,
-                cwd=project_root
+                cwd=project_root,
             )
 
             duration = time.time() - start_time
@@ -72,12 +82,18 @@ class TestRunner:
                 passed=passed,
                 duration=duration,
                 output=result.stdout,
-                error=result.stderr
+                error=result.stderr,
             )
 
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
-            return TestResult(description, False, duration, "", f"Test timed out after {TEST_TIMEOUT}s")
+            return TestResult(
+                description,
+                False,
+                duration,
+                "",
+                f"Test timed out after {TEST_TIMEOUT}s",
+            )
         except Exception as e:
             duration = time.time() - start_time
             return TestResult(description, False, duration, "", str(e))
@@ -92,27 +108,25 @@ class TestRunner:
         if Path("pyproject.toml").exists():
             print("   📋 pyproject.toml found - running configured tools...")
 
-                        # Black formatter check
+            # Black formatter check
             quality_tests.append(
                 await self.run_command_test(
                     ["python3", "-m", "black", "--check", "--diff", "src/"],
-                    "Black Code Formatting Check"
+                    "Black Code Formatting Check",
                 )
             )
 
             # Flake8 linting
             quality_tests.append(
                 await self.run_command_test(
-                    ["python3", "-m", "flake8", "src/"],
-                    "Flake8 Linting Check"
+                    ["python3", "-m", "flake8", "src/"], "Flake8 Linting Check"
                 )
             )
 
             # MyPy type checking
             quality_tests.append(
                 await self.run_command_test(
-                    ["python3", "-m", "mypy", "src/"],
-                    "MyPy Type Checking"
+                    ["python3", "-m", "mypy", "src/"], "MyPy Type Checking"
                 )
             )
 
@@ -120,13 +134,13 @@ class TestRunner:
             print("   ⚠️ pyproject.toml not found - skipping tool-specific checks")
 
         # Basic Python syntax check
-        quality_tests.append(
-            await self.run_syntax_check()
-        )
+        quality_tests.append(await self.run_syntax_check())
 
         return quality_tests
 
-    async def run_command_test(self, command: List[str], description: str) -> TestResult:
+    async def run_command_test(
+        self, command: List[str], description: str
+    ) -> TestResult:
         """Run a command-line test."""
         start_time = time.time()
         try:
@@ -135,7 +149,7 @@ class TestRunner:
                 capture_output=True,
                 text=True,
                 timeout=TEST_TIMEOUT,
-                cwd=project_root
+                cwd=project_root,
             )
 
             duration = time.time() - start_time
@@ -146,15 +160,27 @@ class TestRunner:
                 passed=passed,
                 duration=duration,
                 output=result.stdout,
-                error=result.stderr
+                error=result.stderr,
             )
 
         except FileNotFoundError:
             duration = time.time() - start_time
-            return TestResult(description, False, duration, "", f"Command not found: {' '.join(command)}")
+            return TestResult(
+                description,
+                False,
+                duration,
+                "",
+                f"Command not found: {' '.join(command)}",
+            )
         except subprocess.TimeoutExpired:
             duration = time.time() - start_time
-            return TestResult(description, False, duration, "", f"Command timed out after {TEST_TIMEOUT}s")
+            return TestResult(
+                description,
+                False,
+                duration,
+                "",
+                f"Command timed out after {TEST_TIMEOUT}s",
+            )
         except Exception as e:
             duration = time.time() - start_time
             return TestResult(description, False, duration, "", str(e))
@@ -173,7 +199,7 @@ class TestRunner:
             # Check all Python files
             for py_file in glob.glob("src/**/*.py", recursive=True):
                 try:
-                    with open(py_file, 'r', encoding='utf-8') as f:
+                    with open(py_file, encoding="utf-8") as f:
                         source = f.read()
                     ast.parse(source)
                     files_checked += 1
@@ -188,7 +214,9 @@ class TestRunner:
             if passed:
                 output = f"✅ Syntax check passed for {files_checked} files"
             else:
-                output = f"❌ Syntax errors in {len(errors)} files:\n" + "\n".join(errors)
+                output = f"❌ Syntax errors in {len(errors)} files:\n" + "\n".join(
+                    errors
+                )
 
             return TestResult("Python Syntax Check", passed, duration, output)
 
@@ -241,14 +269,10 @@ class TestRunner:
         integration_tests = []
 
         # Test FastAPI app creation
-        integration_tests.append(
-            await self.run_app_integration_test()
-        )
+        integration_tests.append(await self.run_app_integration_test())
 
         # Test service dependencies
-        integration_tests.append(
-            await self.run_dependencies_test()
-        )
+        integration_tests.append(await self.run_dependencies_test())
 
         return integration_tests
 
@@ -277,14 +301,14 @@ class TestRunner:
                     False,
                     duration,
                     "",
-                    f"Missing routes: {missing_routes}"
+                    f"Missing routes: {missing_routes}",
                 )
 
             return TestResult(
                 "FastAPI App Integration",
                 True,
                 duration,
-                f"✅ App created successfully with {len(routes)} routes"
+                f"✅ App created successfully with {len(routes)} routes",
             )
 
         except Exception as e:
@@ -322,14 +346,14 @@ class TestRunner:
                     False,
                     duration,
                     "",
-                    f"Import errors: {import_errors}"
+                    f"Import errors: {import_errors}",
                 )
 
             return TestResult(
                 "Service Dependencies",
                 True,
                 duration,
-                f"✅ All {len(services)} services imported successfully"
+                f"✅ All {len(services)} services imported successfully",
             )
 
         except Exception as e:
@@ -341,14 +365,10 @@ class TestRunner:
         performance_tests = []
 
         # Test configuration loading speed
-        performance_tests.append(
-            await self.run_config_performance_test()
-        )
+        performance_tests.append(await self.run_config_performance_test())
 
         # Test service initialization speed
-        performance_tests.append(
-            await self.run_service_performance_test()
-        )
+        performance_tests.append(await self.run_service_performance_test())
 
         return performance_tests
 
@@ -375,12 +395,14 @@ class TestRunner:
                 "Configuration Loading Performance",
                 passed,
                 duration,
-                f"✅ Average config load time: {avg_time:.4f}s"
+                f"✅ Average config load time: {avg_time:.4f}s",
             )
 
         except Exception as e:
             duration = time.time() - start_time
-            return TestResult("Configuration Loading Performance", False, duration, "", str(e))
+            return TestResult(
+                "Configuration Loading Performance", False, duration, "", str(e)
+            )
 
     async def run_service_performance_test(self) -> TestResult:
         """Test service initialization performance."""
@@ -407,12 +429,14 @@ class TestRunner:
                 "Service Initialization Performance",
                 passed,
                 duration,
-                f"✅ Average service init time: {avg_time:.4f}s"
+                f"✅ Average service init time: {avg_time:.4f}s",
             )
 
         except Exception as e:
             duration = time.time() - start_time
-            return TestResult("Service Initialization Performance", False, duration, "", str(e))
+            return TestResult(
+                "Service Initialization Performance", False, duration, "", str(e)
+            )
 
     def print_results(self, all_results: Dict[str, List[TestResult]]):
         """Print comprehensive test results."""
@@ -449,7 +473,7 @@ class TestRunner:
         # Overall results
         success_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
 
-        print(f"\n🏆 OVERALL RESULTS:")
+        print("\n🏆 OVERALL RESULTS:")
         print(f"   • Total Tests: {total_tests}")
         print(f"   • Passed: {total_passed}")
         print(f"   • Failed: {total_tests - total_passed}")

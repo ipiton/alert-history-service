@@ -186,9 +186,8 @@ class Config:
     def _load_llm_config(self) -> LLMConfig:
         """Load LLM configuration from environment."""
         # LLM enabled if API key is provided and enabled flag is set
-        enabled = (
-            os.getenv("LLM_ENABLED", "false").lower() == "true" and
-            bool(os.getenv("LLM_API_KEY", ""))
+        enabled = os.getenv("LLM_ENABLED", "false").lower() == "true" and bool(
+            os.getenv("LLM_API_KEY", "")
         )
 
         return LLMConfig(

@@ -10,11 +10,9 @@ Test T1.4: Stateless Application Design.
 - Stateless service coordination
 """
 import asyncio
-import hashlib
 import os
 import sys
-import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 # Add project root to path
 project_root = os.path.abspath(".")
@@ -36,12 +34,14 @@ async def test_stateless_manager():
 
         # Test instance ID generation
         assert manager.instance_id.startswith("alert-history-")
-        assert len(manager.instance_id) > 20  # Should include timestamp and random suffix
+        assert (
+            len(manager.instance_id) > 20
+        )  # Should include timestamp and random suffix
 
         print("   ✅ StatelessManager initialization")
 
         # Test operation registry
-        assert hasattr(manager, '_operation_registry')
+        assert hasattr(manager, "_operation_registry")
         assert isinstance(manager._operation_registry, dict)
 
         print("   ✅ Local operation registry")
@@ -92,7 +92,7 @@ async def test_idempotent_operations():
         # Create mock Redis cache
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None  # Operation doesn't exist
-        mock_redis.set.return_value = True   # Successfully set operation
+        mock_redis.set.return_value = True  # Successfully set operation
 
         manager = StatelessManager(
             redis_cache=mock_redis,
@@ -129,7 +129,10 @@ async def test_idempotent_operations():
 
         # Add operation that should be expired
         from datetime import datetime, timedelta
-        expired_time = datetime.utcnow() - timedelta(seconds=manager.operation_ttl + 100)
+
+        expired_time = datetime.utcnow() - timedelta(
+            seconds=manager.operation_ttl + 100
+        )
         manager._operation_registry["expired_op"] = expired_time
 
         # This should return True since operation is expired
@@ -191,7 +194,9 @@ async def test_temporary_data_management():
         # Test without Redis (should fail gracefully)
         manager_no_redis = StatelessManager(redis_cache=None)
 
-        success_no_redis = await manager_no_redis.store_temporary_data("test", {"data": 1})
+        success_no_redis = await manager_no_redis.store_temporary_data(
+            "test", {"data": 1}
+        )
         assert success_no_redis == False
 
         data_no_redis = await manager_no_redis.get_temporary_data("test")
@@ -213,16 +218,25 @@ async def test_stateless_decorators():
 
     try:
         from src.alert_history.utils.stateless_decorators import (
-            idempotent, stateless, instance_tracked, _generate_operation_key
+            _generate_operation_key,
+            idempotent,
+            instance_tracked,
+            stateless,
         )
 
         # Test operation key generation
         def test_function():
             pass
 
-        key1 = _generate_operation_key(test_function, ("arg1", "arg2"), {"param": "value"})
-        key2 = _generate_operation_key(test_function, ("arg1", "arg2"), {"param": "value"})
-        key3 = _generate_operation_key(test_function, ("arg1", "different"), {"param": "value"})
+        key1 = _generate_operation_key(
+            test_function, ("arg1", "arg2"), {"param": "value"}
+        )
+        key2 = _generate_operation_key(
+            test_function, ("arg1", "arg2"), {"param": "value"}
+        )
+        key3 = _generate_operation_key(
+            test_function, ("arg1", "different"), {"param": "value"}
+        )
 
         # Same inputs should generate same key
         assert key1 == key2
@@ -298,8 +312,12 @@ async def test_cross_instance_coordination():
 
         # Should include this instance
         this_instance = next(
-            (inst for inst in active_instances if inst["instance_id"] == manager.instance_id),
-            None
+            (
+                inst
+                for inst in active_instances
+                if inst["instance_id"] == manager.instance_id
+            ),
+            None,
         )
         assert this_instance is not None
 
@@ -328,7 +346,7 @@ async def test_stateless_validation():
 
         manager = StatelessManager(redis_cache=None)
 
-                # Test valid stateless operation
+        # Test valid stateless operation
         valid_result = manager.validate_stateless_operation(
             "process_alert",
             fingerprint="alert_123",
@@ -376,7 +394,7 @@ async def test_main_integration():
         # Check if StatelessManager is imported and used in main.py
         main_file_path = "src/alert_history/main.py"
 
-        with open(main_file_path, 'r') as f:
+        with open(main_file_path) as f:
             main_content = f.read()
 
         # Check for StatelessManager import
@@ -421,7 +439,9 @@ async def test_stateless_patterns():
 
     try:
         # Test alert processing pattern
-        from src.alert_history.utils.stateless_decorators import idempotent_alert_processing
+        from src.alert_history.utils.stateless_decorators import (
+            idempotent_alert_processing,
+        )
 
         @idempotent_alert_processing(ttl=300)
         async def process_alert(alert_data):
@@ -446,7 +466,7 @@ async def test_stateless_patterns():
         # Check that AppState is not used for critical operations
         app_state_file_path = "src/alert_history/core/app_state.py"
 
-        with open(app_state_file_path, 'r') as f:
+        with open(app_state_file_path) as f:
             app_state_content = f.read()
 
         # AppState should only be used for dependency injection, not business state
@@ -509,12 +529,12 @@ async def main():
         print(f"   {status} {test_name}")
 
     success_rate = passed / total * 100
-    print(f"\n🏆 OVERALL RESULTS:")
+    print("\n🏆 OVERALL RESULTS:")
     print(f"   • Tests Passed: {passed}/{total}")
     print(f"   • Success Rate: {success_rate:.1f}%")
 
     if success_rate >= 80:
-        print(f"\n✅ T1.4 STATELESS APPLICATION DESIGN TESTS PASSED!")
+        print("\n✅ T1.4 STATELESS APPLICATION DESIGN TESTS PASSED!")
         if success_rate == 100:
             print("🏆 PERFECT SCORE! All tests passed!")
         print("\n🚀 Ready for:")
@@ -525,7 +545,7 @@ async def main():
         print("   • 12-Factor App compliance COMPLETE")
         return True
     else:
-        print(f"\n❌ T1.4 STATELESS APPLICATION DESIGN TESTS FAILED!")
+        print("\n❌ T1.4 STATELESS APPLICATION DESIGN TESTS FAILED!")
         print("   🔧 Fix failing components before proceeding")
         return False
 

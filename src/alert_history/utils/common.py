@@ -406,7 +406,9 @@ def batch_items(items: List[Any], batch_size: int) -> List[List[Any]]:
     return batches
 
 
-def flatten_dict(data: Dict[str, Any], separator: str = ".", prefix: str = "") -> Dict[str, Any]:
+def flatten_dict(
+    data: Dict[str, Any], separator: str = ".", prefix: str = ""
+) -> Dict[str, Any]:
     """
     Flatten nested dictionary.
 

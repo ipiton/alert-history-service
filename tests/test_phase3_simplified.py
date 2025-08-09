@@ -2,10 +2,9 @@
 """
 Упрощенный тест для ФАЗЫ 3: Intelligent Alert Proxy.
 """
-import sys
-import os
 import asyncio
-import time
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -19,11 +18,14 @@ async def test_phase3_components():
     try:
         # Test all core imports
         print("1. Testing core component imports...")
-        from src.alert_history.services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig
-        from src.alert_history.services.filter_engine import AlertFilterEngine, FilterRule, FilterAction
-        from src.alert_history.services.alert_publisher import AlertPublisher, CircuitBreaker
         from src.alert_history.services.alert_formatter import AlertFormatter
-        from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat, EnrichedAlert, Alert
+        from src.alert_history.services.alert_publisher import AlertPublisher
+        from src.alert_history.services.filter_engine import AlertFilterEngine
+        from src.alert_history.services.target_discovery import (
+            DynamicTargetManager,
+            TargetDiscoveryConfig,
+        )
+
         print("   ✅ All Phase 3 components imported successfully")
 
         print("2. Testing component initialization...")
@@ -32,7 +34,7 @@ async def test_phase3_components():
         config = TargetDiscoveryConfig(
             enabled=True,
             secret_labels=["alert-history.io/target=true"],
-            secret_namespaces=["default"]
+            secret_namespaces=["default"],
         )
         target_manager = DynamicTargetManager(config)
         print("   ✅ Target Discovery Manager initialized")
@@ -67,7 +69,12 @@ async def test_phase3_components():
 
         # Test discovery stats
         discovery_stats = target_manager.get_discovery_stats()
-        required_keys = ['enabled', 'kubernetes_available', 'targets_count', 'metrics_only_mode']
+        required_keys = [
+            "enabled",
+            "kubernetes_available",
+            "targets_count",
+            "metrics_only_mode",
+        ]
         for key in required_keys:
             assert key in discovery_stats, f"Missing discovery stat: {key}"
         print("   ✅ Discovery monitoring works")
@@ -82,6 +89,7 @@ async def test_phase3_components():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -94,18 +102,20 @@ async def test_intelligent_proxy_architecture():
         print("1. Testing proxy pipeline architecture...")
 
         # Core pipeline components
-        from src.alert_history.services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig
-        from src.alert_history.services.filter_engine import AlertFilterEngine
-        from src.alert_history.services.alert_publisher import AlertPublisher
+        from src.alert_history.services.alert_classifier import (
+            AlertClassificationService,
+        )
         from src.alert_history.services.alert_formatter import AlertFormatter
-        from src.alert_history.services.alert_classifier import AlertClassificationService
+        from src.alert_history.services.alert_publisher import AlertPublisher
+        from src.alert_history.services.filter_engine import AlertFilterEngine
+        from src.alert_history.services.target_discovery import DynamicTargetManager
 
         components = {
             "Target Discovery": DynamicTargetManager,
             "Filter Engine": AlertFilterEngine,
             "Alert Publisher": AlertPublisher,
             "Alert Formatter": AlertFormatter,
-            "Alert Classifier": AlertClassificationService
+            "Alert Classifier": AlertClassificationService,
         }
 
         for name, component_class in components.items():
@@ -121,7 +131,7 @@ async def test_intelligent_proxy_architecture():
             "4. Discover publishing targets from K8s secrets",
             "5. Format alerts for target systems",
             "6. Publish to multiple targets (Rootly, PagerDuty, Slack)",
-            "7. Collect metrics and monitor performance"
+            "7. Collect metrics and monitor performance",
         ]
 
         for step in workflow_steps:
@@ -135,7 +145,7 @@ async def test_intelligent_proxy_architecture():
             PublishingFormat.ALERTMANAGER,
             PublishingFormat.ROOTLY,
             PublishingFormat.PAGERDUTY,
-            PublishingFormat.SLACK
+            PublishingFormat.SLACK,
         ]
 
         for fmt in formats:
@@ -159,6 +169,7 @@ async def test_intelligent_proxy_architecture():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -170,13 +181,16 @@ async def test_metrics_only_mode():
     try:
         print("1. Testing metrics-only detection...")
 
-        from src.alert_history.services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig
+        from src.alert_history.services.target_discovery import (
+            DynamicTargetManager,
+            TargetDiscoveryConfig,
+        )
 
         # Initialize without targets
         config = TargetDiscoveryConfig(
             enabled=True,
             secret_labels=["non-existent-label=true"],
-            secret_namespaces=["non-existent-namespace"]
+            secret_namespaces=["non-existent-namespace"],
         )
         manager = DynamicTargetManager(config)
 
@@ -214,6 +228,7 @@ async def test_metrics_only_mode():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -225,25 +240,25 @@ async def test_publishing_targets_integration():
     try:
         print("1. Testing target data structures...")
 
-        from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat
+        from src.alert_history.core.interfaces import PublishingFormat, PublishingTarget
 
         # Test target creation with all formats
         test_targets = [
             {
                 "name": "rootly-prod",
                 "format": PublishingFormat.ROOTLY,
-                "url": "https://api.rootly.com/v1/incidents"
+                "url": "https://api.rootly.com/v1/incidents",
             },
             {
                 "name": "pagerduty-oncall",
                 "format": PublishingFormat.PAGERDUTY,
-                "url": "https://events.pagerduty.com/v2/enqueue"
+                "url": "https://events.pagerduty.com/v2/enqueue",
             },
             {
                 "name": "slack-alerts",
                 "format": PublishingFormat.SLACK,
-                "url": "https://hooks.slack.com/services/xxx/yyy/zzz"
-            }
+                "url": "https://hooks.slack.com/services/xxx/yyy/zzz",
+            },
         ]
 
         created_targets = []
@@ -255,7 +270,7 @@ async def test_publishing_targets_integration():
                 enabled=True,
                 headers={"Content-Type": "application/json"},
                 filter_config={},
-                format=target_info["format"]
+                format=target_info["format"],
             )
             created_targets.append(target)
             print(f"   ✅ Created target: {target.name} ({target.format.value})")
@@ -268,19 +283,20 @@ async def test_publishing_targets_integration():
                 "name": "rootly-integration",
                 "labels": {
                     "alert-history.io/target": "true",
-                    "alert-history.io/format": "rootly"
+                    "alert-history.io/format": "rootly",
                 },
                 "data": {
                     "url": "aHR0cHM6Ly9hcGkucm9vdGx5LmNvbS92MS9pbmNpZGVudHM=",  # base64
-                    "token": "cm9vdGx5LXRva2VuLTEyMw=="  # base64
-                }
+                    "token": "cm9vdGx5LXRva2VuLTEyMw==",  # base64
+                },
             }
         ]
 
         import base64
+
         for secret in mock_secrets:
-            decoded_url = base64.b64decode(secret["data"]["url"]).decode('utf-8')
-            decoded_token = base64.b64decode(secret["data"]["token"]).decode('utf-8')
+            decoded_url = base64.b64decode(secret["data"]["url"]).decode("utf-8")
+            decoded_token = base64.b64decode(secret["data"]["token"]).decode("utf-8")
             print(f"   ✅ Secret {secret['name']}: {decoded_url}")
 
         print("3. Testing target filtering and priority...")
@@ -289,7 +305,7 @@ async def test_publishing_targets_integration():
         priority_targets = [
             {"name": "critical-pager", "priority": 1},
             {"name": "general-slack", "priority": 100},
-            {"name": "audit-webhook", "priority": 200}
+            {"name": "audit-webhook", "priority": 200},
         ]
 
         # Sort by priority
@@ -303,6 +319,7 @@ async def test_publishing_targets_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

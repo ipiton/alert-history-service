@@ -11,7 +11,6 @@ Dynamic Target Discovery для publishing алертов.
 # Standard library imports
 import asyncio
 import base64
-import logging
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
@@ -90,7 +89,9 @@ class DynamicTargetManager:
     def _init_kubernetes_client(self) -> None:
         """Initialize Kubernetes API client."""
         if not KUBERNETES_AVAILABLE:
-            logger.warning("Kubernetes client not available, running in development mode")
+            logger.warning(
+                "Kubernetes client not available, running in development mode"
+            )
             return
 
         try:
@@ -115,7 +116,9 @@ class DynamicTargetManager:
             return
 
         if not self.k8s_client:
-            logger.warning("Kubernetes client not available, targets discovery disabled")
+            logger.warning(
+                "Kubernetes client not available, targets discovery disabled"
+            )
             return
 
         # Initial discovery
@@ -216,15 +219,21 @@ class DynamicTargetManager:
                     )
 
                     for secret in secrets.items:
-                        target = await self._create_target_from_secret(secret, namespace)
+                        target = await self._create_target_from_secret(
+                            secret, namespace
+                        )
                         if target:
                             targets[target.name] = target
 
                 except ApiException as e:
                     if e.status == 403:
-                        logger.warning(f"No permissions to list secrets in namespace {namespace}")
+                        logger.warning(
+                            f"No permissions to list secrets in namespace {namespace}"
+                        )
                     else:
-                        logger.error(f"Kubernetes API error listing secrets in {namespace}: {e}")
+                        logger.error(
+                            f"Kubernetes API error listing secrets in {namespace}: {e}"
+                        )
                 except Exception as e:
                     logger.error(f"Error listing secrets in {namespace}: {e}")
 
@@ -318,7 +327,9 @@ class DynamicTargetManager:
             return target
 
         except Exception as e:
-            logger.error(f"Failed to create target from secret {secret.metadata.name}: {e}")
+            logger.error(
+                f"Failed to create target from secret {secret.metadata.name}: {e}"
+            )
             return None
 
     def _extract_filter_config(self, data: Dict[str, str]) -> Dict[str, any]:
@@ -350,7 +361,9 @@ class DynamicTargetManager:
             try:
                 filter_config["min_confidence"] = float(data["min-confidence"])
             except ValueError:
-                logger.warning(f"Invalid min-confidence value: {data['min-confidence']}")
+                logger.warning(
+                    f"Invalid min-confidence value: {data['min-confidence']}"
+                )
 
         # Alert name patterns (regex)
         if "alert-name-pattern" in data:

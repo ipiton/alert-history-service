@@ -10,16 +10,15 @@ Maintains 100% compatibility with existing alert_history_service.py:
 
 # Standard library imports
 import json
-import sqlite3
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from ..services.alert_classifier import AlertClassificationService
 
 # Third-party imports
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -215,7 +214,9 @@ class LegacyAPIAdapter:
                     processed_count += 1
 
                     # Update metrics (same as original)
-                    self.metrics.increment_alerts_received(alert.alert_name, alert.status.value)
+                    self.metrics.increment_alerts_received(
+                        alert.alert_name, alert.status.value
+                    )
 
                 except Exception as e:
                     # Log error but continue processing other alerts
@@ -276,7 +277,9 @@ class LegacyAPIAdapter:
                         "status": alert.status.value,
                         "labels": alert.labels,
                         "annotations": alert.annotations,
-                        "startsAt": (alert.starts_at.isoformat() if alert.starts_at else None),
+                        "startsAt": (
+                            alert.starts_at.isoformat() if alert.starts_at else None
+                        ),
                         "endsAt": alert.ends_at.isoformat() if alert.ends_at else None,
                         "generatorURL": alert.generator_url,
                     }
@@ -300,7 +303,9 @@ class LegacyAPIAdapter:
                 "end_time": end_time.isoformat(),
             }
 
-            alerts = await self.storage.get_alerts(filters, 10000, 0)  # Large limit for report
+            alerts = await self.storage.get_alerts(
+                filters, 10000, 0
+            )  # Large limit for report
 
             # Group alerts (same logic as original)
             grouped_data = {}
@@ -360,7 +365,9 @@ class LegacyAPIAdapter:
                         "severity": alert.labels.get("severity", "unknown"),
                         "namespace": alert.namespace or "unknown",
                         "startsAt": (
-                            alert.starts_at.strftime("%Y-%m-%d %H:%M:%S") if alert.starts_at else ""
+                            alert.starts_at.strftime("%Y-%m-%d %H:%M:%S")
+                            if alert.starts_at
+                            else ""
                         ),
                         "labels": alert.labels,
                         "annotations": alert.annotations,
@@ -436,7 +443,9 @@ class LegacyAPIAdapter:
             fingerprint = generate_fingerprint(labels)
 
         # Parse timestamps
-        starts_at = parse_timestamp(alert_data.get("startsAt", datetime.utcnow().isoformat()))
+        starts_at = parse_timestamp(
+            alert_data.get("startsAt", datetime.utcnow().isoformat())
+        )
         ends_at = None
         if alert_data.get("endsAt"):
             ends_at = parse_timestamp(alert_data["endsAt"])

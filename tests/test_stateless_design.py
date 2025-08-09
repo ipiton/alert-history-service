@@ -2,8 +2,8 @@
 """
 Тест stateless application design для Kubernetes.
 """
-import sys
 import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -18,21 +18,22 @@ def test_stateless_compliance():
         # Test 1: Configuration через environment variables
         print("1. Testing configuration management...")
         from config import get_config
+
         config = get_config()
 
         # Проверяем что все критичные настройки берутся из env
         config_sources = []
-        if hasattr(config.database, 'database_url') and config.database.database_url:
+        if hasattr(config.database, "database_url") and config.database.database_url:
             config_sources.append("DATABASE_URL")
-        if hasattr(config.redis, 'redis_url') and config.redis.redis_url:
+        if hasattr(config.redis, "redis_url") and config.redis.redis_url:
             config_sources.append("REDIS_URL")
 
         print(f"   ✅ Environment-based config: {', '.join(config_sources)}")
-        print(f"   ✅ No hardcoded secrets in code")
+        print("   ✅ No hardcoded secrets in code")
 
         # Test 2: Session storage в внешнем хранилище
         print("2. Testing session storage...")
-        from src.alert_history.services.redis_cache import RedisCache
+
         print("   ✅ Sessions stored in Redis (external storage)")
         print("   ✅ No local session files")
 
@@ -44,7 +45,7 @@ def test_stateless_compliance():
 
         # Test 4: Health checks для graceful scaling
         print("4. Testing health checks...")
-        from src.alert_history.services.health_checker import get_health_checker
+
         print("   ✅ Liveness probe implemented")
         print("   ✅ Readiness probe implemented")
         print("   ✅ Dependency health checks")
@@ -82,6 +83,7 @@ def test_stateless_compliance():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

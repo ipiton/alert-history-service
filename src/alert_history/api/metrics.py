@@ -234,7 +234,9 @@ class LegacyMetrics:
         """Increment classification counter."""
         self.classification_total.labels(severity=severity, model=model).inc()
 
-    def observe_classification_duration(self, duration: float, model: str = "unknown") -> None:
+    def observe_classification_duration(
+        self, duration: float, model: str = "unknown"
+    ) -> None:
         """Observe classification duration."""
         self.classification_duration_seconds.labels(model=model).observe(duration)
 
@@ -256,7 +258,9 @@ class LegacyMetrics:
         """Increment classification errors (alias for legacy compatibility)."""
         self.increment_classification_error("general")
 
-    def observe_classification_confidence(self, confidence: float, severity: str) -> None:
+    def observe_classification_confidence(
+        self, confidence: float, severity: str
+    ) -> None:
         """Observe classification confidence score."""
         self.classification_confidence.labels(severity=severity).observe(confidence)
 

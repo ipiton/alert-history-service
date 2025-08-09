@@ -13,8 +13,6 @@ Test T1.3: Redis Integration.
 import asyncio
 import os
 import sys
-import time
-from unittest.mock import AsyncMock, MagicMock
 
 # Add project root to path
 project_root = os.path.abspath(".")
@@ -26,15 +24,18 @@ async def test_redis_cache_functionality():
     print("\n📦 Testing Redis Cache Functionality...")
 
     try:
+        from src.alert_history.core.interfaces import (
+            AlertSeverity,
+            ClassificationResult,
+        )
         from src.alert_history.services.redis_cache import RedisCache
-        from src.alert_history.core.interfaces import ClassificationResult, AlertSeverity
 
         # Test cache initialization (without actual Redis connection)
         cache = RedisCache(
             redis_url="redis://localhost:6379/0",
             default_ttl=3600,
             max_connections=10,
-            socket_timeout=5.0
+            socket_timeout=5.0,
         )
 
         # Test configuration
@@ -46,11 +47,21 @@ async def test_redis_cache_functionality():
 
         # Test basic methods existence
         required_methods = [
-            'initialize', 'close', 'get', 'set', 'delete', 'exists',
-            'get_cached_classification', 'cache_classification',
-            'distributed_lock', 'is_locked',
-            'create_session', 'get_session', 'delete_session',
-            'get_stats', 'health_check'
+            "initialize",
+            "close",
+            "get",
+            "set",
+            "delete",
+            "exists",
+            "get_cached_classification",
+            "cache_classification",
+            "distributed_lock",
+            "is_locked",
+            "create_session",
+            "get_session",
+            "delete_session",
+            "get_stats",
+            "health_check",
         ]
 
         for method in required_methods:
@@ -66,7 +77,7 @@ async def test_redis_cache_functionality():
             confidence=0.95,
             reasoning="Test classification",
             recommendations=["Action 1", "Action 2"],
-            processing_time=0.5
+            processing_time=0.5,
         )
 
         print("   ✅ Classification result handling")
@@ -141,7 +152,7 @@ async def test_session_storage():
         session_data = {
             "user_id": "user123",
             "permissions": ["read", "write"],
-            "preferences": {"theme": "dark"}
+            "preferences": {"theme": "dark"},
         }
 
         # Test session wrapper structure
@@ -199,10 +210,7 @@ async def test_connection_pooling():
         ]
 
         for config in test_configs:
-            cache = RedisCache(
-                redis_url="redis://localhost:6379/0",
-                **config
-            )
+            cache = RedisCache(redis_url="redis://localhost:6379/0", **config)
 
             assert cache.max_connections == config["max_connections"]
             assert cache.socket_timeout == config["socket_timeout"]
@@ -213,7 +221,7 @@ async def test_connection_pooling():
         cache = RedisCache(
             redis_url="redis://localhost:6379/0",
             retry_on_timeout=True,
-            socket_connect_timeout=5.0
+            socket_connect_timeout=5.0,
         )
 
         assert cache.retry_on_timeout == True
@@ -225,7 +233,7 @@ async def test_connection_pooling():
         test_urls = [
             "redis://localhost:6379/0",
             "redis://user:pass@localhost:6379/1",
-            "redis://redis-cluster:6379/0"
+            "redis://redis-cluster:6379/0",
         ]
 
         for url in test_urls:
@@ -250,7 +258,7 @@ async def test_main_integration():
         # Check if Redis is imported and used in main.py
         main_file_path = "src/alert_history/main.py"
 
-        with open(main_file_path, 'r') as f:
+        with open(main_file_path) as f:
             main_content = f.read()
 
         # Check for Redis import
@@ -313,11 +321,17 @@ async def test_health_checks():
         expected_unhealthy_response = {
             "status": "unhealthy",
             "error": "Connection failed",
-            "cache": "redis"
+            "cache": "redis",
         }
 
         # Validate response structure
-        healthy_keys = ["status", "response_time", "ping_success", "read_write_test", "cache"]
+        healthy_keys = [
+            "status",
+            "response_time",
+            "ping_success",
+            "read_write_test",
+            "cache",
+        ]
         for key in healthy_keys:
             if key not in expected_healthy_response:
                 print(f"   ❌ Missing healthy response key: {key}")
@@ -341,7 +355,7 @@ async def test_health_checks():
         # Test health check is integrated in shutdown.py
         shutdown_file_path = "src/alert_history/core/shutdown.py"
 
-        with open(shutdown_file_path, 'r') as f:
+        with open(shutdown_file_path) as f:
             shutdown_content = f.read()
 
         if "redis" not in shutdown_content.lower():
@@ -380,8 +394,13 @@ async def test_statistics_monitoring():
 
         # Validate statistics structure
         required_stats = [
-            "cache_hits", "cache_misses", "cache_errors", "hit_rate_percent",
-            "redis_version", "used_memory_human", "connected_clients"
+            "cache_hits",
+            "cache_misses",
+            "cache_errors",
+            "hit_rate_percent",
+            "redis_version",
+            "used_memory_human",
+            "connected_clients",
         ]
 
         for stat in required_stats:
@@ -407,7 +426,7 @@ async def test_statistics_monitoring():
             "cache_hits": 0,
             "cache_misses": 0,
             "cache_errors": 0,
-            "error": "Redis connection failed"
+            "error": "Redis connection failed",
         }
 
         assert "error" in error_stats
@@ -467,12 +486,12 @@ async def main():
         print(f"   {status} {test_name}")
 
     success_rate = passed / total * 100
-    print(f"\n🏆 OVERALL RESULTS:")
+    print("\n🏆 OVERALL RESULTS:")
     print(f"   • Tests Passed: {passed}/{total}")
     print(f"   • Success Rate: {success_rate:.1f}%")
 
     if success_rate >= 80:
-        print(f"\n✅ T1.3 REDIS INTEGRATION TESTS PASSED!")
+        print("\n✅ T1.3 REDIS INTEGRATION TESTS PASSED!")
         if success_rate == 100:
             print("🏆 PERFECT SCORE! All tests passed!")
         print("\n🚀 Ready for:")
@@ -482,7 +501,7 @@ async def main():
         print("   • Production scaling")
         return True
     else:
-        print(f"\n❌ T1.3 REDIS INTEGRATION TESTS FAILED!")
+        print("\n❌ T1.3 REDIS INTEGRATION TESTS FAILED!")
         print("   🔧 Fix failing components before proceeding")
         return False
 

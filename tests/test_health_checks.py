@@ -2,9 +2,9 @@
 """
 Тест health check infrastructure.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -18,8 +18,9 @@ async def test_health_infrastructure():
     try:
         # Test imports
         print("1. Testing health check imports...")
-        from src.alert_history.services.health_checker import HealthChecker, get_health_checker
         from src.alert_history.api.health_endpoints import health_router
+        from src.alert_history.services.health_checker import get_health_checker
+
         print("   ✅ Health check modules imported successfully")
 
         # Test health checker initialization
@@ -29,10 +30,22 @@ async def test_health_infrastructure():
 
         # Test individual health check methods (dry run)
         print("3. Testing health check methods...")
-        print("   ✅ Database health check method available:", hasattr(health_checker, 'check_database_health'))
-        print("   ✅ Redis health check method available:", hasattr(health_checker, 'check_redis_health'))
-        print("   ✅ LLM proxy health check method available:", hasattr(health_checker, 'check_llm_proxy_health'))
-        print("   ✅ Overall health check method available:", hasattr(health_checker, 'check_overall_health'))
+        print(
+            "   ✅ Database health check method available:",
+            hasattr(health_checker, "check_database_health"),
+        )
+        print(
+            "   ✅ Redis health check method available:",
+            hasattr(health_checker, "check_redis_health"),
+        )
+        print(
+            "   ✅ LLM proxy health check method available:",
+            hasattr(health_checker, "check_llm_proxy_health"),
+        )
+        print(
+            "   ✅ Overall health check method available:",
+            hasattr(health_checker, "check_overall_health"),
+        )
 
         # Test router initialization
         print("4. Testing health router...")
@@ -46,10 +59,15 @@ async def test_health_infrastructure():
         # Test configuration loading
         print("5. Testing config integration...")
         from config import get_config
+
         config = get_config()
-        print(f"   ✅ Database type: {'PostgreSQL' if config.database.postgres_host != 'localhost' else 'SQLite fallback'}")
+        print(
+            f"   ✅ Database type: {'PostgreSQL' if config.database.postgres_host != 'localhost' else 'SQLite fallback'}"
+        )
         print(f"   ✅ Redis enabled: {config.redis is not None}")
-        print(f"   ✅ LLM proxy configured: {config.llm and config.llm.proxy_url is not None}")
+        print(
+            f"   ✅ LLM proxy configured: {config.llm and config.llm.proxy_url is not None}"
+        )
 
         print("\n🎉 Health check infrastructure test passed!")
         print("💡 To test with real dependencies, ensure PostgreSQL/Redis are running")
@@ -58,6 +76,7 @@ async def test_health_infrastructure():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

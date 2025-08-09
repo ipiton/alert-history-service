@@ -125,7 +125,8 @@ class PublishingStats:
         """Проверка здоровья target."""
         # Считается здоровым если success rate > 50% или недавно были успешные отправки
         recent_success = (
-            self.last_success_time and time.time() - self.last_success_time < 300  # 5 minutes
+            self.last_success_time
+            and time.time() - self.last_success_time < 300  # 5 minutes
         )
         return self.success_rate > 0.5 or recent_success
 
@@ -204,7 +205,9 @@ class AlertPublisher(IAlertPublisher):
         """Close HTTP session and cancel active tasks."""
         # Cancel all active publishing tasks
         if self._active_publishes:
-            logger.info(f"Cancelling {len(self._active_publishes)} active publishing tasks")
+            logger.info(
+                f"Cancelling {len(self._active_publishes)} active publishing tasks"
+            )
             for task in self._active_publishes:
                 task.cancel()
 
@@ -222,7 +225,9 @@ class AlertPublisher(IAlertPublisher):
             await self._session.close()
             self._session = None
 
-    async def publish_alert(self, enriched_alert: EnrichedAlert, target: PublishingTarget) -> bool:
+    async def publish_alert(
+        self, enriched_alert: EnrichedAlert, target: PublishingTarget
+    ) -> bool:
         """
         Опубликовать алерт в конкретный target.
 
@@ -239,7 +244,9 @@ class AlertPublisher(IAlertPublisher):
 
         # Check filter if available
         if self.filter_engine:
-            should_publish = await self.filter_engine.should_publish(enriched_alert, target)
+            should_publish = await self.filter_engine.should_publish(
+                enriched_alert, target
+            )
             if not should_publish:
                 logger.debug(
                     f"Alert filtered out for target {target.name}",
@@ -261,7 +268,9 @@ class AlertPublisher(IAlertPublisher):
 
         # Publish with concurrency control
         async with self._publish_semaphore:
-            return await self._publish_with_retry(enriched_alert, target, circuit_breaker)
+            return await self._publish_with_retry(
+                enriched_alert, target, circuit_breaker
+            )
 
     async def publish_to_multiple_targets(
         self, enriched_alert: EnrichedAlert, targets: List[PublishingTarget]
@@ -312,8 +321,12 @@ class AlertPublisher(IAlertPublisher):
                     publishing_results[target_name] = result
 
             # Log summary
-            successful_targets = [name for name, success in publishing_results.items() if success]
-            failed_targets = [name for name, success in publishing_results.items() if not success]
+            successful_targets = [
+                name for name, success in publishing_results.items() if success
+            ]
+            failed_targets = [
+                name for name, success in publishing_results.items() if not success
+            ]
 
             logger.info(
                 "Multi-target publishing completed",
@@ -344,7 +357,9 @@ class AlertPublisher(IAlertPublisher):
 
         try:
             # Format alert for target
-            formatted_alert = await self.formatter.format_alert(enriched_alert, target.format)
+            formatted_alert = await self.formatter.format_alert(
+                enriched_alert, target.format
+            )
 
             # Publish with retries
             success = await self._perform_http_publish(
@@ -425,7 +440,9 @@ class AlertPublisher(IAlertPublisher):
     def _get_publishing_stats(self, target_name: str) -> PublishingStats:
         """Получить статистику для target."""
         if target_name not in self._publishing_stats:
-            self._publishing_stats[target_name] = PublishingStats(target_name=target_name)
+            self._publishing_stats[target_name] = PublishingStats(
+                target_name=target_name
+            )
         return self._publishing_stats[target_name]
 
     def _record_publish_success(self, target_name: str, response_time: float) -> None:
@@ -439,7 +456,9 @@ class AlertPublisher(IAlertPublisher):
         if stats.average_response_time == 0:
             stats.average_response_time = response_time
         else:
-            stats.average_response_time = (stats.average_response_time + response_time) / 2
+            stats.average_response_time = (
+                stats.average_response_time + response_time
+            ) / 2
 
         # Record metrics
         if self.metrics:

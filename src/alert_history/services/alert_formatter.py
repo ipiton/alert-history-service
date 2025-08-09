@@ -10,10 +10,8 @@ Alert Formatter для различных publishing форматов.
 """
 
 # Standard library imports
-import json
 import time
 from datetime import datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Local imports
@@ -181,24 +179,26 @@ class AlertFormatter(IAlertFormatter):
 
         # LLM classification info
         if classification:
-            description_parts.append(f"\n**AI Classification:**")
+            description_parts.append("\n**AI Classification:**")
             description_parts.append(f"- **Severity:** {classification.severity.value}")
-            description_parts.append(f"- **Confidence:** {classification.confidence:.0%}")
+            description_parts.append(
+                f"- **Confidence:** {classification.confidence:.0%}"
+            )
             description_parts.append(f"- **Reasoning:** {classification.reasoning}")
 
             if classification.recommendations:
-                description_parts.append(f"\n**Recommendations:**")
+                description_parts.append("\n**Recommendations:**")
                 for i, rec in enumerate(classification.recommendations[:5], 1):
                     description_parts.append(f"{i}. {rec}")
 
         # Alert labels and annotations
         if alert.labels:
-            description_parts.append(f"\n**Labels:**")
+            description_parts.append("\n**Labels:**")
             for key, value in alert.labels.items():
                 description_parts.append(f"- {key}: {value}")
 
         if alert.annotations:
-            description_parts.append(f"\n**Annotations:**")
+            description_parts.append("\n**Annotations:**")
             for key, value in alert.annotations.items():
                 if key not in ["description", "summary"]:  # Avoid duplication
                     description_parts.append(f"- {key}: {truncate_string(value, 100)}")
@@ -219,8 +219,12 @@ class AlertFormatter(IAlertFormatter):
                     "alert_name": alert.alert_name,
                     "namespace": alert.namespace or "unknown",
                     "generator_url": alert.generator_url or "",
-                    "llm_severity": (classification.severity.value if classification else None),
-                    "llm_confidence": (classification.confidence if classification else None),
+                    "llm_severity": (
+                        classification.severity.value if classification else None
+                    ),
+                    "llm_confidence": (
+                        classification.confidence if classification else None
+                    ),
                 },
             }
         }
@@ -347,7 +351,11 @@ class AlertFormatter(IAlertFormatter):
                 {"title": "Status", "value": alert.status.value.upper(), "short": True},
                 {"title": "Severity", "value": severity_text, "short": True},
             ],
-            "ts": (int(alert.starts_at.timestamp()) if alert.starts_at else int(time.time())),
+            "ts": (
+                int(alert.starts_at.timestamp())
+                if alert.starts_at
+                else int(time.time())
+            ),
         }
 
         # Add namespace field

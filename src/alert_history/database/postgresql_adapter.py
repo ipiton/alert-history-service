@@ -15,7 +15,7 @@ import json
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Third-party imports
 import asyncpg
@@ -30,7 +30,6 @@ from ..core.interfaces import (
     IAlertStorage,
 )
 from ..logging_config import get_logger, get_performance_logger
-from ..utils.common import generate_fingerprint, parse_timestamp
 
 logger = get_logger(__name__)
 performance_logger = get_performance_logger()
@@ -129,7 +128,9 @@ class PostgreSQLStorage(IAlertStorage):
             async with self.get_connection() as conn:
                 # Prepare data
                 labels_json = json.dumps(alert.labels) if alert.labels else "{}"
-                annotations_json = json.dumps(alert.annotations) if alert.annotations else "{}"
+                annotations_json = (
+                    json.dumps(alert.annotations) if alert.annotations else "{}"
+                )
 
                 # Insert or update alert
                 query = """
@@ -325,8 +326,12 @@ class PostgreSQLStorage(IAlertStorage):
                         "annotations": (
                             json.loads(row["annotations"]) if row["annotations"] else {}
                         ),
-                        "starts_at": (row["starts_at"].isoformat() if row["starts_at"] else None),
-                        "ends_at": (row["ends_at"].isoformat() if row["ends_at"] else None),
+                        "starts_at": (
+                            row["starts_at"].isoformat() if row["starts_at"] else None
+                        ),
+                        "ends_at": (
+                            row["ends_at"].isoformat() if row["ends_at"] else None
+                        ),
                         "generator_url": row["generator_url"],
                         "timestamp": row["timestamp"].isoformat(),
                         "created_at": row["created_at"].isoformat(),
@@ -348,7 +353,9 @@ class PostgreSQLStorage(IAlertStorage):
                 # Calculate expiration time
                 expires_at = None
                 if hasattr(classification, "ttl") and classification.ttl:
-                    expires_at = datetime.utcnow() + timedelta(seconds=classification.ttl)
+                    expires_at = datetime.utcnow() + timedelta(
+                        seconds=classification.ttl
+                    )
 
                 query = """
                     INSERT INTO alert_classifications (
@@ -371,7 +378,11 @@ class PostgreSQLStorage(IAlertStorage):
                         else "[]"
                     ),
                     classification.processing_time,
-                    (json.dumps(classification.metadata) if classification.metadata else "{}"),
+                    (
+                        json.dumps(classification.metadata)
+                        if classification.metadata
+                        else "{}"
+                    ),
                     getattr(classification, "llm_model", None),
                     getattr(classification, "llm_version", None),
                     getattr(classification, "cache_hit", False),
@@ -391,7 +402,9 @@ class PostgreSQLStorage(IAlertStorage):
             logger.error(f"Failed to save classification: {e}")
             return False
 
-    async def get_classification(self, fingerprint: str) -> Optional[ClassificationResult]:
+    async def get_classification(
+        self, fingerprint: str
+    ) -> Optional[ClassificationResult]:
         """Get latest classification for alert."""
         try:
             async with self.get_connection() as conn:
@@ -415,10 +428,14 @@ class PostgreSQLStorage(IAlertStorage):
                         confidence=float(row["confidence"]),
                         reasoning=row["reasoning"],
                         recommendations=(
-                            json.loads(row["recommendations"]) if row["recommendations"] else []
+                            json.loads(row["recommendations"])
+                            if row["recommendations"]
+                            else []
                         ),
                         processing_time=(
-                            float(row["processing_time"]) if row["processing_time"] else 0.0
+                            float(row["processing_time"])
+                            if row["processing_time"]
+                            else 0.0
                         ),
                         metadata=json.loads(row["metadata"]) if row["metadata"] else {},
                     )
@@ -469,7 +486,9 @@ class PostgreSQLStorage(IAlertStorage):
                 )
 
                 # Update target statistics
-                await self._update_target_stats(conn, target_name, status, processing_time)
+                await self._update_target_stats(
+                    conn, target_name, status, processing_time
+                )
 
                 logger.debug(
                     "Publishing result saved",
@@ -521,7 +540,9 @@ class PostgreSQLStorage(IAlertStorage):
         try:
             async with self.get_connection() as conn:
                 # Use the stored procedure
-                deleted_count = await conn.fetchval("SELECT cleanup_old_data($1)", retention_days)
+                deleted_count = await conn.fetchval(
+                    "SELECT cleanup_old_data($1)", retention_days
+                )
 
                 logger.info(
                     "Cleanup completed",

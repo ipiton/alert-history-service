@@ -10,11 +10,11 @@ Enrichment Mode API endpoints.
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..logging_config import get_logger
 from ..core.app_state import app_state
+from ..logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -68,8 +68,8 @@ def _get_default_mode() -> str:
 
 @router.get("/mode", response_model=EnrichmentModeResponse)
 async def get_enrichment_mode() -> EnrichmentModeResponse:
+
     from ..api.metrics import get_metrics
-    from fastapi import Depends
 
     # Record API request metric
     try:
@@ -112,7 +112,9 @@ async def set_enrichment_mode(req: EnrichmentModeRequest) -> EnrichmentModeRespo
 
         # Track mode switches if different
         if current_mode != mode:
-            metrics.enrichment_mode_switches.labels(from_mode=current_mode, to_mode=mode).inc()
+            metrics.enrichment_mode_switches.labels(
+                from_mode=current_mode, to_mode=mode
+            ).inc()
 
         # Update mode status gauge
         metrics.enrichment_mode_status.set(1 if mode == "enriched" else 0)
@@ -126,5 +128,7 @@ async def set_enrichment_mode(req: EnrichmentModeRequest) -> EnrichmentModeRespo
         # Fallback to memory
         app_state.enrichment_mode = mode
 
-    logger.info("Enrichment mode updated", mode=mode, saved_to="redis" if saved else "memory")
+    logger.info(
+        "Enrichment mode updated", mode=mode, saved_to="redis" if saved else "memory"
+    )
     return EnrichmentModeResponse(mode=mode, source="redis" if saved else "memory")

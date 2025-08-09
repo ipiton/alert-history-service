@@ -2,9 +2,9 @@
 """
 Тест Dynamic Target Discovery System.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 import time
 
 # Add the project root to the Python path
@@ -19,16 +19,21 @@ async def test_target_discovery_infrastructure():
     try:
         # Test imports
         print("1. Testing target discovery imports...")
+        from src.alert_history.core.interfaces import PublishingFormat, PublishingTarget
         from src.alert_history.services.target_discovery import DynamicTargetManager
-        from src.alert_history.core.interfaces import PublishingTarget, PublishingFormat
+
         print("   ✅ Target discovery components imported")
 
         # Test PublishingTarget structure
         print("2. Testing PublishingTarget data structure...")
 
         # Test supported formats
-        formats = [PublishingFormat.ALERTMANAGER, PublishingFormat.ROOTLY,
-                  PublishingFormat.PAGERDUTY, PublishingFormat.SLACK]
+        formats = [
+            PublishingFormat.ALERTMANAGER,
+            PublishingFormat.ROOTLY,
+            PublishingFormat.PAGERDUTY,
+            PublishingFormat.SLACK,
+        ]
         print(f"   ✅ Supported formats: {[f.value for f in formats]}")
 
         # Test target creation
@@ -39,7 +44,7 @@ async def test_target_discovery_infrastructure():
             url="https://api.rootly.com/v1/incidents",
             headers={"Authorization": "Bearer test-token"},
             enabled=True,
-            filter_config={"severity": ["critical", "warning"]}
+            filter_config={"severity": ["critical", "warning"]},
         )
 
         assert mock_target.name == "test-rootly"
@@ -55,7 +60,7 @@ async def test_target_discovery_infrastructure():
             enabled=True,
             secret_labels=["alert-history.io/target=true"],
             secret_namespaces=["default"],
-            config_refresh_interval="300s"
+            config_refresh_interval="300s",
         )
 
         manager = DynamicTargetManager(config)
@@ -67,11 +72,11 @@ async def test_target_discovery_infrastructure():
         # Test manager methods
         print("4. Testing manager interface...")
         methods_to_check = [
-            'get_active_targets',
-            'refresh_targets',
-            'get_target_by_name',
-            'is_metrics_only_mode',
-            'get_discovery_stats'
+            "get_active_targets",
+            "refresh_targets",
+            "get_target_by_name",
+            "is_metrics_only_mode",
+            "get_discovery_stats",
         ]
 
         for method in methods_to_check:
@@ -84,6 +89,7 @@ async def test_target_discovery_infrastructure():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -94,7 +100,11 @@ async def test_target_discovery_without_kubernetes():
 
     try:
         print("1. Testing fallback mode initialization...")
-        from src.alert_history.services.target_discovery import DynamicTargetManager, TargetDiscoveryConfig, KUBERNETES_AVAILABLE
+        from src.alert_history.services.target_discovery import (
+            KUBERNETES_AVAILABLE,
+            DynamicTargetManager,
+            TargetDiscoveryConfig,
+        )
 
         print(f"   ✅ Kubernetes available: {KUBERNETES_AVAILABLE}")
 
@@ -107,7 +117,7 @@ async def test_target_discovery_without_kubernetes():
         config = TargetDiscoveryConfig(
             enabled=True,
             secret_labels=["alert-history.io/target=true"],
-            secret_namespaces=["default"]
+            secret_namespaces=["default"],
         )
         manager = DynamicTargetManager(config)
 
@@ -124,7 +134,12 @@ async def test_target_discovery_without_kubernetes():
         print("3. Testing discovery stats...")
         stats = manager.get_discovery_stats()
 
-        required_stats = ['targets_count', 'last_refresh_time', 'kubernetes_available', 'enabled']
+        required_stats = [
+            "targets_count",
+            "last_refresh_time",
+            "kubernetes_available",
+            "enabled",
+        ]
         for stat in required_stats:
             assert stat in stats, f"Missing stat: {stat}"
             print(f"   ✅ Stat available: {stat} = {stats[stat]}")
@@ -135,6 +150,7 @@ async def test_target_discovery_without_kubernetes():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -158,7 +174,7 @@ async def test_secret_parsing():
         mock_secret_labels = {
             "alert-history.io/target": "true",
             "alert-history.io/format": "rootly",
-            "alert-history.io/priority": "100"
+            "alert-history.io/priority": "100",
         }
 
         print("   ✅ Mock secret data created")
@@ -166,9 +182,9 @@ async def test_secret_parsing():
         print("2. Testing base64 decoding...")
         import base64
 
-        decoded_url = base64.b64decode(mock_secret_data["url"]).decode('utf-8')
-        decoded_token = base64.b64decode(mock_secret_data["token"]).decode('utf-8')
-        decoded_format = base64.b64decode(mock_secret_data["format"]).decode('utf-8')
+        decoded_url = base64.b64decode(mock_secret_data["url"]).decode("utf-8")
+        decoded_token = base64.b64decode(mock_secret_data["token"]).decode("utf-8")
+        decoded_format = base64.b64decode(mock_secret_data["format"]).decode("utf-8")
 
         assert decoded_url == "https://api.rootly.com/v1/incidents"
         assert decoded_token == "test-token-123"
@@ -195,6 +211,7 @@ async def test_secret_parsing():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -213,26 +230,24 @@ async def test_target_filtering_and_discovery():
                 "labels": {
                     "alert-history.io/target": "true",
                     "alert-history.io/format": "rootly",
-                    "alert-history.io/env": "production"
+                    "alert-history.io/env": "production",
                 },
-                "should_match": True
+                "should_match": True,
             },
             {
                 "name": "pagerduty-dev",
                 "labels": {
                     "alert-history.io/target": "true",
                     "alert-history.io/format": "pagerduty",
-                    "alert-history.io/env": "development"
+                    "alert-history.io/env": "development",
                 },
-                "should_match": True
+                "should_match": True,
             },
             {
                 "name": "unrelated-secret",
-                "labels": {
-                    "app": "other-service"
-                },
-                "should_match": False
-            }
+                "labels": {"app": "other-service"},
+                "should_match": False,
+            },
         ]
 
         # Test label selector matching
@@ -243,9 +258,14 @@ async def test_target_filtering_and_discovery():
             should_match = test_case["should_match"]
 
             # Simple selector matching (would be done by Kubernetes API)
-            matches = "alert-history.io/target" in labels and labels.get("alert-history.io/target") == "true"
+            matches = (
+                "alert-history.io/target" in labels
+                and labels.get("alert-history.io/target") == "true"
+            )
 
-            assert matches == should_match, f"Label matching failed for {test_case['name']}"
+            assert (
+                matches == should_match
+            ), f"Label matching failed for {test_case['name']}"
             print(f"   ✅ Label matching: {test_case['name']} = {matches}")
 
         print("2. Testing target priority and filtering...")
@@ -254,7 +274,7 @@ async def test_target_filtering_and_discovery():
         mock_targets = [
             {"name": "critical-alerts", "priority": 1, "format": "pagerduty"},
             {"name": "general-alerts", "priority": 100, "format": "slack"},
-            {"name": "audit-alerts", "priority": 200, "format": "webhook"}
+            {"name": "audit-alerts", "priority": 200, "format": "webhook"},
         ]
 
         # Sort by priority (lower number = higher priority)
@@ -270,10 +290,12 @@ async def test_target_filtering_and_discovery():
         target_health = {
             "rootly-prod": {"healthy": True, "last_check": time.time()},
             "pagerduty-dev": {"healthy": False, "last_check": time.time() - 300},
-            "slack-general": {"healthy": True, "last_check": time.time() - 60}
+            "slack-general": {"healthy": True, "last_check": time.time() - 60},
         }
 
-        healthy_targets = [name for name, health in target_health.items() if health["healthy"]]
+        healthy_targets = [
+            name for name, health in target_health.items() if health["healthy"]
+        ]
         print(f"   ✅ Healthy targets: {len(healthy_targets)}/{len(target_health)}")
 
         print("\n🎉 Target filtering & discovery test passed!")
@@ -282,6 +304,7 @@ async def test_target_filtering_and_discovery():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -2,11 +2,9 @@
 """
 Тест для 12-Factor App compliance.
 """
-import sys
-import os
 import asyncio
-import signal
-import time
+import os
+import sys
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -28,7 +26,7 @@ async def test_environment_configuration():
             "LOG_LEVEL": "DEBUG",
             "DATABASE_URL": "sqlite:///test.db",
             "LLM_ENABLED": "true",
-            "PROXY_ENABLED": "false"
+            "PROXY_ENABLED": "false",
         }
 
         for key, value in test_env.items():
@@ -62,13 +60,13 @@ async def test_environment_configuration():
         print("4. Testing structured configuration...")
 
         # Test nested configuration access
-        assert hasattr(config, 'database')
-        assert hasattr(config, 'redis')
-        assert hasattr(config, 'llm')
-        assert hasattr(config, 'server')
-        assert hasattr(config, 'proxy')
-        assert hasattr(config, 'monitoring')
-        assert hasattr(config, 'security')
+        assert hasattr(config, "database")
+        assert hasattr(config, "redis")
+        assert hasattr(config, "llm")
+        assert hasattr(config, "server")
+        assert hasattr(config, "proxy")
+        assert hasattr(config, "monitoring")
+        assert hasattr(config, "security")
 
         print("   ✅ Structured configuration works")
 
@@ -82,6 +80,7 @@ async def test_environment_configuration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -98,7 +97,7 @@ async def test_structured_logging():
         os.environ["LOG_LEVEL"] = "INFO"
         os.environ["SERVICE_NAME"] = "test-logger"
 
-        from src.alert_history.logging_config import setup_logging, get_logger
+        from src.alert_history.logging_config import get_logger, setup_logging
 
         # Setup logging
         setup_logging()
@@ -120,14 +119,15 @@ async def test_structured_logging():
         # We can't easily capture stdout in this test,
         # but we can verify the formatter is set up
         import logging
+
         root_logger = logging.getLogger()
 
         has_json_formatter = False
         for handler in root_logger.handlers:
-            formatter = getattr(handler, 'formatter', None)
-            if formatter and hasattr(formatter, 'format'):
+            formatter = getattr(handler, "formatter", None)
+            if formatter and hasattr(formatter, "format"):
                 # Check if it's our JSON formatter
-                if 'JSONFormatter' in str(type(formatter)):
+                if "JSONFormatter" in str(type(formatter)):
                     has_json_formatter = True
                     break
 
@@ -144,6 +144,7 @@ async def test_structured_logging():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -160,6 +161,7 @@ async def test_graceful_shutdown():
 
         # Test cleanup task registration
         cleanup_called = False
+
         def test_cleanup():
             nonlocal cleanup_called
             cleanup_called = True
@@ -202,7 +204,13 @@ async def test_graceful_shutdown():
         print("4. Testing status reporting...")
         status = health_checker.get_status()
 
-        required_fields = ['ready', 'healthy', 'uptime_seconds', 'dependencies', 'timestamp']
+        required_fields = [
+            "ready",
+            "healthy",
+            "uptime_seconds",
+            "dependencies",
+            "timestamp",
+        ]
         for field in required_fields:
             assert field in status
 
@@ -214,6 +222,7 @@ async def test_graceful_shutdown():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -276,6 +285,7 @@ async def test_health_endpoints():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -299,7 +309,7 @@ async def test_12factor_compliance():
             "IX. Disposability": "✅ Graceful shutdown with SIGTERM",
             "X. Dev/prod parity": "✅ Same environment via containers",
             "XI. Logs": "✅ Structured logs to stdout",
-            "XII. Admin processes": "✅ Management tasks as one-off processes"
+            "XII. Admin processes": "✅ Management tasks as one-off processes",
         }
 
         for principle, status in principles.items():
@@ -310,19 +320,22 @@ async def test_12factor_compliance():
         # Test environment-based config
         os.environ["TEST_CONFIG"] = "test_value"
         from src.alert_history.config import get_config
+
         config = get_config()
-        assert hasattr(config, 'service_name')
+        assert hasattr(config, "service_name")
         os.environ.pop("TEST_CONFIG", None)
         print("   ✅ Environment-based configuration")
 
         # Test logging to stdout
         from src.alert_history.logging_config import get_logger
+
         logger = get_logger("compliance_test")
         logger.info("12-Factor compliance test")
         print("   ✅ Logging to stdout")
 
         # Test stateless design
         from src.alert_history.core.app_state import app_state
+
         app_state.test_value = "stateless_test"
         assert app_state.test_value == "stateless_test"
         print("   ✅ Stateless application design")
@@ -337,7 +350,7 @@ async def test_12factor_compliance():
             "Dependency management",
             "Error handling and recovery",
             "Monitoring and metrics",
-            "Security configuration"
+            "Security configuration",
         ]
 
         for feature in production_features:
@@ -349,6 +362,7 @@ async def test_12factor_compliance():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

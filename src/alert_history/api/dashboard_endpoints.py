@@ -9,23 +9,22 @@ Provides:
 - Chart data endpoints
 """
 
-import time
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from ..core.interfaces import Alert, AlertSeverity, AlertStatus
-from ..logging_config import get_logger
-from ..services.alert_classifier import AlertClassificationService
-from ..services.target_discovery import DynamicTargetManager
-from ..services.alert_publisher import AlertPublisher
-from ..database.sqlite_adapter import SQLiteLegacyStorage
 from ..api.metrics import LegacyMetrics
 from ..core.app_state import app_state
+from ..core.interfaces import AlertStatus
+from ..database.sqlite_adapter import SQLiteLegacyStorage
+from ..logging_config import get_logger
+from ..services.alert_classifier import AlertClassificationService
+from ..services.alert_publisher import AlertPublisher
+from ..services.target_discovery import DynamicTargetManager
 
 logger = get_logger(__name__)
 
@@ -136,7 +135,7 @@ def get_storage() -> SQLiteLegacyStorage:
     try:
         db_path = os.getenv("SQLITE_PATH", "alert_history.sqlite3")
         storage = SQLiteLegacyStorage(db_path)
-        setattr(app_state, "storage", storage)
+        app_state.storage = storage
         logger.info(f"Initialized fallback SQLite storage at {db_path}")
         return storage
     except Exception as e:
@@ -185,8 +184,12 @@ async def get_dashboard_overview(
         overview.total_alerts = len(all_alerts)
 
         # Count by status
-        active_count = sum(1 for alert in all_alerts if alert.status == AlertStatus.FIRING)
-        resolved_count = sum(1 for alert in all_alerts if alert.status == AlertStatus.RESOLVED)
+        active_count = sum(
+            1 for alert in all_alerts if alert.status == AlertStatus.FIRING
+        )
+        resolved_count = sum(
+            1 for alert in all_alerts if alert.status == AlertStatus.RESOLVED
+        )
 
         overview.active_alerts = active_count
         overview.resolved_alerts = resolved_count
@@ -194,7 +197,9 @@ async def get_dashboard_overview(
         # Alerts in last 24h
         yesterday = datetime.utcnow() - timedelta(days=1)
         recent_alerts = [
-            alert for alert in all_alerts if alert.timestamp and alert.timestamp >= yesterday
+            alert
+            for alert in all_alerts
+            if alert.timestamp and alert.timestamp >= yesterday
         ]
         overview.alerts_last_24h = len(recent_alerts)
 
@@ -204,7 +209,9 @@ async def get_dashboard_overview(
             try:
                 class_stats = await classification_service.get_classification_stats()
                 overview.classified_alerts = class_stats.get("total_requests", 0)
-                overview.classification_cache_hit_rate = class_stats.get("cache_hit_rate", 0.0)
+                overview.classification_cache_hit_rate = class_stats.get(
+                    "cache_hit_rate", 0.0
+                )
                 overview.llm_service_available = class_stats.get("llm_available", False)
             except Exception as e:
                 logger.warning(f"Failed to get classification stats: {e}")
@@ -213,7 +220,9 @@ async def get_dashboard_overview(
         if target_manager:
             overview.publishing_targets = target_manager.get_targets_count()
             overview.publishing_mode = (
-                "metrics_only" if target_manager.is_metrics_only_mode() else "intelligent"
+                "metrics_only"
+                if target_manager.is_metrics_only_mode()
+                else "intelligent"
             )
 
         if alert_publisher:
@@ -260,7 +269,9 @@ async def get_dashboard_charts(
 
         # Filter alerts within time range
         filtered_alerts = [
-            alert for alert in all_alerts if alert.timestamp and alert.timestamp >= since
+            alert
+            for alert in all_alerts
+            if alert.timestamp and alert.timestamp >= since
         ]
 
         # Generate time series data (hourly buckets)
@@ -322,9 +333,9 @@ async def get_dashboard_charts(
                 alert_counts[key]["status"] = alert.status.value
 
         # Sort by frequency and take top 10
-        top_by_frequency = sorted(alert_counts.items(), key=lambda x: x[1]["count"], reverse=True)[
-            :10
-        ]
+        top_by_frequency = sorted(
+            alert_counts.items(), key=lambda x: x[1]["count"], reverse=True
+        )[:10]
 
         charts_data.top_alerts_by_frequency = [
             TopAlertsData(
@@ -360,12 +371,16 @@ async def get_dashboard_charts(
         charts_data.status_distribution = status_counts
         charts_data.namespace_distribution = namespace_counts
 
-        logger.debug(f"Generated charts data for {len(filtered_alerts)} alerts over {hours} hours")
+        logger.debug(
+            f"Generated charts data for {len(filtered_alerts)} alerts over {hours} hours"
+        )
         return charts_data
 
     except Exception as e:
         logger.error(f"Failed to generate charts data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get charts data: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get charts data: {str(e)}"
+        )
 
 
 @dashboard_router.get("/health", response_model=List[SystemHealthData])
@@ -394,7 +409,9 @@ async def get_system_health(
         )
     except Exception as e:
         health_data.append(
-            SystemHealthData(component="database", status="unhealthy", details={"error": str(e)})
+            SystemHealthData(
+                component="database", status="unhealthy", details={"error": str(e)}
+            )
         )
 
     # Redis health
@@ -411,7 +428,9 @@ async def get_system_health(
             )
         except Exception as e:
             health_data.append(
-                SystemHealthData(component="redis", status="unhealthy", details={"error": str(e)})
+                SystemHealthData(
+                    component="redis", status="unhealthy", details={"error": str(e)}
+                )
             )
     else:
         health_data.append(
@@ -429,14 +448,18 @@ async def get_system_health(
             health_data.append(
                 SystemHealthData(
                     component="classification",
-                    status="healthy" if class_health.get("llm_available") else "degraded",
+                    status=(
+                        "healthy" if class_health.get("llm_available") else "degraded"
+                    ),
                     details=class_health,
                 )
             )
         except Exception as e:
             health_data.append(
                 SystemHealthData(
-                    component="classification", status="unhealthy", details={"error": str(e)}
+                    component="classification",
+                    status="unhealthy",
+                    details={"error": str(e)},
                 )
             )
     else:
@@ -455,7 +478,11 @@ async def get_system_health(
             health_data.append(
                 SystemHealthData(
                     component="publishing",
-                    status="healthy" if not target_manager.is_metrics_only_mode() else "degraded",
+                    status=(
+                        "healthy"
+                        if not target_manager.is_metrics_only_mode()
+                        else "degraded"
+                    ),
                     details={
                         "targets_count": target_manager.get_targets_count(),
                         "mode": (
@@ -470,7 +497,9 @@ async def get_system_health(
         except Exception as e:
             health_data.append(
                 SystemHealthData(
-                    component="publishing", status="unhealthy", details={"error": str(e)}
+                    component="publishing",
+                    status="unhealthy",
+                    details={"error": str(e)},
                 )
             )
     else:
@@ -493,7 +522,9 @@ async def get_recent_alerts(
     min_confidence: Optional[float] = Query(
         None, ge=0.0, le=1.0, description="Filter by minimum classification confidence"
     ),
-    include_classification: bool = Query(False, description="Include classification details"),
+    include_classification: bool = Query(
+        False, description="Include classification details"
+    ),
     namespace: Optional[str] = Query(None, description="Filter by namespace"),
     storage: SQLiteLegacyStorage = Depends(get_storage),
 ) -> JSONResponse:
@@ -554,7 +585,9 @@ async def get_recent_alerts(
 
         return JSONResponse(
             {
-                "alerts": alert_data[:limit],  # Ensure we don't exceed limit after filtering
+                "alerts": alert_data[
+                    :limit
+                ],  # Ensure we don't exceed limit after filtering
                 "total": len(alert_data),
                 "filters_applied": {
                     "severity": severity,
@@ -567,7 +600,9 @@ async def get_recent_alerts(
 
     except Exception as e:
         logger.error(f"Failed to get recent alerts: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get recent alerts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get recent alerts: {str(e)}"
+        )
 
 
 @dashboard_router.get("/recommendations", response_model=RecommendationsResponse)
@@ -604,7 +639,15 @@ async def get_recommendations(
         conn.close()
 
         for row in rows:
-            fingerprint, severity, confidence, reasoning, rec_json, created_at, alertname = row
+            (
+                fingerprint,
+                severity,
+                confidence,
+                reasoning,
+                rec_json,
+                created_at,
+                alertname,
+            ) = row
             try:
                 import json
 

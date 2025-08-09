@@ -7,29 +7,20 @@ Endpoints:
 """
 
 # Standard library imports
-import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # Third-party imports
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 
 # Local imports
 from ..api.metrics import LegacyMetrics
-from ..core.interfaces import (
-    Alert,
-    AlertSeverity,
-    AlertStatus,
-    EnrichedAlert,
-    PublishingTarget,
-)
+from ..core.interfaces import Alert, AlertStatus, EnrichedAlert
 from ..logging_config import get_logger
 from ..services.alert_classifier import AlertClassificationService
-from ..services.alert_formatter import AlertFormatter
 from ..services.alert_publisher import AlertPublisher
-from ..services.filter_engine import AlertFilterEngine, FilterAction
+from ..services.filter_engine import AlertFilterEngine
 from ..services.target_discovery import DynamicTargetManager
 from ..services.webhook_processor import WebhookProcessor
 
@@ -73,8 +64,8 @@ async def get_target_manager() -> DynamicTargetManager:
 
     if not hasattr(app_state, "target_manager"):
         from ..services.target_discovery import (
-            TargetDiscoveryConfig,
             DynamicTargetManager,
+            TargetDiscoveryConfig,
         )
 
         config = TargetDiscoveryConfig(
@@ -162,7 +153,9 @@ async def legacy_webhook(
         )
 
         # Process alerts using existing webhook processor
-        result = await webhook_processor.process_webhook(webhook_data.dict(), background_tasks)
+        result = await webhook_processor.process_webhook(
+            webhook_data.dict(), background_tasks
+        )
 
         # Update metrics
         for alert_data in webhook_data.alerts:
@@ -178,7 +171,9 @@ async def legacy_webhook(
 
     except Exception as e:
         logger.error(f"Legacy webhook processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Webhook processing failed: {str(e)}"
+        )
 
 
 @webhook_router.post("/proxy", response_model=ProxyWebhookResponse)
@@ -230,11 +225,16 @@ async def intelligent_proxy_webhook(
         enrichment_mode = getattr(_as, "enrichment_mode", None)
         if enrichment_mode not in ("transparent", "enriched"):
             try:
-                from .enrichment_endpoints import _get_mode_from_redis, _get_default_mode
+                from .enrichment_endpoints import (
+                    _get_default_mode,
+                    _get_mode_from_redis,
+                )
 
                 resolved = await _get_mode_from_redis()
                 enrichment_mode = (
-                    resolved if resolved in ("transparent", "enriched") else _get_default_mode()
+                    resolved
+                    if resolved in ("transparent", "enriched")
+                    else _get_default_mode()
                 )
                 _as.enrichment_mode = enrichment_mode
             except Exception:
@@ -248,13 +248,17 @@ async def intelligent_proxy_webhook(
             original_flag = webhook_processor.enable_auto_classification
             webhook_processor.enable_auto_classification = False
             try:
-                await webhook_processor.process_webhook(webhook_data.dict(), background_tasks)
+                await webhook_processor.process_webhook(
+                    webhook_data.dict(), background_tasks
+                )
             finally:
                 webhook_processor.enable_auto_classification = original_flag
         else:
             # Record enriched mode processing
             metrics.enrichment_enriched_alerts.inc(len(webhook_data.alerts))
-            await webhook_processor.process_webhook(webhook_data.dict(), background_tasks)
+            await webhook_processor.process_webhook(
+                webhook_data.dict(), background_tasks
+            )
 
         # Process each alert through intelligent proxy pipeline
         publishing_results = {}
@@ -262,7 +266,9 @@ async def intelligent_proxy_webhook(
         for alert_data in webhook_data.alerts:
             try:
                 processed_alerts += 1
-                fingerprint = alert_data.get("fingerprint", f"unknown-{processed_alerts}")
+                fingerprint = alert_data.get(
+                    "fingerprint", f"unknown-{processed_alerts}"
+                )
 
                 # Update metrics
                 status = alert_data.get("status", "firing")
@@ -276,15 +282,15 @@ async def intelligent_proxy_webhook(
                     labels=alert_data.get("labels", {}),
                     annotations=alert_data.get("annotations", {}),
                     starts_at=datetime.fromisoformat(
-                        alert_data.get("startsAt", datetime.utcnow().isoformat()).replace(
-                            "Z", "+00:00"
-                        )
+                        alert_data.get(
+                            "startsAt", datetime.utcnow().isoformat()
+                        ).replace("Z", "+00:00")
                     ),
                     ends_at=(
                         datetime.fromisoformat(
-                            alert_data.get("endsAt", datetime.utcnow().isoformat()).replace(
-                                "Z", "+00:00"
-                            )
+                            alert_data.get(
+                                "endsAt", datetime.utcnow().isoformat()
+                            ).replace("Z", "+00:00")
                         )
                         if alert_data.get("endsAt")
                         else None
@@ -296,7 +302,9 @@ async def intelligent_proxy_webhook(
                 enriched_alert = None
                 if classification_service:
                     try:
-                        classification_result = await classification_service.classify_alert(alert)
+                        classification_result = (
+                            await classification_service.classify_alert(alert)
+                        )
                         enriched_alert = EnrichedAlert(
                             alert=alert, classification=classification_result
                         )
@@ -311,7 +319,9 @@ async def intelligent_proxy_webhook(
                         }
 
                         # Update classification metrics
-                        metrics.increment_classification(classification_result.severity.value)
+                        metrics.increment_classification(
+                            classification_result.severity.value
+                        )
 
                         logger.debug(
                             f"Alert {fingerprint} classified as {classification_result.severity.value}"
@@ -324,7 +334,9 @@ async def intelligent_proxy_webhook(
                     enriched_alert = EnrichedAlert(alert=alert)
 
                 # Step 3: Apply filters
-                should_publish, delay = await filter_engine.should_publish(enriched_alert)
+                should_publish, delay = await filter_engine.should_publish(
+                    enriched_alert
+                )
 
                 if not should_publish:
                     filtered_alerts += 1
@@ -335,8 +347,10 @@ async def intelligent_proxy_webhook(
                 if not metrics_only_mode and active_targets:
                     try:
                         # Use existing AlertPublisher to publish to multiple targets
-                        publish_results = await alert_publisher.publish_to_multiple_targets(
-                            enriched_alert, active_targets
+                        publish_results = (
+                            await alert_publisher.publish_to_multiple_targets(
+                                enriched_alert, active_targets
+                            )
                         )
 
                         publishing_results[fingerprint] = {
@@ -345,7 +359,9 @@ async def intelligent_proxy_webhook(
                                 1 for r in publish_results if r.get("success", False)
                             ),
                             "failed": sum(
-                                1 for r in publish_results if not r.get("success", False)
+                                1
+                                for r in publish_results
+                                if not r.get("success", False)
                             ),
                         }
 
@@ -386,7 +402,9 @@ async def intelligent_proxy_webhook(
             processed_alerts=processed_alerts,
             published_alerts=published_alerts,
             filtered_alerts=filtered_alerts,
-            classification_results=(classification_results if classification_results else None),
+            classification_results=(
+                classification_results if classification_results else None
+            ),
             publishing_results=publishing_results if publishing_results else None,
             metrics_only_mode=metrics_only_mode,
             processing_time_ms=int(processing_time),

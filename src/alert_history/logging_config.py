@@ -12,14 +12,14 @@ Implements 12-Factor App logging principles:
 # Standard library imports
 import json
 import logging
-import sys
-import traceback
-from datetime import datetime
-from typing import Any, Dict, Optional
-from uuid import uuid4
 
 # First-party imports
 import os
+import sys
+import traceback
+from datetime import datetime
+from typing import Any, Optional
+from uuid import uuid4
 
 
 class JSONFormatter(logging.Formatter):
@@ -326,7 +326,9 @@ def setup_logging() -> None:
         )
     else:
         # Use simple formatter for development
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
 
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)

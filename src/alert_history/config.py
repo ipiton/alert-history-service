@@ -5,6 +5,7 @@ Configuration management для Alert History.
 
 import os
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -144,7 +145,8 @@ def get_config() -> Config:
         command_timeout=float(os.getenv("DATABASE_COMMAND_TIMEOUT", "60.0")),
         query_timeout=float(os.getenv("DATABASE_QUERY_TIMEOUT", "30.0")),
         # Migration settings
-        enable_migrations=os.getenv("DATABASE_ENABLE_MIGRATIONS", "true").lower() == "true",
+        enable_migrations=os.getenv("DATABASE_ENABLE_MIGRATIONS", "true").lower()
+        == "true",
         auto_migrate=os.getenv("DATABASE_AUTO_MIGRATE", "false").lower() == "true",
         # Development
         echo=os.getenv("DATABASE_ECHO", "false").lower() == "true",
@@ -182,25 +184,32 @@ def get_config() -> Config:
     proxy_config = ProxyConfig(
         enabled=os.getenv("PROXY_ENABLED", "true").lower() == "true",
         metrics_only_mode=os.getenv("METRICS_ONLY_MODE", "false").lower() == "true",
-        target_discovery_enabled=os.getenv("TARGET_DISCOVERY_ENABLED", "true").lower() == "true",
+        target_discovery_enabled=os.getenv("TARGET_DISCOVERY_ENABLED", "true").lower()
+        == "true",
         target_refresh_interval=int(os.getenv("TARGET_REFRESH_INTERVAL", "300")),
     )
 
     # Monitoring configuration
     monitoring_config = MonitoringConfig(
         metrics_enabled=os.getenv("METRICS_ENABLED", "true").lower() == "true",
-        health_check_enabled=os.getenv("HEALTH_CHECK_ENABLED", "true").lower() == "true",
+        health_check_enabled=os.getenv("HEALTH_CHECK_ENABLED", "true").lower()
+        == "true",
         structured_logs=os.getenv("STRUCTURED_LOGS", "true").lower() == "true",
         log_requests=os.getenv("LOG_REQUESTS", "true").lower() == "true",
         prometheus_enabled=os.getenv("PROMETHEUS_ENABLED", "true").lower() == "true",
     )
 
     # Security configuration
-    cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
+    cors_origins = (
+        os.getenv("CORS_ORIGINS", "*").split(",")
+        if os.getenv("CORS_ORIGINS")
+        else ["*"]
+    )
     security_config = SecurityConfig(
         cors_enabled=os.getenv("CORS_ENABLED", "true").lower() == "true",
         cors_origins=cors_origins,
-        rate_limiting_enabled=os.getenv("RATE_LIMITING_ENABLED", "false").lower() == "true",
+        rate_limiting_enabled=os.getenv("RATE_LIMITING_ENABLED", "false").lower()
+        == "true",
         rate_limit_per_minute=int(os.getenv("RATE_LIMIT_PER_MINUTE", "60")),
     )
 

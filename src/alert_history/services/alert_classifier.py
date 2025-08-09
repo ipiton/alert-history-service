@@ -26,9 +26,8 @@ from ..core.interfaces import (
     IMetricsCollector,
 )
 from ..logging_config import get_alert_logger, get_performance_logger
-from ..services.llm_client import LLMProxyClient
-from ..utils.common import generate_fingerprint, normalize_severity
-from ..utils.decorators import cache_result, measure_time, retry
+from ..utils.common import normalize_severity
+from ..utils.decorators import measure_time
 
 alert_logger = get_alert_logger()
 performance_logger = get_performance_logger()
@@ -84,7 +83,9 @@ class AlertClassificationService(BaseClassificationService):
         if hasattr(self.llm_client, "__aexit__"):
             await self.llm_client.__aexit__(None, None, None)
 
-        alert_logger.info("Alert Classification Service shutdown", **self._classification_stats)
+        alert_logger.info(
+            "Alert Classification Service shutdown", **self._classification_stats
+        )
 
     @measure_time()
     async def classify_alert(
@@ -147,7 +148,9 @@ class AlertClassificationService(BaseClassificationService):
 
         except Exception as e:
             self._classification_stats["errors"] += 1
-            self._record_metric("classification_errors", 1, {"error_type": type(e).__name__})
+            self._record_metric(
+                "classification_errors", 1, {"error_type": type(e).__name__}
+            )
 
             # Fallback стратегия
             if self.enable_fallback:
@@ -173,7 +176,9 @@ class AlertClassificationService(BaseClassificationService):
             )
             raise
 
-    async def get_classification_history(self, fingerprint: str) -> Optional[ClassificationResult]:
+    async def get_classification_history(
+        self, fingerprint: str
+    ) -> Optional[ClassificationResult]:
         """
         Получить сохраненную классификацию по fingerprint.
 
@@ -185,7 +190,9 @@ class AlertClassificationService(BaseClassificationService):
         """
         try:
             # Сначала проверяем кэш
-            cache_key = self._generate_classification_cache_key_by_fingerprint(fingerprint)
+            cache_key = self._generate_classification_cache_key_by_fingerprint(
+                fingerprint
+            )
             if self.cache:
                 cached_result = await self.cache.get(cache_key)
                 if cached_result:
@@ -394,13 +401,18 @@ class AlertClassificationService(BaseClassificationService):
                     [
                         a
                         for a in similar_alerts
-                        if a.starts_at and (time.time() - a.starts_at.timestamp()) < 86400
+                        if a.starts_at
+                        and (time.time() - a.starts_at.timestamp()) < 86400
                     ]
                 ),
-                "firing_ratio": len([a for a in similar_alerts if a.status.value == "firing"])
+                "firing_ratio": len(
+                    [a for a in similar_alerts if a.status.value == "firing"]
+                )
                 / len(similar_alerts),
                 "common_labels": self._find_common_labels(similar_alerts),
-                "severity_distribution": self._analyze_severity_distribution(similar_alerts),
+                "severity_distribution": self._analyze_severity_distribution(
+                    similar_alerts
+                ),
             }
 
             return patterns
@@ -435,7 +447,9 @@ class AlertClassificationService(BaseClassificationService):
         for alert in alerts:
             severity = alert.labels.get("severity", "unknown")
             normalized_severity = normalize_severity(severity)
-            distribution[normalized_severity] = distribution.get(normalized_severity, 0) + 1
+            distribution[normalized_severity] = (
+                distribution.get(normalized_severity, 0) + 1
+            )
 
         return distribution
 
@@ -448,7 +462,9 @@ class AlertClassificationService(BaseClassificationService):
         confidence = max(0.0, min(1.0, result.confidence))
 
         # Проверяем что reasoning не пустой
-        reasoning = result.reasoning.strip() if result.reasoning else "No reasoning provided"
+        reasoning = (
+            result.reasoning.strip() if result.reasoning else "No reasoning provided"
+        )
 
         # Ограничиваем количество рекомендаций
         recommendations = result.recommendations[:5] if result.recommendations else []
@@ -472,7 +488,9 @@ class AlertClassificationService(BaseClassificationService):
             metadata=metadata,
         )
 
-    async def _save_classification_result(self, alert: Alert, result: ClassificationResult) -> None:
+    async def _save_classification_result(
+        self, alert: Alert, result: ClassificationResult
+    ) -> None:
         """Сохранить результат классификации в кэш и storage."""
         try:
             # Сохраняем в кэш
@@ -559,7 +577,9 @@ class AlertClassificationService(BaseClassificationService):
             "alert_classification_total", {"severity": result.severity.value}
         )
 
-        self.metrics.observe_histogram("alert_classification_duration_seconds", total_time)
+        self.metrics.observe_histogram(
+            "alert_classification_duration_seconds", total_time
+        )
 
         self.metrics.observe_histogram(
             "alert_classification_confidence",
@@ -573,6 +593,8 @@ class AlertClassificationService(BaseClassificationService):
                 "llm_classification_duration_seconds", result.processing_time
             )
 
-    def _generate_classification_cache_key_by_fingerprint(self, fingerprint: str) -> str:
+    def _generate_classification_cache_key_by_fingerprint(
+        self, fingerprint: str
+    ) -> str:
         """Генерация ключа кэша по fingerprint."""
         return f"classification:{fingerprint}"

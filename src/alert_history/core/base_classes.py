@@ -11,8 +11,9 @@ Applies DRY principle by providing reusable implementations:
 import asyncio
 import time
 from abc import ABC
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 # Local imports
 from .interfaces import (
@@ -108,7 +109,9 @@ class BaseService(ABC):
         finally:
             duration = time.time() - start_time
             if self.metrics:
-                self.metrics.observe_histogram(f"{operation_name}_duration_seconds", duration)
+                self.metrics.observe_histogram(
+                    f"{operation_name}_duration_seconds", duration
+                )
 
 
 class BaseRepository(IRepository, Generic[T]):
@@ -131,7 +134,9 @@ class BaseRepository(IRepository, Generic[T]):
             return None
         return await self.cache.get(cache_key)
 
-    async def _set_cache(self, cache_key: str, entity: T, ttl: Optional[int] = None) -> None:
+    async def _set_cache(
+        self, cache_key: str, entity: T, ttl: Optional[int] = None
+    ) -> None:
         """Set entity in cache."""
         if self.cache:
             await self.cache.set(cache_key, entity, ttl)
@@ -308,13 +313,17 @@ class BasePublishingService(BaseService):
                     success = await self._perform_publish(enriched_alert, target_config)
 
                 if success:
-                    self._record_publishing_success(target_config.get("name", "unknown"))
+                    self._record_publishing_success(
+                        target_config.get("name", "unknown")
+                    )
                     return True
 
             except Exception as e:
                 last_exception = e
                 if attempt < self.max_retries:
-                    await asyncio.sleep(self.retry_delay * (2**attempt))  # Exponential backoff
+                    await asyncio.sleep(
+                        self.retry_delay * (2**attempt)
+                    )  # Exponential backoff
                 continue
 
         # All retries failed
@@ -398,7 +407,7 @@ class BaseEventProcessor(BaseService):
                 if events:
                     await self._process_event_batch(events)
 
-            except Exception as e:
+            except Exception:
                 # Log error but continue processing
                 self._record_metric("event_processing_errors", 1)
                 await asyncio.sleep(1)  # Brief pause before retrying
@@ -410,7 +419,7 @@ class BaseEventProcessor(BaseService):
                 try:
                     await self._process_single_event(event)
                     self._record_metric("events_processed_success", 1)
-                except Exception as e:
+                except Exception:
                     self._record_metric("events_processed_failure", 1)
 
     async def _process_single_event(self, event_data: Dict[str, Any]) -> None:
