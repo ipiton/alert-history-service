@@ -256,7 +256,7 @@ async def initialize_services() -> None:
         "Intelligent Alert Proxy initialized",
         metrics_only_mode=metrics_only_mode,
         active_targets=active_targets,
-        target_discovery_enabled=discovery_config.enabled,
+        target_discovery_enabled=app_state.config.target_discovery.enabled,
     )
 
     logger.info(

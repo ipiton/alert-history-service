@@ -434,7 +434,7 @@ class AlertClassificationService(BaseClassificationService):
         # Возвращаем общие лейблы с их значениями
         result = {}
         for label in common_labels:
-            values = set(alert.labels.get(label) for alert in alerts)
+            values = {alert.labels.get(label) for alert in alerts}
             if len(values) == 1:  # Если значение одинаковое у всех
                 result[label] = list(values)[0]
 

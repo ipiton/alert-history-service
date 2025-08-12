@@ -286,7 +286,7 @@ class PostgreSQLStorage(IAlertStorage):
         try:
             async with self.get_connection() as conn:
                 # Build conditions
-                conditions = ["timestamp >= NOW() - INTERVAL '%s hours'" % hours]
+                conditions = [f"timestamp >= NOW() - INTERVAL '{hours} hours'"]
                 params = []
                 param_count = 0
 
