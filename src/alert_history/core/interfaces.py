@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class AlertSeverity(Enum):
@@ -48,8 +48,8 @@ class Alert:
     fingerprint: str
     alert_name: str
     status: AlertStatus
-    labels: Dict[str, str]
-    annotations: Dict[str, str]
+    labels: dict[str, str]
+    annotations: dict[str, str]
     starts_at: datetime
     ends_at: Optional[datetime] = None
     generator_url: Optional[str] = None
@@ -72,9 +72,9 @@ class ClassificationResult:
     severity: AlertSeverity
     confidence: float
     reasoning: str
-    recommendations: List[str]
+    recommendations: list[str]
     processing_time: float
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -85,8 +85,8 @@ class PublishingTarget:
     type: str
     url: str
     enabled: bool
-    filter_config: Dict[str, Any]
-    headers: Dict[str, str]
+    filter_config: dict[str, Any]
+    headers: dict[str, str]
     format: PublishingFormat
 
 
@@ -96,7 +96,7 @@ class EnrichedAlert:
 
     alert: Alert
     classification: Optional[ClassificationResult] = None
-    enrichment_metadata: Optional[Dict[str, Any]] = None
+    enrichment_metadata: Optional[dict[str, Any]] = None
     processing_timestamp: Optional[datetime] = None
 
 
@@ -118,8 +118,8 @@ class IAlertStorage(ABC):
 
     @abstractmethod
     async def get_alerts(
-        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
-    ) -> List[Alert]:
+        self, filters: dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> list[Alert]:
         """Get alerts with filters."""
         pass
 
@@ -212,7 +212,7 @@ class ILLMClient(ABC):
 
     @abstractmethod
     async def classify_alert(
-        self, alert: Alert, context: Optional[Dict[str, Any]] = None
+        self, alert: Alert, context: Optional[dict[str, Any]] = None
     ) -> ClassificationResult:
         """Classify alert using LLM."""
         pass
@@ -220,7 +220,7 @@ class ILLMClient(ABC):
     @abstractmethod
     async def generate_recommendations(
         self, alert: Alert, classification: ClassificationResult
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate configuration recommendations."""
         pass
 
@@ -243,7 +243,7 @@ class IAlertFormatter(ABC):
     @abstractmethod
     async def format_alert(
         self, enriched_alert: EnrichedAlert, target_format: PublishingFormat
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Format alert for specific target."""
         pass
 
@@ -282,7 +282,7 @@ class IConfigurationManager(ABC):
         pass
 
     @abstractmethod
-    async def get_all_configs(self) -> Dict[str, Any]:
+    async def get_all_configs(self) -> dict[str, Any]:
         """Get all configuration values."""
         pass
 
@@ -301,7 +301,7 @@ class ISecretsManager(ABC):
         pass
 
     @abstractmethod
-    async def list_secrets(self, label_selector: str) -> Dict[str, Dict[str, str]]:
+    async def list_secrets(self, label_selector: str) -> dict[str, dict[str, str]]:
         """List secrets matching label selector."""
         pass
 
@@ -313,7 +313,7 @@ class ITargetDiscovery(ABC):
     """Interface for dynamic target discovery."""
 
     @abstractmethod
-    async def discover_targets(self) -> List[PublishingTarget]:
+    async def discover_targets(self) -> list[PublishingTarget]:
         """Discover available publishing targets."""
         pass
 
@@ -330,12 +330,12 @@ class IHealthChecker(ABC):
     """Interface for health checking."""
 
     @abstractmethod
-    async def check_health(self) -> Dict[str, Any]:
+    async def check_health(self) -> dict[str, Any]:
         """Perform health check."""
         pass
 
     @abstractmethod
-    async def check_readiness(self) -> Dict[str, Any]:
+    async def check_readiness(self) -> dict[str, Any]:
         """Perform readiness check."""
         pass
 
@@ -348,21 +348,21 @@ class IMetricsCollector(ABC):
 
     @abstractmethod
     def increment_counter(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self, name: str, labels: Optional[dict[str, str]] = None
     ) -> None:
         """Increment counter metric."""
         pass
 
     @abstractmethod
     def set_gauge(
-        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+        self, name: str, value: float, labels: Optional[dict[str, str]] = None
     ) -> None:
         """Set gauge metric."""
         pass
 
     @abstractmethod
     def observe_histogram(
-        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+        self, name: str, value: float, labels: Optional[dict[str, str]] = None
     ) -> None:
         """Observe histogram metric."""
         pass
@@ -375,7 +375,7 @@ class IEventProcessor(ABC):
     """Interface for event processing strategies."""
 
     @abstractmethod
-    async def process_event(self, event_data: Dict[str, Any]) -> bool:
+    async def process_event(self, event_data: dict[str, Any]) -> bool:
         """Process incoming event."""
         pass
 
@@ -414,9 +414,9 @@ class IRepository(ABC):
     @abstractmethod
     async def list(
         self,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Optional[dict[str, Any]] = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """List entities with optional filters."""
         pass

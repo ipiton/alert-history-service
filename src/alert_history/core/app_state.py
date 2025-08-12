@@ -2,7 +2,7 @@
 Application state management для dependency injection.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from ..logging_config import get_logger
 
@@ -13,7 +13,7 @@ class AppState:
     """Глобальное состояние приложения для dependency injection."""
 
     def __init__(self):
-        self._state: Dict[str, Any] = {}
+        self._state: dict[str, Any] = {}
 
     def set(self, key: str, value: Any) -> None:
         """Установить значение в state."""

@@ -15,7 +15,7 @@ import json
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 import asyncpg
@@ -212,7 +212,7 @@ class PostgreSQLStorage(IAlertStorage):
         end_time: Optional[datetime] = None,
         limit: int = 1000,
         offset: int = 0,
-    ) -> List[Alert]:
+    ) -> list[Alert]:
         """Get alerts with filters."""
         try:
             async with self.get_connection() as conn:
@@ -281,7 +281,7 @@ class PostgreSQLStorage(IAlertStorage):
         hours: int = 24,
         alert_name: Optional[str] = None,
         status: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get alert history for reports."""
         try:
             async with self.get_connection() as conn:
@@ -457,7 +457,7 @@ class PostgreSQLStorage(IAlertStorage):
         response_code: Optional[int] = None,
         response_message: Optional[str] = None,
         processing_time: Optional[float] = None,
-        error_details: Optional[Dict[str, Any]] = None,
+        error_details: Optional[dict[str, Any]] = None,
     ) -> bool:
         """Save publishing result."""
         try:
@@ -560,7 +560,7 @@ class PostgreSQLStorage(IAlertStorage):
         """Clean up old alerts and return count of deleted records (IAlertStorage interface)."""
         return await self.cleanup_old_data(retention_days)
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """Get database statistics."""
         try:
             async with self.get_connection() as conn:
@@ -606,14 +606,14 @@ class PostgreSQLStorage(IAlertStorage):
             timestamp=row["timestamp"],
         )
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Health check for PostgreSQL connection."""
         try:
             start_time = time.time()
 
             async with self.get_connection() as conn:
                 # Test basic connectivity
-                result = await conn.fetchval("SELECT 1")
+                await conn.fetchval("SELECT 1")  # Test connectivity
 
                 # Test query performance
                 await conn.fetchval("SELECT COUNT(*) FROM alerts LIMIT 1")

@@ -12,7 +12,7 @@ Alert Classifier Service для интеллектуальной классиф�
 # Standard library imports
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Local imports
 from ..core.base_classes import BaseClassificationService
@@ -91,7 +91,7 @@ class AlertClassificationService(BaseClassificationService):
     async def classify_alert(
         self,
         alert: Alert,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         force_refresh: bool = False,
     ) -> ClassificationResult:
         """
@@ -212,7 +212,7 @@ class AlertClassificationService(BaseClassificationService):
             )
             return None
 
-    async def get_classification_stats(self) -> Dict[str, Any]:
+    async def get_classification_stats(self) -> dict[str, Any]:
         """Получить статистику классификации."""
         stats = self._classification_stats.copy()
 
@@ -228,10 +228,10 @@ class AlertClassificationService(BaseClassificationService):
 
     async def bulk_classify_alerts(
         self,
-        alerts: List[Alert],
-        context: Optional[Dict[str, Any]] = None,
+        alerts: list[Alert],
+        context: Optional[dict[str, Any]] = None,
         max_parallel: int = 5,
-    ) -> List[ClassificationResult]:
+    ) -> list[ClassificationResult]:
         """
         Массовая классификация алертов с контролем параллелизма.
 
@@ -302,7 +302,7 @@ class AlertClassificationService(BaseClassificationService):
     async def refresh_classification(
         self,
         fingerprint: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> ClassificationResult:
         """
         Принудительно обновить классификацию алерта.
@@ -328,7 +328,7 @@ class AlertClassificationService(BaseClassificationService):
         return await self.classify_alert(alert, context, force_refresh=True)
 
     async def _classify_with_llm(
-        self, alert: Alert, context: Optional[Dict[str, Any]]
+        self, alert: Alert, context: Optional[dict[str, Any]]
     ) -> ClassificationResult:
         """Выполнить классификацию через LLM."""
         self._classification_stats["llm_requests"] += 1
@@ -357,8 +357,8 @@ class AlertClassificationService(BaseClassificationService):
         return validated_result
 
     async def _prepare_llm_context(
-        self, alert: Alert, context: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, alert: Alert, context: Optional[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Подготовить расширенный контекст для LLM."""
         enhanced_context = {
             "timestamp": time.time(),
@@ -383,7 +383,7 @@ class AlertClassificationService(BaseClassificationService):
 
         return enhanced_context
 
-    async def _analyze_alert_patterns(self, alert: Alert) -> Optional[Dict[str, Any]]:
+    async def _analyze_alert_patterns(self, alert: Alert) -> Optional[dict[str, Any]]:
         """Анализ паттернов алерта на основе истории."""
         try:
             # Получаем историю похожих алертов
@@ -421,7 +421,7 @@ class AlertClassificationService(BaseClassificationService):
             alert_logger.warning(f"Pattern analysis failed: {e}")
             return None
 
-    def _find_common_labels(self, alerts: list) -> Dict[str, str]:
+    def _find_common_labels(self, alerts: list) -> dict[str, str]:
         """Найти общие лейблы в алертах."""
         if not alerts:
             return {}
@@ -440,7 +440,7 @@ class AlertClassificationService(BaseClassificationService):
 
         return result
 
-    def _analyze_severity_distribution(self, alerts: list) -> Dict[str, int]:
+    def _analyze_severity_distribution(self, alerts: list) -> dict[str, int]:
         """Анализ распределения severity в алертах."""
         distribution = {}
 

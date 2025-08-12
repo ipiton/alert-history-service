@@ -12,7 +12,7 @@ Maintains 100% compatibility with existing alert_history_service.py:
 import json
 import time
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from ..services.alert_classifier import AlertClassificationService
@@ -237,7 +237,7 @@ class LegacyAPIAdapter:
 
         except Exception as e:
             self.metrics.increment_webhook_errors()
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     async def _handle_history(
         self,
@@ -288,7 +288,7 @@ class LegacyAPIAdapter:
             return JSONResponse({"alerts": legacy_alerts, "total": len(legacy_alerts)})
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_report(self, days: int, group_by: str) -> JSONResponse:
         """Handle report request - same logic as original."""
@@ -339,7 +339,7 @@ class LegacyAPIAdapter:
             )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_metrics(self) -> Response:
         """Handle metrics request - same format as original."""
@@ -384,7 +384,7 @@ class LegacyAPIAdapter:
             )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_dashboard_grouped(self, request: Request) -> HTMLResponse:
         """Handle grouped dashboard request."""
@@ -429,9 +429,9 @@ class LegacyAPIAdapter:
             )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-    def _convert_webhook_to_alert(self, alert_data: Dict[str, Any]) -> Alert:
+    def _convert_webhook_to_alert(self, alert_data: dict[str, Any]) -> Alert:
         """Convert webhook alert data to internal Alert format."""
         # Extract required fields
         labels = alert_data.get("labels", {})

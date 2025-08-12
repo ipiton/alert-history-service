@@ -12,7 +12,7 @@ Implements communication with internal LLM-proxy service:
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 import aiohttp
@@ -97,7 +97,7 @@ class LLMProxyClient(ILLMClient):
     @retry(max_attempts=3, delay=1.0, backoff_factor=2.0)
     @measure_time()
     async def classify_alert(
-        self, alert: Alert, context: Optional[Dict[str, Any]] = None
+        self, alert: Alert, context: Optional[dict[str, Any]] = None
     ) -> ClassificationResult:
         """
         Classify alert using LLM via proxy.
@@ -145,7 +145,7 @@ class LLMProxyClient(ILLMClient):
     @measure_time()
     async def generate_recommendations(
         self, alert: Alert, classification: ClassificationResult
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Generate configuration recommendations based on classification.
 
@@ -185,7 +185,7 @@ class LLMProxyClient(ILLMClient):
             # Return empty list on failure rather than raising
             return []
 
-    async def _make_llm_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_llm_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Make request to LLM proxy service."""
         if not self._session:
             await self._init_session()
@@ -207,8 +207,8 @@ class LLMProxyClient(ILLMClient):
             return await response.json()
 
     def _build_classification_payload(
-        self, alert: Alert, context: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, alert: Alert, context: Optional[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Build LLM request payload for classification."""
 
         # Prepare alert context
@@ -260,7 +260,7 @@ Please classify this alert and provide recommendations.
 
     def _build_recommendation_payload(
         self, alert: Alert, classification: ClassificationResult
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build LLM request payload for recommendations."""
 
         system_message = """
@@ -322,7 +322,7 @@ Consider these factors:
 Provide a confidence score (0.0-1.0) and clear reasoning for your classification.
 """
 
-    def _build_function_schema(self) -> Dict[str, Any]:
+    def _build_function_schema(self) -> dict[str, Any]:
         """Build OpenAI function schema for structured responses."""
         return {
             "name": "classify_alert",
@@ -361,7 +361,7 @@ Provide a confidence score (0.0-1.0) and clear reasoning for your classification
         }
 
     def _parse_classification_response(
-        self, response_data: Dict[str, Any], start_time: float
+        self, response_data: dict[str, Any], start_time: float
     ) -> ClassificationResult:
         """Parse LLM response into ClassificationResult."""
         try:
@@ -415,8 +415,8 @@ Provide a confidence score (0.0-1.0) and clear reasoning for your classification
             )
 
     def _parse_recommendation_response(
-        self, response_data: Dict[str, Any]
-    ) -> List[str]:
+        self, response_data: dict[str, Any]
+    ) -> list[str]:
         """Parse recommendation response from LLM."""
         try:
             content = response_data["choices"][0]["message"]["content"]

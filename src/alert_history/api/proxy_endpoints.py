@@ -10,7 +10,7 @@ Proxy API endpoints для intelligent alert routing.
 
 # Standard library imports
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -37,14 +37,14 @@ proxy_router = APIRouter(prefix="/proxy", tags=["Intelligent Proxy"])
 class ProxyWebhookRequest(BaseModel):
     """Request model для proxy webhook."""
 
-    alerts: List[Dict[str, Any]]
+    alerts: list[dict[str, Any]]
     receiver: str = "default"
     status: str = "firing"
     version: str = "4"
     groupKey: Optional[str] = None
-    groupLabels: Optional[Dict[str, str]] = None
-    commonLabels: Optional[Dict[str, str]] = None
-    commonAnnotations: Optional[Dict[str, str]] = None
+    groupLabels: Optional[dict[str, str]] = None
+    commonLabels: Optional[dict[str, str]] = None
+    commonAnnotations: Optional[dict[str, str]] = None
     externalURL: Optional[str] = None
     truncatedAlerts: int = 0
 
@@ -60,9 +60,9 @@ class ProxyStatsResponse(BaseModel):
     failed_publishes: int
     filtered_alerts: int
     classification_enabled: bool
-    target_discovery_stats: Dict[str, Any]
-    filter_stats: Dict[str, Any]
-    publisher_stats: Dict[str, Any]
+    target_discovery_stats: dict[str, Any]
+    filter_stats: dict[str, Any]
+    publisher_stats: dict[str, Any]
 
 
 class TargetInfo(BaseModel):
@@ -84,7 +84,7 @@ class FilterRuleRequest(BaseModel):
 
     name: str
     action: str = Field(..., pattern="^(allow|deny|delay)$")
-    conditions: Dict[str, Any]
+    conditions: dict[str, Any]
     priority: int = Field(default=100, ge=1, le=1000)
     enabled: bool = True
     target_name: Optional[str] = None
@@ -316,10 +316,10 @@ async def proxy_webhook(
 
         raise HTTPException(
             status_code=500, detail=f"Proxy processing failed: {str(e)}"
-        )
+        ) from e
 
 
-@proxy_router.get("/targets", response_model=List[TargetInfo])
+@proxy_router.get("/targets", response_model=list[TargetInfo])
 async def get_publishing_targets(
     target_manager: DynamicTargetManager = Depends(get_target_manager),
     alert_publisher: AlertPublisher = Depends(get_alert_publisher),
@@ -360,7 +360,7 @@ async def get_publishing_targets(
 
     except Exception as e:
         logger.error(f"Error getting publishing targets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @proxy_router.get("/stats", response_model=ProxyStatsResponse)
@@ -429,7 +429,7 @@ async def get_proxy_stats(
 
     except Exception as e:
         logger.error(f"Error getting proxy stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @proxy_router.get("/health")
@@ -510,7 +510,7 @@ async def refresh_targets(
 
     except Exception as e:
         logger.error(f"Error refreshing targets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @proxy_router.post("/filters/rules")
@@ -549,7 +549,7 @@ async def add_filter_rule(
 
     except Exception as e:
         logger.error(f"Error adding filter rule: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @proxy_router.delete("/filters/rules/{rule_name}")
@@ -574,11 +574,11 @@ async def remove_filter_rule(
 
     except Exception as e:
         logger.error(f"Error removing filter rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Helper functions
-async def _convert_webhook_to_alert(alert_data: Dict[str, Any]) -> Alert:
+async def _convert_webhook_to_alert(alert_data: dict[str, Any]) -> Alert:
     """Convert webhook alert data to internal Alert format."""
     # Parse timestamps
     starts_at = None

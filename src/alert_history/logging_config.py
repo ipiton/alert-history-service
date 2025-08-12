@@ -304,7 +304,7 @@ def setup_logging() -> None:
     environment = os.getenv("ENVIRONMENT", "development")
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     enable_json = os.getenv("LOG_JSON", "true").lower() == "true"
-    enable_correlation = os.getenv("LOG_CORRELATION", "true").lower() == "true"
+    # enable_correlation = os.getenv("LOG_CORRELATION", "true").lower() == "true"  # Reserved for future use
 
     # Configure root logger
     root_logger = logging.getLogger()

@@ -11,7 +11,7 @@ Provides:
 
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -89,7 +89,7 @@ class SystemHealthData(BaseModel):
 
     component: str
     status: str  # healthy, unhealthy, degraded, unknown
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[dict[str, Any]] = None
     last_check: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -97,16 +97,16 @@ class DashboardChartsData(BaseModel):
     """Chart data for dashboard visualizations."""
 
     # Time series for line charts
-    alert_timeline: List[AlertTimeSeriesData] = []
+    alert_timeline: list[AlertTimeSeriesData] = []
 
     # Top alerts for bar charts
-    top_alerts_by_frequency: List[TopAlertsData] = []
-    top_alerts_by_severity: List[TopAlertsData] = []
+    top_alerts_by_frequency: list[TopAlertsData] = []
+    top_alerts_by_severity: list[TopAlertsData] = []
 
     # Distribution data for pie charts
-    severity_distribution: Dict[str, int] = {}
-    status_distribution: Dict[str, int] = {}
-    namespace_distribution: Dict[str, int] = {}
+    severity_distribution: dict[str, int] = {}
+    status_distribution: dict[str, int] = {}
+    namespace_distribution: dict[str, int] = {}
 
 
 class RecommendationItem(BaseModel):
@@ -115,13 +115,13 @@ class RecommendationItem(BaseModel):
     severity: str
     confidence: float
     reasoning: Optional[str] = None
-    recommendations: List[str] = []
+    recommendations: list[str] = []
     created_at: str
 
 
 class RecommendationsResponse(BaseModel):
     total: int
-    items: List[RecommendationItem]
+    items: list[RecommendationItem]
 
 
 # Dependency injection helpers
@@ -140,7 +140,7 @@ def get_storage() -> SQLiteLegacyStorage:
         return storage
     except Exception as e:
         logger.error(f"Failed to initialize fallback storage: {e}")
-        raise HTTPException(status_code=503, detail="Storage not available")
+        raise HTTPException(status_code=503, detail="Storage not available") from e
 
 
 def get_classification_service() -> Optional[AlertClassificationService]:
@@ -250,7 +250,9 @@ async def get_dashboard_overview(
 
     except Exception as e:
         logger.error(f"Failed to generate dashboard overview: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get overview: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get overview: {str(e)}"
+        ) from e
 
 
 @dashboard_router.get("/charts", response_model=DashboardChartsData)
@@ -380,17 +382,17 @@ async def get_dashboard_charts(
         logger.error(f"Failed to generate charts data: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to get charts data: {str(e)}"
-        )
+        ) from e
 
 
-@dashboard_router.get("/health", response_model=List[SystemHealthData])
+@dashboard_router.get("/health", response_model=list[SystemHealthData])
 async def get_system_health(
     classification_service: Optional[AlertClassificationService] = Depends(
         get_classification_service
     ),
     target_manager: Optional[DynamicTargetManager] = Depends(get_target_manager),
     alert_publisher: Optional[AlertPublisher] = Depends(get_alert_publisher),
-) -> List[SystemHealthData]:
+) -> list[SystemHealthData]:
     """Get system health status for all components."""
 
     health_data = []
@@ -602,7 +604,7 @@ async def get_recent_alerts(
         logger.error(f"Failed to get recent alerts: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to get recent alerts: {str(e)}"
-        )
+        ) from e
 
 
 @dashboard_router.get("/recommendations", response_model=RecommendationsResponse)
@@ -615,7 +617,7 @@ async def get_recommendations(
     try:
         import sqlite3
 
-        items: List[RecommendationItem] = []
+        items: list[RecommendationItem] = []
 
         # Open direct connection using storage path
         db_path = storage.db_path  # type: ignore[attr-defined]
@@ -670,4 +672,6 @@ async def get_recommendations(
 
     except Exception as e:
         logger.error(f"Failed to get recommendations: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get recommendations")
+        raise HTTPException(
+            status_code=500, detail="Failed to get recommendations"
+        ) from e

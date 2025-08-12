@@ -15,7 +15,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
 
 # Add the project root to the Python path
 project_root = os.path.abspath(".")
@@ -48,7 +47,7 @@ class TestRunner:
     """Comprehensive test runner."""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
         self.total_tests = 0
         self.passed_tests = 0
         self.failed_tests = 0
@@ -98,7 +97,7 @@ class TestRunner:
             duration = time.time() - start_time
             return TestResult(description, False, duration, "", str(e))
 
-    async def run_code_quality_checks(self) -> List[TestResult]:
+    async def run_code_quality_checks(self) -> list[TestResult]:
         """Run code quality checks."""
         print("🔍 Running Code Quality Checks...")
 
@@ -139,7 +138,7 @@ class TestRunner:
         return quality_tests
 
     async def run_command_test(
-        self, command: List[str], description: str
+        self, command: list[str], description: str
     ) -> TestResult:
         """Run a command-line test."""
         start_time = time.time()
@@ -224,7 +223,7 @@ class TestRunner:
             duration = time.time() - start_time
             return TestResult("Python Syntax Check", False, duration, "", str(e))
 
-    async def run_all_tests(self) -> Dict[str, List[TestResult]]:
+    async def run_all_tests(self) -> dict[str, list[TestResult]]:
         """Run all test categories."""
         print("🎯 Running Comprehensive Test Suite")
         print("=" * 60)
@@ -264,7 +263,7 @@ class TestRunner:
 
         return all_results
 
-    async def run_integration_tests(self) -> List[TestResult]:
+    async def run_integration_tests(self) -> list[TestResult]:
         """Run integration tests."""
         integration_tests = []
 
@@ -360,7 +359,7 @@ class TestRunner:
             duration = time.time() - start_time
             return TestResult("Service Dependencies", False, duration, "", str(e))
 
-    async def run_performance_tests(self) -> List[TestResult]:
+    async def run_performance_tests(self) -> list[TestResult]:
         """Run basic performance tests."""
         performance_tests = []
 
@@ -438,7 +437,7 @@ class TestRunner:
                 "Service Initialization Performance", False, duration, "", str(e)
             )
 
-    def print_results(self, all_results: Dict[str, List[TestResult]]):
+    def print_results(self, all_results: dict[str, list[TestResult]]):
         """Print comprehensive test results."""
         print("\n" + "=" * 60)
         print("📊 COMPREHENSIVE TEST RESULTS")

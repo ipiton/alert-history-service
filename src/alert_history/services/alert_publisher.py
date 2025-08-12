@@ -14,7 +14,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Optional
 
 # Third-party imports
 import aiohttp
@@ -164,16 +164,16 @@ class AlertPublisher(IAlertPublisher):
         self._session: Optional[aiohttp.ClientSession] = None
 
         # Circuit breakers per target
-        self._circuit_breakers: Dict[str, CircuitBreaker] = {}
+        self._circuit_breakers: dict[str, CircuitBreaker] = {}
 
         # Publishing statistics per target
-        self._publishing_stats: Dict[str, PublishingStats] = {}
+        self._publishing_stats: dict[str, PublishingStats] = {}
 
         # Concurrency control
         self._publish_semaphore = asyncio.Semaphore(max_concurrent_publishes)
 
         # Active publishing tasks tracking
-        self._active_publishes: Set[asyncio.Task] = set()
+        self._active_publishes: set[asyncio.Task] = set()
 
     async def __aenter__(self) -> "AlertPublisher":
         """Async context manager entry."""
@@ -273,8 +273,8 @@ class AlertPublisher(IAlertPublisher):
             )
 
     async def publish_to_multiple_targets(
-        self, enriched_alert: EnrichedAlert, targets: List[PublishingTarget]
-    ) -> Dict[str, bool]:
+        self, enriched_alert: EnrichedAlert, targets: list[PublishingTarget]
+    ) -> dict[str, bool]:
         """
         Опубликовать алерт в несколько targets параллельно.
 
@@ -391,7 +391,7 @@ class AlertPublisher(IAlertPublisher):
 
     @retry(max_attempts=3, delay=1.0, backoff_factor=2.0)
     async def _perform_http_publish(
-        self, formatted_alert: Dict[str, any], target: PublishingTarget, retries: int
+        self, formatted_alert: dict[str, any], target: PublishingTarget, retries: int
     ) -> bool:
         """Выполнить HTTP запрос для публикации."""
         if not self._session:
@@ -499,11 +499,11 @@ class AlertPublisher(IAlertPublisher):
         """Получить статистику для конкретного target."""
         return self._publishing_stats.get(target_name)
 
-    def get_all_stats(self) -> Dict[str, PublishingStats]:
+    def get_all_stats(self) -> dict[str, PublishingStats]:
         """Получить статистику для всех targets."""
         return self._publishing_stats.copy()
 
-    def get_circuit_breaker_status(self, target_name: str) -> Dict[str, any]:
+    def get_circuit_breaker_status(self, target_name: str) -> dict[str, any]:
         """Получить статус circuit breaker для target."""
         circuit_breaker = self._circuit_breakers.get(target_name)
         if not circuit_breaker:

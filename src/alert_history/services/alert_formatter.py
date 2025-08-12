@@ -12,7 +12,7 @@ Alert Formatter для различных publishing форматов.
 # Standard library imports
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Local imports
 from ..core.interfaces import (
@@ -48,7 +48,7 @@ class AlertFormatter(IAlertFormatter):
 
     async def format_alert(
         self, enriched_alert: EnrichedAlert, target_format: PublishingFormat
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Форматировать алерт для конкретного target.
 
@@ -86,7 +86,7 @@ class AlertFormatter(IAlertFormatter):
             )
             raise
 
-    def _format_alertmanager(self, enriched_alert: EnrichedAlert) -> Dict[str, Any]:
+    def _format_alertmanager(self, enriched_alert: EnrichedAlert) -> dict[str, Any]:
         """Форматирование в стандартный Alertmanager webhook format."""
         alert = enriched_alert.alert
 
@@ -139,7 +139,7 @@ class AlertFormatter(IAlertFormatter):
             "truncatedAlerts": 0,
         }
 
-    def _format_rootly(self, enriched_alert: EnrichedAlert) -> Dict[str, Any]:
+    def _format_rootly(self, enriched_alert: EnrichedAlert) -> dict[str, Any]:
         """Форматирование для Rootly incident management."""
         alert = enriched_alert.alert
         classification = enriched_alert.classification
@@ -231,7 +231,7 @@ class AlertFormatter(IAlertFormatter):
 
         return rootly_payload
 
-    def _format_pagerduty(self, enriched_alert: EnrichedAlert) -> Dict[str, Any]:
+    def _format_pagerduty(self, enriched_alert: EnrichedAlert) -> dict[str, Any]:
         """Форматирование для PagerDuty."""
         alert = enriched_alert.alert
         classification = enriched_alert.classification
@@ -311,7 +311,7 @@ class AlertFormatter(IAlertFormatter):
 
         return pagerduty_event
 
-    def _format_slack(self, enriched_alert: EnrichedAlert) -> Dict[str, Any]:
+    def _format_slack(self, enriched_alert: EnrichedAlert) -> dict[str, Any]:
         """Форматирование для Slack."""
         alert = enriched_alert.alert
         classification = enriched_alert.classification
@@ -417,7 +417,7 @@ class AlertFormatter(IAlertFormatter):
 
         return slack_message
 
-    def _format_webhook(self, enriched_alert: EnrichedAlert) -> Dict[str, Any]:
+    def _format_webhook(self, enriched_alert: EnrichedAlert) -> dict[str, Any]:
         """Форматирование для generic webhook."""
         alert = enriched_alert.alert
         classification = enriched_alert.classification
@@ -464,7 +464,7 @@ class AlertFormatter(IAlertFormatter):
 
     def _build_rootly_tags(
         self, alert: Alert, classification: Optional[ClassificationResult]
-    ) -> List[str]:
+    ) -> list[str]:
         """Построить теги для Rootly."""
         tags = ["alert-history", "automated"]
 

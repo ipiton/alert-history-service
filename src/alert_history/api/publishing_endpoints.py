@@ -14,7 +14,7 @@ Endpoints for managing dynamic publishing targets:
 import asyncio
 import base64
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -69,7 +69,7 @@ class PublishingStatsResponse(BaseModel):
     successful_publishes: int
     failed_publishes: int
     success_rate: float
-    targets: List[PublishingTargetInfo]
+    targets: list[PublishingTargetInfo]
     last_updated: str
 
 
@@ -78,15 +78,15 @@ class SecretTemplate(BaseModel):
 
     apiVersion: str = "v1"
     kind: str = "Secret"
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     type: str = "Opaque"
-    data: Dict[str, str]
+    data: dict[str, str]
 
 
 class TestTargetRequest(BaseModel):
     """Request for testing a publishing target."""
 
-    test_alert: Optional[Dict[str, Any]] = None
+    test_alert: Optional[dict[str, Any]] = None
     timeout_seconds: int = 30
 
 
@@ -128,7 +128,7 @@ async def get_alert_publisher() -> AlertPublisher:
     return app_state.alert_publisher
 
 
-@publishing_router.get("/targets", response_model=List[PublishingTargetInfo])
+@publishing_router.get("/targets", response_model=list[PublishingTargetInfo])
 async def get_publishing_targets(
     target_manager: DynamicTargetManager = Depends(get_target_manager),
     alert_publisher: AlertPublisher = Depends(get_alert_publisher),
@@ -180,7 +180,9 @@ async def get_publishing_targets(
 
     except Exception as e:
         logger.error(f"Failed to get publishing targets: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get targets: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get targets: {str(e)}"
+        ) from e
 
 
 @publishing_router.post("/targets/refresh")
@@ -222,7 +224,7 @@ async def refresh_publishing_targets(
 
     except Exception as e:
         logger.error(f"Failed to refresh publishing targets: {e}")
-        raise HTTPException(status_code=500, detail=f"Refresh failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Refresh failed: {str(e)}") from e
 
 
 @publishing_router.get("/mode", response_model=PublishingModeInfo)
@@ -261,7 +263,9 @@ async def get_publishing_mode(
 
     except Exception as e:
         logger.error(f"Failed to get publishing mode: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get mode: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get mode: {str(e)}"
+        ) from e
 
 
 @publishing_router.get("/stats", response_model=PublishingStatsResponse)
@@ -347,7 +351,9 @@ async def get_publishing_stats(
 
     except Exception as e:
         logger.error(f"Failed to get publishing stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get stats: {str(e)}"
+        ) from e
 
 
 @publishing_router.post("/test/{target_name}", response_model=TestTargetResponse)
@@ -449,10 +455,10 @@ async def test_publishing_target(
         raise
     except Exception as e:
         logger.error(f"Failed to test target {target_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}") from e
 
 
-@publishing_router.get("/secrets/template", response_model=List[SecretTemplate])
+@publishing_router.get("/secrets/template", response_model=list[SecretTemplate])
 async def get_secret_templates():
     """
     Получить templates для создания Kubernetes secrets с publishing targets.
@@ -539,7 +545,7 @@ async def get_secret_templates():
         logger.error(f"Failed to generate secret templates: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to generate templates: {str(e)}"
-        )
+        ) from e
 
 
 @publishing_router.get("/health")

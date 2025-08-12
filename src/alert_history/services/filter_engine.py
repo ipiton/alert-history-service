@@ -15,7 +15,7 @@ import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Local imports
 from ..core.interfaces import (
@@ -44,7 +44,7 @@ class FilterRule:
 
     name: str
     action: FilterAction
-    conditions: Dict[str, Any]
+    conditions: dict[str, Any]
     priority: int = 100  # Lower number = higher priority
     enabled: bool = True
 
@@ -71,18 +71,18 @@ class AlertFilterEngine(IFilterEngine):
 
     def __init__(self):
         """Initialize filter engine."""
-        self.global_rules: List[FilterRule] = []
-        self.target_specific_rules: Dict[str, List[FilterRule]] = {}
+        self.global_rules: list[FilterRule] = []
+        self.target_specific_rules: dict[str, list[FilterRule]] = {}
 
         # Deduplication tracking
-        self._recent_alerts: Dict[str, float] = {}  # fingerprint -> last_seen_time
+        self._recent_alerts: dict[str, float] = {}  # fingerprint -> last_seen_time
         self._dedup_window = 300.0  # 5 minutes default
 
         # Rate limiting tracking
-        self._rate_limit_counters: Dict[str, Dict[str, int]] = (
+        self._rate_limit_counters: dict[str, dict[str, int]] = (
             {}
         )  # target -> {window: count}
-        self._rate_limit_windows: Dict[str, float] = {}  # target -> window_start_time
+        self._rate_limit_windows: dict[str, float] = {}  # target -> window_start_time
 
         self._setup_default_rules()
 
@@ -229,7 +229,7 @@ class AlertFilterEngine(IFilterEngine):
     ) -> bool:
         """Проверить фильтры из конфигурации target."""
         alert = enriched_alert.alert
-        classification = enriched_alert.classification
+        # classification = enriched_alert.classification  # Available for future use
         filter_config = target.filter_config or {}
 
         # Severity filter
@@ -276,11 +276,11 @@ class AlertFilterEngine(IFilterEngine):
         return True
 
     def _apply_rules(
-        self, enriched_alert: EnrichedAlert, rules: List[FilterRule]
+        self, enriched_alert: EnrichedAlert, rules: list[FilterRule]
     ) -> FilterAction:
         """Применить список правил к алерту."""
         alert = enriched_alert.alert
-        classification = enriched_alert.classification
+        # classification = enriched_alert.classification  # Available for future use
 
         for rule in rules:
             if not rule.enabled:
@@ -299,11 +299,11 @@ class AlertFilterEngine(IFilterEngine):
         return FilterAction.ALLOW
 
     def _evaluate_rule_conditions(
-        self, enriched_alert: EnrichedAlert, conditions: Dict[str, Any]
+        self, enriched_alert: EnrichedAlert, conditions: dict[str, Any]
     ) -> bool:
         """Оценить условия правила."""
         alert = enriched_alert.alert
-        classification = enriched_alert.classification
+        # classification = enriched_alert.classification  # Available for future use
 
         for condition_key, condition_value in conditions.items():
 
@@ -506,7 +506,7 @@ class AlertFilterEngine(IFilterEngine):
 
         return False
 
-    def get_filter_stats(self) -> Dict[str, Any]:
+    def get_filter_stats(self) -> dict[str, Any]:
         """Получить статистику фильтрации."""
         current_time = time.time()
 

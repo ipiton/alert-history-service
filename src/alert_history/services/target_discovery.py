@@ -13,7 +13,7 @@ import asyncio
 import base64
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Optional
 
 try:
     # Third-party imports
@@ -52,8 +52,8 @@ class TargetDiscoveryConfig:
     """Конфигурация для discovery targets."""
 
     enabled: bool = True
-    secret_labels: List[str] = None
-    secret_namespaces: List[str] = None
+    secret_labels: list[str] = None
+    secret_namespaces: list[str] = None
     config_refresh_interval: str = "300s"  # 5 minutes
 
     def __post_init__(self):
@@ -78,8 +78,8 @@ class DynamicTargetManager:
         """Initialize target manager."""
         self.config = discovery_config
         self.k8s_client: Optional[client.CoreV1Api] = None
-        self.current_targets: Dict[str, PublishingTarget] = {}
-        self.watched_secrets: Set[str] = set()
+        self.current_targets: dict[str, PublishingTarget] = {}
+        self.watched_secrets: set[str] = set()
         self.refresh_task: Optional[asyncio.Task] = None
         self._last_refresh_time = 0.0
 
@@ -204,7 +204,7 @@ class DynamicTargetManager:
         except Exception as e:
             logger.error(f"Failed to discover publishing targets: {e}")
 
-    async def _discover_targets_from_secrets(self) -> Dict[str, PublishingTarget]:
+    async def _discover_targets_from_secrets(self) -> dict[str, PublishingTarget]:
         """Обнаружение targets из Kubernetes secrets."""
         targets = {}
 
@@ -332,7 +332,7 @@ class DynamicTargetManager:
             )
             return None
 
-    def _extract_filter_config(self, data: Dict[str, str]) -> Dict[str, any]:
+    def _extract_filter_config(self, data: dict[str, str]) -> dict[str, any]:
         """Извлечение конфигурации фильтров из secret data."""
         filter_config = {}
 
@@ -371,7 +371,7 @@ class DynamicTargetManager:
 
         return filter_config
 
-    def get_active_targets(self) -> List[PublishingTarget]:
+    def get_active_targets(self) -> list[PublishingTarget]:
         """Получить все активные publishing targets."""
         return list(self.current_targets.values())
 
@@ -387,7 +387,7 @@ class DynamicTargetManager:
         """Проверить, работает ли сервис в режиме только метрик."""
         return len(self.current_targets) == 0
 
-    def get_discovery_stats(self) -> Dict[str, any]:
+    def get_discovery_stats(self) -> dict[str, any]:
         """Получить статистику discovery."""
         return {
             "enabled": self.config.enabled,

@@ -12,7 +12,7 @@ Stateless Application Manager для T1.4: Stateless Application Design.
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..core.interfaces import ICache
 from ..logging_config import get_logger
@@ -43,7 +43,7 @@ class StatelessManager:
         self.operation_ttl = operation_ttl
 
         # Track operations in this instance (for debugging only)
-        self._operation_registry: Dict[str, datetime] = {}
+        self._operation_registry: dict[str, datetime] = {}
 
         logger.info(
             "Stateless manager initialized",
@@ -253,14 +253,14 @@ class StatelessManager:
     # Cross-Instance Coordination
     # ===============================
 
-    async def get_active_instances(self) -> List[Dict[str, Any]]:
+    async def get_active_instances(self) -> list[dict[str, Any]]:
         """Get list of currently active instances."""
         if not self.redis_cache:
             return [{"instance_id": self.instance_id, "source": "local"}]
 
         try:
             # Heartbeat pattern - instances update their heartbeat every 30 seconds
-            heartbeat_pattern = "instance:heartbeat:*"
+            # heartbeat_pattern = "instance:heartbeat:*"  # Reserved for future use
 
             # This would require Redis SCAN command, simplified for now
             # In real implementation, we'd scan for heartbeat keys
@@ -311,7 +311,7 @@ class StatelessManager:
 
     def validate_stateless_operation(
         self, operation_name: str, **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Validate that operation can be performed statelessly.
 
@@ -387,7 +387,7 @@ class StatelessManager:
     # Monitoring and Statistics
     # ===============================
 
-    async def get_stateless_stats(self) -> Dict[str, Any]:
+    async def get_stateless_stats(self) -> dict[str, Any]:
         """Get statistics about stateless operations."""
         stats = {
             "instance_id": self.instance_id,
@@ -415,7 +415,7 @@ class StatelessManager:
 
         return stats
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Health check for stateless manager."""
         health = {
             "stateless_manager": "healthy",

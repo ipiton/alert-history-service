@@ -13,7 +13,7 @@ Common decorators to avoid code duplication:
 import asyncio
 import functools
 import time
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 # Local imports
 from ..core.interfaces import ICache, IMetricsCollector
@@ -88,7 +88,7 @@ def retry(
 def measure_time(
     metrics_collector: Optional[IMetricsCollector] = None,
     metric_name: Optional[str] = None,
-    labels: Optional[Dict[str, str]] = None,
+    labels: Optional[dict[str, str]] = None,
 ) -> Callable:
     """
     Decorator to measure execution time.
@@ -290,7 +290,7 @@ def rate_limit(
         time_window: Time window in seconds
         key_generator: Function to generate rate limit key
     """
-    call_history: Dict[str, list] = {}
+    call_history: dict[str, list] = {}
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         def generate_key(*args: Any, **kwargs: Any) -> str:

@@ -12,7 +12,7 @@ Implements proper shutdown sequence to ensure:
 import asyncio
 import time
 from collections.abc import Awaitable
-from typing import Callable, List
+from typing import Callable
 
 # Local imports
 from ..logging_config import get_logger
@@ -32,7 +32,7 @@ class GracefulShutdownHandler:
         """Initialize graceful shutdown handler."""
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_requested = False
-        self.shutdown_callbacks: List[Callable[[], Awaitable[None]]] = []
+        self.shutdown_callbacks: list[Callable[[], Awaitable[None]]] = []
         self._shutdown_event = asyncio.Event()
 
     def register_shutdown_callback(

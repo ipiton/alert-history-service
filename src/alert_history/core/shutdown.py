@@ -7,7 +7,7 @@ Implements proper SIGTERM handling for Kubernetes deployments.
 import asyncio
 import signal
 from contextlib import asynccontextmanager
-from typing import Callable, List
+from typing import Callable
 
 from ..logging_config import get_logger
 
@@ -25,7 +25,7 @@ class GracefulShutdownHandler:
         """
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_event = asyncio.Event()
-        self.cleanup_tasks: List[Callable] = []
+        self.cleanup_tasks: list[Callable] = []
         self.is_shutting_down = False
 
     def add_cleanup_task(self, task: Callable):

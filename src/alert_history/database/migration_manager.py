@@ -16,7 +16,7 @@ import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 # Local imports
@@ -109,7 +109,7 @@ class MigrationManager:
             logger.debug(f"No migration history found (first run?): {e}")
             return None
 
-    async def get_available_migrations(self) -> List[Dict[str, Any]]:
+    async def get_available_migrations(self) -> list[dict[str, Any]]:
         """Get list of available migration files."""
         migrations = []
 
@@ -190,7 +190,7 @@ class MigrationManager:
             logger.error(f"Schema migration failed: {e}")
             return False
 
-    async def _apply_single_migration(self, migration: Dict[str, Any]) -> bool:
+    async def _apply_single_migration(self, migration: dict[str, Any]) -> bool:
         """Apply a single migration."""
         try:
             start_time = time.time()
@@ -515,7 +515,7 @@ class MigrationManager:
     # Migration Status and Monitoring
     # ===============================
 
-    def get_migration_status(self) -> Dict[str, Any]:
+    def get_migration_status(self) -> dict[str, Any]:
         """Get current migration status."""
         status = self.migration_stats.copy()
 

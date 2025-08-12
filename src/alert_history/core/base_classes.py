@@ -13,7 +13,7 @@ import time
 from abc import ABC
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 # Local imports
 from .interfaces import (
@@ -94,7 +94,7 @@ class BaseService(ABC):
         pass
 
     def _record_metric(
-        self, name: str, value: float, labels: Optional[Dict[str, str]] = None
+        self, name: str, value: float, labels: Optional[dict[str, str]] = None
     ) -> None:
         """Record metric if metrics collector is available."""
         if self.metrics:
@@ -169,13 +169,13 @@ class BaseHealthChecker(IHealthChecker):
         self.service_name = service_name
         self.version = version
         self.startup_time = time.time()
-        self._dependencies: List[IHealthChecker] = []
+        self._dependencies: list[IHealthChecker] = []
 
     def add_dependency(self, dependency: IHealthChecker) -> None:
         """Add dependency health checker."""
         self._dependencies.append(dependency)
 
-    async def check_health(self) -> Dict[str, Any]:
+    async def check_health(self) -> dict[str, Any]:
         """Perform comprehensive health check."""
         health_status = {
             "service": self.service_name,
@@ -210,7 +210,7 @@ class BaseHealthChecker(IHealthChecker):
 
         return health_status
 
-    async def check_readiness(self) -> Dict[str, Any]:
+    async def check_readiness(self) -> dict[str, Any]:
         """Perform readiness check."""
         readiness_status = {
             "service": self.service_name,
@@ -231,11 +231,11 @@ class BaseHealthChecker(IHealthChecker):
 
         return readiness_status
 
-    async def _check_self_health(self) -> Dict[str, Any]:
+    async def _check_self_health(self) -> dict[str, Any]:
         """Override in subclasses for specific health checks."""
         return {"status": "healthy"}
 
-    async def _check_readiness(self) -> Dict[str, Any]:
+    async def _check_readiness(self) -> dict[str, Any]:
         """Override in subclasses for specific readiness checks."""
         return {"ready": True}
 
@@ -302,7 +302,7 @@ class BasePublishingService(BaseService):
         self.retry_delay = retry_delay
 
     async def publish_with_retry(
-        self, enriched_alert: EnrichedAlert, target_config: Dict[str, Any]
+        self, enriched_alert: EnrichedAlert, target_config: dict[str, Any]
     ) -> bool:
         """Publish alert with retry logic (Template Method)."""
         last_exception = None
@@ -334,7 +334,7 @@ class BasePublishingService(BaseService):
         return False
 
     async def _perform_publish(
-        self, enriched_alert: EnrichedAlert, target_config: Dict[str, Any]
+        self, enriched_alert: EnrichedAlert, target_config: dict[str, Any]
     ) -> bool:
         """Override in subclasses for actual publishing logic."""
         raise NotImplementedError
@@ -381,7 +381,7 @@ class BaseEventProcessor(BaseService):
             except asyncio.CancelledError:
                 pass
 
-    async def submit_event(self, event_data: Dict[str, Any]) -> None:
+    async def submit_event(self, event_data: dict[str, Any]) -> None:
         """Submit event for processing."""
         await self._event_queue.put(event_data)
         self._record_metric("events_submitted", 1)
@@ -412,7 +412,7 @@ class BaseEventProcessor(BaseService):
                 self._record_metric("event_processing_errors", 1)
                 await asyncio.sleep(1)  # Brief pause before retrying
 
-    async def _process_event_batch(self, events: List[Dict[str, Any]]) -> None:
+    async def _process_event_batch(self, events: list[dict[str, Any]]) -> None:
         """Process batch of events."""
         async with self._timed_operation("event_batch_processing"):
             for event in events:
@@ -422,6 +422,6 @@ class BaseEventProcessor(BaseService):
                 except Exception:
                     self._record_metric("events_processed_failure", 1)
 
-    async def _process_single_event(self, event_data: Dict[str, Any]) -> None:
+    async def _process_single_event(self, event_data: dict[str, Any]) -> None:
         """Override in subclasses for actual event processing."""
         raise NotImplementedError

@@ -13,7 +13,7 @@ import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Local imports
 from ..core.interfaces import Alert, AlertStatus, ClassificationResult, IAlertStorage
@@ -162,8 +162,8 @@ class SQLiteLegacyStorage(IAlertStorage):
             return None
 
     async def get_alerts(
-        self, filters: Dict[str, Any], limit: int = 100, offset: int = 0
-    ) -> List[Alert]:
+        self, filters: dict[str, Any], limit: int = 100, offset: int = 0
+    ) -> list[Alert]:
         """Get alerts with filters using legacy database (same logic as original)."""
         try:
             with self._lock:
@@ -400,7 +400,7 @@ class SQLiteLegacyStorage(IAlertStorage):
             print(f"Error getting classification: {e}")
             return None
 
-    def get_database_stats(self) -> Dict[str, Any]:
+    def get_database_stats(self) -> dict[str, Any]:
         """Get database statistics for monitoring."""
         try:
             with self._lock:
@@ -453,7 +453,7 @@ class SQLiteCompatibilityLayer:
         self.postgres_storage = postgres_storage
         self._migration_mode = postgres_storage is not None
 
-    async def migrate_to_postgres(self, batch_size: int = 1000) -> Dict[str, int]:
+    async def migrate_to_postgres(self, batch_size: int = 1000) -> dict[str, int]:
         """Migrate data from SQLite to PostgreSQL."""
         if not self.postgres_storage:
             raise ValueError("PostgreSQL storage not configured")

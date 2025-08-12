@@ -8,7 +8,7 @@ Endpoints:
 
 # Standard library imports
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -34,7 +34,7 @@ webhook_router = APIRouter(prefix="/webhook", tags=["Webhook"])
 class WebhookAlertRequest(BaseModel):
     """Request model для webhook alerts."""
 
-    alerts: List[Dict[str, Any]]
+    alerts: list[dict[str, Any]]
     receiver: str = "default"
     status: str = "firing"
     externalURL: Optional[str] = None
@@ -50,8 +50,8 @@ class ProxyWebhookResponse(BaseModel):
     processed_alerts: int
     published_alerts: int
     filtered_alerts: int
-    classification_results: Optional[Dict[str, Any]] = None
-    publishing_results: Optional[Dict[str, Any]] = None
+    classification_results: Optional[dict[str, Any]] = None
+    publishing_results: Optional[dict[str, Any]] = None
     metrics_only_mode: bool = False
     processing_time_ms: int
 
@@ -132,7 +132,7 @@ async def get_metrics() -> LegacyMetrics:
     return app_state.metrics
 
 
-@webhook_router.post("/", response_model=Dict[str, Any])
+@webhook_router.post("/", response_model=dict[str, Any])
 async def legacy_webhook(
     webhook_data: WebhookAlertRequest,
     background_tasks: BackgroundTasks,
@@ -173,7 +173,7 @@ async def legacy_webhook(
         logger.error(f"Legacy webhook processing failed: {e}")
         raise HTTPException(
             status_code=500, detail=f"Webhook processing failed: {str(e)}"
-        )
+        ) from e
 
 
 @webhook_router.post("/proxy", response_model=ProxyWebhookResponse)
@@ -414,7 +414,7 @@ async def intelligent_proxy_webhook(
         logger.error(f"Intelligent proxy webhook processing failed: {e}")
         raise HTTPException(
             status_code=500, detail=f"Intelligent proxy processing failed: {str(e)}"
-        )
+        ) from e
 
 
 @webhook_router.get("/health")

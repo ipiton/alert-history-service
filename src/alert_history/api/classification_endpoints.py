@@ -9,7 +9,7 @@ API endpoints для работы с классификацией алертов
 """
 
 # Standard library imports
-from typing import List, Optional
+from typing import Optional
 
 # Third-party imports
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -32,7 +32,7 @@ class ClassificationResponse(BaseModel):
     severity: str
     confidence: float
     reasoning: str
-    recommendations: List[str]
+    recommendations: list[str]
     processing_time: float
     metadata: Optional[dict] = None
     cached: bool = False
@@ -57,7 +57,7 @@ class ClassificationResponse(BaseModel):
 class BulkClassificationRequest(BaseModel):
     """Request model для массовой классификации."""
 
-    fingerprints: List[str] = Field(..., min_items=1, max_items=50)
+    fingerprints: list[str] = Field(..., min_items=1, max_items=50)
     force_refresh: bool = False
     include_recommendations: bool = True
 
@@ -65,9 +65,9 @@ class BulkClassificationRequest(BaseModel):
 class BulkClassificationResponse(BaseModel):
     """Response model для массовой классификации."""
 
-    results: List[ClassificationResponse]
+    results: list[ClassificationResponse]
     total_processed: int
-    errors: List[dict]
+    errors: list[dict]
     processing_time: float
 
 
@@ -163,7 +163,7 @@ async def get_classification(
             status_code=500,
             processing_time=performance_logger._get_current_time() - start_time,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -225,7 +225,7 @@ async def refresh_classification(
             status_code=500,
             processing_time=performance_logger._get_current_time() - start_time,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -330,7 +330,7 @@ async def bulk_classification(
             status_code=500,
             processing_time=performance_logger._get_current_time() - start_time,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(
@@ -367,7 +367,7 @@ async def get_classification_stats(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(

@@ -11,7 +11,7 @@ Webhook processor с интеграцией LLM классификации.
 # Standard library imports
 import asyncio
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Local imports
 from ..api.metrics import LegacyMetrics
@@ -57,7 +57,7 @@ class WebhookProcessor:
             "storage_failures": 0,
         }
 
-    async def process_webhook(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_webhook(self, webhook_data: dict[str, Any]) -> dict[str, Any]:
         """
         Обработать webhook данные от Alertmanager.
 
@@ -227,7 +227,7 @@ class WebhookProcessor:
             self.stats["classification_failures"] += 1
             return False
 
-    def _convert_webhook_to_alert(self, alert_data: Dict[str, Any]) -> Alert:
+    def _convert_webhook_to_alert(self, alert_data: dict[str, Any]) -> Alert:
         """Convert webhook alert data to internal Alert format."""
         # Extract required fields
         labels = alert_data.get("labels", {})
@@ -260,7 +260,7 @@ class WebhookProcessor:
             generator_url=alert_data.get("generatorURL"),
         )
 
-    def get_processing_stats(self) -> Dict[str, Any]:
+    def get_processing_stats(self) -> dict[str, Any]:
         """Получить статистику обработки webhook."""
         return self.stats.copy()
 

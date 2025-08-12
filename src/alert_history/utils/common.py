@@ -13,11 +13,11 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
 
-def generate_fingerprint(data: Union[Dict[str, Any], str]) -> str:
+def generate_fingerprint(data: Union[dict[str, Any], str]) -> str:
     """
     Generate consistent fingerprint for data.
 
@@ -83,7 +83,7 @@ def sanitize_label_value(value: str) -> str:
     return sanitized
 
 
-def normalize_alert_labels(labels: Dict[str, str]) -> Dict[str, str]:
+def normalize_alert_labels(labels: dict[str, str]) -> dict[str, str]:
     """
     Normalize alert labels for consistent processing.
 
@@ -237,7 +237,7 @@ def validate_url(url: str) -> bool:
         return False
 
 
-def deep_merge_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
+def deep_merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge two dictionaries.
 
@@ -259,7 +259,7 @@ def deep_merge_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, 
     return result
 
 
-def extract_namespace_from_labels(labels: Dict[str, str]) -> Optional[str]:
+def extract_namespace_from_labels(labels: dict[str, str]) -> Optional[str]:
     """
     Extract namespace from alert labels.
 
@@ -279,7 +279,7 @@ def extract_namespace_from_labels(labels: Dict[str, str]) -> Optional[str]:
     return None
 
 
-def extract_service_from_labels(labels: Dict[str, str]) -> Optional[str]:
+def extract_service_from_labels(labels: dict[str, str]) -> Optional[str]:
     """
     Extract service name from alert labels.
 
@@ -300,7 +300,7 @@ def extract_service_from_labels(labels: Dict[str, str]) -> Optional[str]:
 
 
 def calculate_confidence_score(
-    classification_factors: Dict[str, float], weights: Optional[Dict[str, float]] = None
+    classification_factors: dict[str, float], weights: Optional[dict[str, float]] = None
 ) -> float:
     """
     Calculate confidence score from multiple factors.
@@ -385,7 +385,7 @@ def safe_json_loads(json_str: str, default_value: Any = None) -> Any:
         return default_value
 
 
-def batch_items(items: List[Any], batch_size: int) -> List[List[Any]]:
+def batch_items(items: list[Any], batch_size: int) -> list[list[Any]]:
     """
     Split items into batches.
 
@@ -407,8 +407,8 @@ def batch_items(items: List[Any], batch_size: int) -> List[List[Any]]:
 
 
 def flatten_dict(
-    data: Dict[str, Any], separator: str = ".", prefix: str = ""
-) -> Dict[str, Any]:
+    data: dict[str, Any], separator: str = ".", prefix: str = ""
+) -> dict[str, Any]:
     """
     Flatten nested dictionary.
 

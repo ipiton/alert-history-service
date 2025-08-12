@@ -15,7 +15,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party imports
 import aioredis
@@ -199,7 +199,7 @@ class RedisCache(ICache):
             logger.warning(f"Cache exists error for key {key}: {e}")
             return False
 
-    async def get_many(self, keys: List[str]) -> Dict[str, Any]:
+    async def get_many(self, keys: list[str]) -> dict[str, Any]:
         """Get multiple values from cache."""
         if not self._initialized:
             await self.initialize()
@@ -238,7 +238,7 @@ class RedisCache(ICache):
             logger.warning(f"Cache mget error: {e}")
             return {}
 
-    async def set_many(self, items: Dict[str, Any], ttl: Optional[int] = None) -> bool:
+    async def set_many(self, items: dict[str, Any], ttl: Optional[int] = None) -> bool:
         """Set multiple values in cache."""
         if not self._initialized:
             await self.initialize()
@@ -433,7 +433,7 @@ class RedisCache(ICache):
     # ===============================
 
     async def create_session(
-        self, session_id: str, data: Dict[str, Any], ttl: int = 3600
+        self, session_id: str, data: dict[str, Any], ttl: int = 3600
     ) -> bool:
         """Create or update session data."""
         session_key = f"session:{session_id}"
@@ -446,7 +446,7 @@ class RedisCache(ICache):
 
         return await self.set(session_key, session_data, ttl)
 
-    async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session(self, session_id: str) -> Optional[dict[str, Any]]:
         """Get session data."""
         session_key = f"session:{session_id}"
 
@@ -470,7 +470,7 @@ class RedisCache(ICache):
     # Monitoring and Statistics
     # ===============================
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         if not self._initialized:
             await self.initialize()
@@ -507,7 +507,7 @@ class RedisCache(ICache):
                 "error": str(e),
             }
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Health check for Redis connection."""
         try:
             start_time = time.time()

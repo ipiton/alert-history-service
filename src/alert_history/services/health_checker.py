@@ -6,7 +6,6 @@ Health checker для проверки состояния всех внешни�
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict
 
 import aioredis
 import asyncpg
@@ -24,7 +23,7 @@ class HealthChecker:
     def __init__(self):
         self.config = get_config()
 
-    async def check_database_health(self) -> Dict[str, any]:
+    async def check_database_health(self) -> dict[str, any]:
         """Проверка состояния базы данных."""
         start_time = time.time()
         result = {
@@ -82,7 +81,7 @@ class HealthChecker:
         result["response_time_ms"] = round((time.time() - start_time) * 1000, 2)
         return result
 
-    async def check_redis_health(self) -> Dict[str, any]:
+    async def check_redis_health(self) -> dict[str, any]:
         """Проверка состояния Redis/KeyDB."""
         start_time = time.time()
         result = {
@@ -134,7 +133,7 @@ class HealthChecker:
         result["response_time_ms"] = round((time.time() - start_time) * 1000, 2)
         return result
 
-    async def check_llm_proxy_health(self) -> Dict[str, any]:
+    async def check_llm_proxy_health(self) -> dict[str, any]:
         """Проверка состояния LLM proxy (если настроен)."""
         start_time = time.time()
         result = {
@@ -180,7 +179,7 @@ class HealthChecker:
         result["response_time_ms"] = round((time.time() - start_time) * 1000, 2)
         return result
 
-    async def check_overall_health(self) -> Dict[str, any]:
+    async def check_overall_health(self) -> dict[str, any]:
         """Полная проверка состояния всех компонентов."""
         start_time = time.time()
 

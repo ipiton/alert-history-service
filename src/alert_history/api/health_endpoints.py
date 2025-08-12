@@ -51,7 +51,7 @@ async def liveness_probe():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Liveness check failed",
-        )
+        ) from e
 
 
 @health_router.get("/readiness")
@@ -100,7 +100,7 @@ async def readiness_probe():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Readiness check failed",
-        )
+        ) from e
 
 
 @health_router.get("/detailed")
@@ -128,7 +128,7 @@ async def detailed_health():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Health check failed",
-        )
+        ) from e
 
 
 @health_router.get("/database")
@@ -151,7 +151,7 @@ async def database_health():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database health check failed",
-        )
+        ) from e
 
 
 @health_router.get("/cache")
@@ -174,7 +174,7 @@ async def cache_health():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Cache health check failed",
-        )
+        ) from e
 
 
 @health_router.get("/llm")
@@ -197,4 +197,4 @@ async def llm_health():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="LLM health check failed",
-        )
+        ) from e
