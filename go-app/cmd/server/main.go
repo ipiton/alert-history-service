@@ -1,3 +1,4 @@
+// Package main is the entry point for Alert History Service.
 package main
 
 func main() {

@@ -42,7 +42,7 @@ test-coverage:
 # Run linter (requires golangci-lint to be installed)
 lint:
 	@echo "Running linter..."
-	golangci-lint run
+	$(shell go env GOPATH)/bin/golangci-lint run
 
 # Format code
 fmt:

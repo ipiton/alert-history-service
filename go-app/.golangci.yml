@@ -1,0 +1,103 @@
+run:
+  go: '1.21'
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    # Security
+    - gosec
+
+    # Error handling
+    - errcheck
+    - err113
+
+    # Code quality
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Style
+    - gofmt
+    - goimports
+    - misspell
+    - whitespace
+
+    # Complexity
+    - gocyclo
+    - funlen
+    - nestif
+
+    # Best practices
+    - revive
+    - gocritic
+    - godot
+    - mnd
+
+  disable: []
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+
+  funlen:
+    lines: 100
+    statements: 50
+
+  nestif:
+    min-complexity: 4
+
+  mnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+    ignored-numbers:
+      - '0666'
+      - '0755'
+      - '42'
+    ignored-files:
+      - 'magic_.*.go'
+    ignored-functions:
+      - 'math.*'
+      - 'http.StatusText'
+      - 'http.Method.*'
+
+  revive:
+    min-confidence: 0
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+        arguments:
+          - "disableStutteringCheck"
+      - name: package-comments
+        severity: warning
+        disabled: false
+
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G404 # Use of weak random number generator
+      - G501 # Import blacklist: crypto/md5
+      - G502 # Import blacklist: crypto/des
+      - G505 # Import blacklist: crypto/sha1
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - gocyclo
+        - funlen
+        - gomnd
+
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
