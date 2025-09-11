@@ -11,6 +11,51 @@
 
 **GitHub Repository:** [https://github.com/ipiton/alert-history-service.git](https://github.com/ipiton/alert-history-service.git)
 
+## 🔄 Go Version (Beta)
+
+⚠️ **Go версия находится в активной разработке.** Python версия остается основной для production использования.
+
+### Быстрый старт с Go
+
+```bash
+# Перейти в Go директорию
+cd go-app
+
+# Установить зависимости и собрать
+make deps && make build
+
+# Запустить приложение
+make run
+
+# Health check
+curl http://localhost:8080/healthz
+```
+
+### Docker (рекомендуемый способ)
+
+```bash
+cd go-app
+
+# Собрать образ
+make docker-build
+
+# Запустить контейнер
+make docker-run
+
+# Проверить health
+curl http://localhost:8080/healthz
+```
+
+### Особенности Go версии
+- ✅ **Multi-stage Docker build** (< 10MB образ)
+- ✅ **Structured logging** в JSON формате
+- ✅ **Graceful shutdown** с таймаутами
+- ✅ **Health checks** для Kubernetes
+- ✅ **Static binary** без зависимостей
+- ✅ **Production-ready** containerization
+
+📖 **[Подробная документация Go версии](go-app/README.md)**
+
 ---
 
 ## ✨ Основные возможности
@@ -334,6 +379,65 @@ black src/
 flake8 src/
 mypy src/
 ```
+
+---
+
+## 🔄 Go Migration Progress
+
+### ФАЗА 1: Infrastructure Foundation ✅ **87.5% Complete**
+
+| Task | Status | Description |
+|------|--------|-------------|
+| TN-01 | ✅ | Go module initialization |
+| TN-02 | ✅ | Directory structure setup |
+| TN-03 | ✅ | Makefile with development tools |
+| TN-04 | ✅ | golangci-lint configuration |
+| TN-05 | ✅ | GitHub Actions CI/CD pipeline |
+| TN-06 | ✅ | HTTP server with /healthz endpoint |
+| TN-07 | ✅ | Multi-stage Dockerfile (< 10MB) |
+| TN-08 | 🔄 | **README documentation** (Current) |
+
+### ФАЗА 2: Data Layer (Documented)
+
+- Database connections (PostgreSQL, Redis, SQLite)
+- Migration system
+- ORM/Driver evaluation (pgx vs GORM)
+- Connection pooling
+- Health checks for databases
+
+### ФАЗА 3: Core Services
+
+- Configuration management (Viper)
+- Structured logging (slog)
+- HTTP framework evaluation (Fiber vs Gin)
+- Middleware stack (CORS, logging, metrics)
+- Error handling patterns
+
+### ФАЗА 4: Business Logic
+
+- Alert processing pipeline
+- LLM integration (HTTP client)
+- Publishing system (Rootly, PagerDuty, Slack)
+- Target discovery (Kubernetes)
+- Alert filtering engine
+
+### Особенности Go версии
+
+#### Преимущества миграции:
+- 🚀 **Performance**: 2-5x faster than Python
+- 📦 **Deployment**: Single static binary
+- 🔒 **Security**: Minimal attack surface
+- 🎯 **Resource usage**: Lower memory footprint
+- ⚡ **Startup time**: Near-instant cold starts
+- 🏗️ **Maintainability**: Strong typing, better tooling
+
+#### Архитектура:
+- **Hexagonal Architecture** (Ports & Adapters)
+- **Dependency Injection** (Google Wire)
+- **Clean Architecture** principles
+- **12-Factor App** compliance
+
+📁 **[Детальная документация по задачам](tasks/go-migration-analysis/)**
 
 ---
 
