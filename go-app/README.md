@@ -54,17 +54,54 @@ Library code that's OK to use by external applications. Other projects will impo
 
 ### Building
 ```bash
+# Using Go directly
 go build ./cmd/server
+
+# Using Makefile (recommended)
+make build
 ```
 
 ### Running
 ```bash
+# Using Go directly
 go run ./cmd/server
+
+# Using Makefile
+make run
+
+# Development mode with hot reload (requires air)
+make dev
 ```
 
 ### Testing
 ```bash
+# Basic tests
 go test ./...
+make test
+
+# With coverage report
+make test-coverage
+```
+
+### Development Commands
+```bash
+# Format code
+make fmt
+
+# Run linter (requires golangci-lint)
+make lint
+
+# Run static analysis
+make vet
+
+# Clean build artifacts
+make clean
+
+# Install development tools
+make install-tools
+
+# Show all available commands
+make help
 ```
 
 ## Architecture Principles
