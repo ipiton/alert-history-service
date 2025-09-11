@@ -1,0 +1,8 @@
+Running 30s test @ http://localhost:8080/api/alerts
+  4 threads and 200 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    44.96ms   50.69ms 337.12ms   80.98%
+    Req/Sec     1.98k     0.92k    4.14k    62.34%
+  223842 requests in 30.08s, 135.55MB read
+Requests/sec:   7442.11
+Transfer/sec:      4.51MB

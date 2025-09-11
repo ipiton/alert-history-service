@@ -15,14 +15,14 @@ import (
 
 // Alert represents an alert structure for database operations
 type Alert struct {
-	ID          int                    `json:"id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Severity    string                 `json:"severity"`
-	Status      string                 `json:"status"`
-	Labels      map[string]string      `json:"labels"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          int               `json:"id"`
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Severity    string            `json:"severity"`
+	Status      string            `json:"status"`
+	Labels      map[string]string `json:"labels"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 var db *pgxpool.Pool
@@ -249,7 +249,7 @@ func bulkInsertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"message":         "Bulk insert completed",
+		"message":        "Bulk insert completed",
 		"inserted_count": insertedCount,
 	}
 

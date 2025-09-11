@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,12 +16,35 @@ import (
 )
 
 const (
-	defaultPort = "8080"
-	serviceName = "alert-history"
+	defaultPort    = "8080"
+	serviceName    = "alert-history"
 	serviceVersion = "1.0.0"
 )
 
 func main() {
+	// Parse command line flags
+	var showVersion = flag.Bool("version", false, "Show version information")
+	var showHelp = flag.Bool("help", false, "Show help information")
+	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("%s version %s\n", serviceName, serviceVersion)
+		os.Exit(0)
+	}
+
+	// Handle help flag
+	if *showHelp {
+		fmt.Printf("Alert History Service - Intelligent Alert Proxy\n\n")
+		fmt.Printf("Usage: %s [options]\n\n", os.Args[0])
+		fmt.Printf("Options:\n")
+		fmt.Printf("  -version    Show version information\n")
+		fmt.Printf("  -help       Show this help message\n\n")
+		fmt.Printf("Environment variables:\n")
+		fmt.Printf("  PORT        HTTP server port (default: %s)\n\n", defaultPort)
+		os.Exit(0)
+	}
+
 	// Configure structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,

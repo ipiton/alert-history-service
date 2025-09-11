@@ -15,14 +15,14 @@ import (
 
 // Alert represents an alert structure for GORM
 type Alert struct {
-	ID          uint                   `json:"id" gorm:"primaryKey"`
-	Title       string                 `json:"title" gorm:"size:255;not null"`
-	Description string                 `json:"description" gorm:"type:text"`
-	Severity    string                 `json:"severity" gorm:"size:20;not null"`
-	Status      string                 `json:"status" gorm:"size:20;not null;default:'active'"`
-	Labels      map[string]string      `json:"labels" gorm:"type:jsonb"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          uint              `json:"id" gorm:"primaryKey"`
+	Title       string            `json:"title" gorm:"size:255;not null"`
+	Description string            `json:"description" gorm:"type:text"`
+	Severity    string            `json:"severity" gorm:"size:20;not null"`
+	Status      string            `json:"status" gorm:"size:20;not null;default:'active'"`
+	Labels      map[string]string `json:"labels" gorm:"type:jsonb"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 var db *gorm.DB
@@ -196,7 +196,7 @@ func bulkInsertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"message":         "Bulk insert completed",
+		"message":        "Bulk insert completed",
 		"inserted_count": insertedCount,
 	}
 

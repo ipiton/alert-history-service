@@ -13,14 +13,14 @@ import (
 
 // Alert represents an alert structure
 type Alert struct {
-	ID          int                    `json:"id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Severity    string                 `json:"severity"`
-	Status      string                 `json:"status"`
-	Labels      map[string]string      `json:"labels"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          int               `json:"id"`
+	Title       string            `json:"title"`
+	Description string            `json:"description"`
+	Severity    string            `json:"severity"`
+	Status      string            `json:"status"`
+	Labels      map[string]string `json:"labels"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 // CreateAlertRequest represents alert creation request

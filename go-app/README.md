@@ -246,10 +246,11 @@ make docker-clean
 ### Docker Image Details
 
 - **Base Image**: `golang:1.21-alpine` (build) → `scratch` (runtime)
-- **Size**: < 10MB final image
-- **Architecture**: Linux x86_64
+- **Size**: < 10MB final image (< 15MB with multi-arch manifest)
+- **Architecture**: Linux AMD64 + ARM64 (multi-platform support)
 - **Security**: Non-root user, minimal attack surface
 - **Health Check**: Application self-test every 30s
+- **Build Tools**: Docker Buildx, Docker Bake, Docker Compose
 
 ### Custom Build
 
@@ -263,6 +264,35 @@ docker run -p 9090:8080 my-alert-history:latest
 # Run with environment variables
 docker run -e PORT=9090 -p 9090:9090 my-alert-history:latest
 ```
+
+### Multi-Architecture Builds
+
+```bash
+# Build for AMD64 and ARM64 with push to registry
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ipiton/alert-history-llm:1.1.3 \
+  . --push
+
+# Using Docker Bake (advanced)
+make bake-build
+
+# Using Docker Compose
+make compose-build
+
+# Development multi-arch build
+make bake-dev
+```
+
+#### Supported Platforms
+- ✅ **linux/amd64** - Intel/AMD 64-bit
+- ✅ **linux/arm64** - ARM 64-bit (Apple Silicon, AWS Graviton, etc.)
+- 🚧 **linux/arm/v7** - ARM 32-bit (future support)
+
+#### Build Tools
+- **Docker Buildx**: Native multi-platform builds
+- **Docker Bake**: Advanced build orchestration
+- **Docker Compose**: Multi-service development
+- **GitHub Actions**: CI/CD multi-platform builds
 
 ## Configuration
 
