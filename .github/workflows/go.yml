@@ -19,6 +19,8 @@ jobs:
     strategy:
       matrix:
         go-version: [1.21.x, 1.22.x, 1.23.x]
+    env:
+      DATABASE_URL: postgres://postgres:test@localhost:5432/testdb?sslmode=disable
 
     services:
       postgres:
@@ -64,6 +66,19 @@ jobs:
     - name: Verify dependencies
       working-directory: go-app
       run: go mod verify
+
+    - name: Install goose (database migration tool)
+      run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+    - name: Run database migrations
+      working-directory: go-app
+      run: |
+        if [ -d "migrations" ]; then
+          goose -dir migrations postgres "$DATABASE_URL" up
+          echo "Migrations applied successfully"
+        else
+          echo "No migrations directory found, skipping migrations"
+        fi
 
     - name: Run tests
       working-directory: go-app
