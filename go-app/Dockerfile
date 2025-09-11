@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
 
 # Install ca-certificates (needed for HTTPS)
 RUN apk add --no-cache ca-certificates
@@ -15,8 +15,9 @@ RUN go mod download && go mod verify
 # Copy source code
 COPY . .
 
-# Build the binary with optimizations
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the binary with optimizations for target platform
+ARG TARGETOS TARGETARCH
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -a \
     -installsuffix cgo \
     -ldflags="-w -s -extldflags '-static'" \
