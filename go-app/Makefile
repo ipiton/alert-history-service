@@ -105,22 +105,66 @@ migrate-down:
 	@echo "Running migrations down..."
 	goose -dir migrations postgres "$(DATABASE_URL)" down
 
+# Docker commands
+docker-build:
+	@echo "Building Docker image..."
+	docker build -t alert-history:latest .
+	@echo "Docker image built successfully"
+
+docker-run:
+	@echo "Running Docker container..."
+	docker run -p 8080:8080 --rm alert-history:latest
+
+docker-run-detached:
+	@echo "Running Docker container in background..."
+	docker run -d -p 8080:8080 --name alert-history alert-history:latest
+	@echo "Container started. Use 'make docker-stop' to stop it"
+
+docker-stop:
+	@echo "Stopping Docker container..."
+	docker stop alert-history || true
+	docker rm alert-history || true
+	@echo "Container stopped"
+
+docker-logs:
+	@echo "Showing Docker container logs..."
+	docker logs alert-history
+
+docker-clean:
+	@echo "Cleaning Docker images..."
+	docker rmi alert-history:latest || true
+	@echo "Docker images cleaned"
+
+docker-health-check:
+	@echo "Checking container health..."
+	@timeout 10 docker exec alert-history /server --version || echo "Container health check failed"
+	@echo "Health check complete"
+
 # Show available commands
 help:
 	@echo "Available commands:"
-	@echo "  build         - Build the application"
-	@echo "  build-linux   - Build for Linux (Docker)"
-	@echo "  test          - Run tests"
-	@echo "  test-coverage - Run tests with coverage report"
-	@echo "  lint          - Run linter (requires golangci-lint)"
-	@echo "  fmt           - Format code"
-	@echo "  vet           - Run go vet"
-	@echo "  mod-tidy      - Tidy dependencies"
-	@echo "  deps          - Download dependencies"
-	@echo "  run           - Run the application"
-	@echo "  dev           - Run with hot reload (requires air)"
-	@echo "  clean         - Clean build artifacts"
-	@echo "  install-tools - Install development tools"
-	@echo "  migrate-create - Create new migration (requires goose)"
-	@echo "  migrate-up    - Run migrations up"
-	@echo "  migrate-down  - Run migrations down"
+	@echo "  build           - Build the application"
+	@echo "  build-linux     - Build for Linux (Docker)"
+	@echo "  test            - Run tests"
+	@echo "  test-coverage   - Run tests with coverage report"
+	@echo "  lint            - Run linter (requires golangci-lint)"
+	@echo "  fmt             - Format code"
+	@echo "  vet             - Run go vet"
+	@echo "  mod-tidy        - Tidy dependencies"
+	@echo "  deps            - Download dependencies"
+	@echo "  run             - Run the application"
+	@echo "  dev             - Run with hot reload (requires air)"
+	@echo "  clean           - Clean build artifacts"
+	@echo "  install-tools   - Install development tools"
+	@echo "  migrate-create  - Create new migration (requires goose)"
+	@echo "  migrate-up      - Run migrations up"
+	@echo "  migrate-down    - Run migrations down"
+	@echo ""
+	@echo "Docker commands:"
+	@echo "  docker-build        - Build Docker image"
+	@echo "  docker-run          - Run Docker container"
+	@echo "  docker-run-detached - Run container in background"
+	@echo "  docker-stop         - Stop running container"
+	@echo "  docker-logs         - Show container logs"
+	@echo "  docker-clean        - Remove Docker images"
+	@echo "  docker-health-check - Check container health"
