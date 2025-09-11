@@ -104,6 +104,40 @@ make install-tools
 make help
 ```
 
+## CI/CD
+
+### GitHub Actions
+The project uses GitHub Actions for continuous integration and delivery:
+
+- **Multi-version testing**: Go 1.21, 1.22, 1.23
+- **Database integration**: PostgreSQL and Redis services
+- **Comprehensive checks**: build, test, lint, security scan
+- **Coverage reporting**: Codecov integration
+- **Multi-platform builds**: Linux binaries for different architectures
+
+### Workflow Triggers
+- Push to `main`, `develop`, `feature/use-LLM` branches
+- Pull requests to these branches
+- Only when Go code changes (`go-app/**` or workflow files)
+
+### Available Jobs
+- **test**: Unit tests with race detection and coverage
+- **lint**: golangci-lint code quality checks
+- **build**: Multi-platform binary builds
+- **security**: Gosec security scanning with SARIF reports
+- **dependency-review**: Dependency vulnerability checks
+
+### Local Development
+```bash
+# Run local checks before pushing
+make test
+make lint
+make build
+
+# Or run all checks at once
+make test && make lint && make build
+```
+
 ## Architecture Principles
 
 This project follows:

@@ -1,6 +1,7 @@
 # Alert History Service - Intelligent Alert Proxy
 
 ![GitHub](https://img.shields.io/badge/GitHub-ipiton%2Falert--history--service-blue?logo=github)
+![Go CI](https://github.com/ipiton/alert-history-service/actions/workflows/go.yml/badge.svg)
 ![Docker](https://img.shields.io/badge/Docker-Supported-blue?logo=docker)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm%20Chart-blue?logo=kubernetes)
 ![LLM](https://img.shields.io/badge/LLM-Intelligent%20Classification-green?logo=openai)
@@ -79,7 +80,10 @@ curl http://localhost:8080/readyz
 curl http://localhost:8080/metrics
 
 # Dashboard
-open http://localhost:8080/dashboard/modern
+open http://localhost:8080/dashboard
+
+# API Documentation
+open http://localhost:8080/docs
 ```
 
 ---
@@ -87,8 +91,8 @@ open http://localhost:8080/dashboard/modern
 ## 🎛️ API Endpoints
 
 ### Core Endpoints
-- **POST /webhook** — legacy Alertmanager webhook
-- **POST /webhook/proxy** — intelligent proxy с classification & publishing
+- **POST /webhook** — universal webhook (auto-switches between legacy and intelligent modes)
+- **POST /webhook/proxy** — explicit intelligent proxy с classification & publishing
 - **GET /history** — alert history с advanced filtering
 - **GET /report** — analytics (top alerts, flapping, summary)
 
