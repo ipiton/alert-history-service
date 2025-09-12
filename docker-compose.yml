@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: alert-history-postgres
+    environment:
+      POSTGRES_DB: alerthistory
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./go-app/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d alerthistory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alert-history-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: alert-history-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alert-history-network
+
+  app:
+    build:
+      context: ./go-app
+      target: builder
+    container_name: alert-history-app
+    volumes:
+      - ./go-app:/app
+      - /app/vendor
+    environment:
+      # Database
+      DATABASE_URL: postgres://dev:dev@postgres:5432/alerthistory?sslmode=disable
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: alerthistory
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+
+      # Redis
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: dev
+      REDIS_DB: 0
+
+      # App
+      APP_PORT: 8080
+      APP_HOST: 0.0.0.0
+      LOG_LEVEL: debug
+      ENVIRONMENT: development
+
+      # Lock settings
+      LOCK_TTL: 30s
+      LOCK_MAX_RETRIES: 3
+      LOCK_RETRY_INTERVAL: 100ms
+      LOCK_ACQUIRE_TIMEOUT: 5s
+      LOCK_RELEASE_TIMEOUT: 2s
+      LOCK_VALUE_PREFIX: dev
+
+      # Cache settings
+      REDIS_POOL_SIZE: 10
+      REDIS_MIN_IDLE_CONNS: 5
+      REDIS_DIAL_TIMEOUT: 5s
+      REDIS_READ_TIMEOUT: 3s
+      REDIS_WRITE_TIMEOUT: 3s
+      REDIS_MAX_RETRIES: 3
+      REDIS_MIN_RETRY_BACKOFF: 100ms
+      REDIS_MAX_RETRY_BACKOFF: 500ms
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: air -c .air.toml
+    networks:
+      - alert-history-network
+    restart: unless-stopped
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: alert-history-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@alert-history.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - alert-history-network
+    profiles:
+      - tools
+
+  # Optional: Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: alert-history-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:dev
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - alert-history-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  alert-history-network:
+    driver: bridge

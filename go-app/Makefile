@@ -192,6 +192,9 @@ compose-build:
 	docker-compose build
 	@echo "Services built"
 
+# Include Docker Compose development commands
+include ../Makefile.docker
+
 # Bake commands (advanced multi-arch builds)
 bake-build:
 	@echo "Building with Docker Bake (multi-arch)..."

@@ -24,7 +24,7 @@
 - [x] **TN-15** Интегрировать миграции в CI ✅ **ЗАВЕРШЕНА**
 - [x] **TN-16** Обёртка Cache (go-redis v9) ✅ **ЗАВЕРШЕНА**
 - [x] **TN-17** Distributed lock с Redis ✅
-- [ ] **TN-18** Docker Compose для локального запуска
+- [x] **TN-18** Docker Compose для локального запуска ✅
 - [ ] **TN-19** Loader конфигурации (viper)
 - [ ] **TN-20** Structured logging (slog JSON)
 
