@@ -1,0 +1,308 @@
+# Makefile для управления миграциями базы данных
+# Использование: make -f Makefile.migrations <target>
+
+.PHONY: help migrate-up migrate-down migrate-status migrate-version migrate-create migrate-redo migrate-reset migrate-validate migrate-fix backup-create backup-list backup-cleanup health-check migrate-dry-run migrate-up-to migrate-down-by
+
+# Переменные по умолчанию
+MIGRATION_BINARY ?= ./bin/migrate
+MIGRATION_DRIVER ?= postgres
+MIGRATION_DSN ?= postgres://user:password@localhost:5432/alert_history?sslmode=disable
+MIGRATION_DIR ?= ./migrations
+MIGRATION_TABLE ?= goose_db_version
+
+# Цвета для вывода
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+BLUE := \033[0;34m
+NC := \033[0m # No Color
+
+# Помощь
+help:
+	@echo "$(BLUE)🐦 Goose Migration Management$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Migration Commands:$(NC)"
+	@echo "  $(GREEN)make migrate-up$(NC)           - Apply all pending migrations"
+	@echo "  $(GREEN)make migrate-down$(NC)         - Rollback all migrations"
+	@echo "  $(GREEN)make migrate-status$(NC)       - Show migration status"
+	@echo "  $(GREEN)make migrate-version$(NC)      - Show current migration version"
+	@echo "  $(GREEN)make migrate-create name=<name>$(NC) - Create new migration file"
+	@echo "  $(GREEN)make migrate-redo$(NC)          - Redo the last migration"
+	@echo "  $(GREEN)make migrate-reset$(NC)         - Reset all migrations (WARNING: DATA LOSS)"
+	@echo "  $(GREEN)make migrate-validate$(NC)      - Validate migration files"
+	@echo "  $(GREEN)make migrate-fix$(NC)           - Fix common migration issues"
+	@echo "  $(GREEN)make migrate-dry-run$(NC)       - Show what would be migrated (dry run)"
+	@echo ""
+	@echo "$(YELLOW)Backup Commands:$(NC)"
+	@echo "  $(GREEN)make backup-create$(NC)         - Create database backup"
+	@echo "  $(GREEN)make backup-list$(NC)           - List backup files"
+	@echo "  $(GREEN)make backup-cleanup$(NC)        - Clean up old backup files"
+	@echo ""
+	@echo "$(YELLOW)Health Check:$(NC)"
+	@echo "  $(GREEN)make health-check$(NC)          - Run database health checks"
+	@echo ""
+	@echo "$(YELLOW)Configuration:$(NC)"
+	@echo "  Current settings:"
+	@echo "    DRIVER: $(MIGRATION_DRIVER)"
+	@echo "    DSN: $(MIGRATION_DSN)"
+	@echo "    DIR: $(MIGRATION_DIR)"
+	@echo "    TABLE: $(MIGRATION_TABLE)"
+
+# Проверка зависимостей
+check-dependencies:
+	@echo "$(BLUE)🔍 Checking dependencies...$(NC)"
+	@command -v goose >/dev/null 2>&1 || { echo "$(RED)❌ goose is not installed. Install with: go install github.com/pressly/goose/v3/cmd/goose@latest$(NC)" >&2; exit 1; }
+	@echo "$(GREEN)✅ Dependencies OK$(NC)"
+
+# Создание бинарного файла мигратора (если используется)
+build-migration-tool:
+	@echo "$(BLUE)🔨 Building migration tool...$(NC)"
+	@mkdir -p bin
+	@go build -o $(MIGRATION_BINARY) ./cmd/migrate
+	@echo "$(GREEN)✅ Migration tool built: $(MIGRATION_BINARY)$(NC)"
+
+# Применение миграций
+migrate-up: check-dependencies
+	@echo "$(BLUE)🚀 Applying migrations...$(NC)"
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" up
+	@echo "$(GREEN)✅ All migrations applied successfully$(NC)"
+
+# Откат всех миграций
+migrate-down: check-dependencies
+	@echo "$(YELLOW)⚠️  WARNING: This will rollback ALL migrations!$(NC)"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		echo "$(BLUE)🔄 Rolling back all migrations...$(NC)"; \
+		goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" down; \
+		echo "$(GREEN)✅ All migrations rolled back$(NC)"; \
+	else \
+		echo "$(YELLOW)Operation cancelled$(NC)"; \
+	fi
+
+# Статус миграций
+migrate-status: check-dependencies
+	@echo "$(BLUE)📊 Migration Status:$(NC)"
+	@echo "=================================================="
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" status
+
+# Версия миграций
+migrate-version: check-dependencies
+	@echo "$(BLUE)📋 Current Migration Version:$(NC)"
+	@version=$$(goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" version 2>/dev/null); \
+	if [ $$? -eq 0 ]; then \
+		echo "$(GREEN)$$version$(NC)"; \
+	else \
+		echo "$(YELLOW)No migrations applied yet$(NC)"; \
+	fi
+
+# Создание новой миграции
+migrate-create: check-dependencies
+	@if [ -z "$(name)" ]; then \
+		echo "$(RED)❌ Error: Migration name is required$(NC)"; \
+		echo "Usage: make migrate-create name=<migration_name>"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)✨ Creating new migration: $(name)$(NC)"
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" create $(name) sql
+	@echo "$(GREEN)✅ Migration created successfully$(NC)"
+
+# Переприменение последней миграции
+migrate-redo: check-dependencies
+	@echo "$(BLUE)🔄 Redoing last migration...$(NC)"
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" down
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" up
+	@echo "$(GREEN)✅ Last migration redone successfully$(NC)"
+
+# Сброс всех миграций
+migrate-reset: check-dependencies
+	@echo "$(RED)🚨 DANGER ZONE: This will RESET ALL MIGRATIONS!$(NC)"
+	@echo "$(RED)🚨 ALL DATA WILL BE LOST!$(NC)"
+	@read -p "Type 'YES' to confirm: " confirm; \
+	if [ "$$confirm" = "YES" ]; then \
+		echo "$(BLUE)🔥 Resetting all migrations...$(NC)"; \
+		goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" reset; \
+		echo "$(GREEN)✅ All migrations reset$(NC)"; \
+	else \
+		echo "$(YELLOW)Operation cancelled$(NC)"; \
+	fi
+
+# Валидация миграций
+migrate-validate: check-dependencies
+	@echo "$(BLUE)🔍 Validating migrations...$(NC)"
+	@# Проверяем наличие директории миграций
+	@if [ ! -d "$(MIGRATION_DIR)" ]; then \
+		echo "$(RED)❌ Migration directory does not exist: $(MIGRATION_DIR)$(NC)"; \
+		exit 1; \
+	fi
+	@# Проверяем наличие файлов миграций
+	@migration_count=$$(ls -1 $(MIGRATION_DIR)/*.sql 2>/dev/null | wc -l); \
+	if [ $$migration_count -eq 0 ]; then \
+		echo "$(YELLOW)⚠️  No migration files found$(NC)"; \
+	else \
+		echo "$(GREEN)✅ Found $$migration_count migration file(s)$(NC)"; \
+	fi
+	@# Проверяем синтаксис файлов
+	@echo "$(BLUE)🔍 Checking migration file syntax...$(NC)"
+	@for file in $(MIGRATION_DIR)/*.sql; do \
+		if [ -f "$$file" ]; then \
+			if head -1 "$$file" | grep -q "^-- +goose Up"; then \
+				echo "$(GREEN)✅ $$file - syntax OK$(NC)"; \
+			else \
+				echo "$(RED)❌ $$file - invalid goose header$(NC)"; \
+			fi; \
+		fi; \
+	done
+	@echo "$(GREEN)✅ Migration validation completed$(NC)"
+
+# Исправление проблем с миграциями
+migrate-fix: check-dependencies
+	@echo "$(BLUE)🔧 Fixing migration issues...$(NC)"
+	@# Проверяем и исправляем распространенные проблемы
+	@if [ ! -d "$(MIGRATION_DIR)" ]; then \
+		echo "$(YELLOW)📁 Creating migration directory...$(NC)"; \
+		mkdir -p $(MIGRATION_DIR); \
+	fi
+	@# Проверяем нумерацию файлов
+	@ls -1 $(MIGRATION_DIR)/*.sql 2>/dev/null | sort -V
+	@echo "$(GREEN)✅ Migration fix completed$(NC)"
+
+# Dry run миграций
+migrate-dry-run: check-dependencies
+	@echo "$(BLUE)🔍 Migration Dry Run:$(NC)"
+	@echo "=================================================="
+	@echo "$(YELLOW)This will show what migrations would be applied:$(NC)"
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" status | grep "Pending"
+
+# Применение миграций до определенной версии
+migrate-up-to: check-dependencies
+	@if [ -z "$(version)" ]; then \
+		echo "$(RED)❌ Error: Version number is required$(NC)"; \
+		echo "Usage: make migrate-up-to version=<number>"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🚀 Applying migrations up to version $(version)...$(NC)"
+	@goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" up-to $(version)
+	@echo "$(GREEN)✅ Migrations applied up to version $(version)$(NC)"
+
+# Откат определенного количества миграций
+migrate-down-by: check-dependencies
+	@if [ -z "$(steps)" ]; then \
+		echo "$(RED)❌ Error: Number of steps is required$(NC)"; \
+		echo "Usage: make migrate-down-by steps=<number>"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🔄 Rolling back $(steps) migration(s)...$(NC)"
+	@for i in $$(seq 1 $(steps)); do \
+		echo "Rolling back step $$i..."; \
+		goose -dir $(MIGRATION_DIR) $(MIGRATION_DRIVER) "$(MIGRATION_DSN)" down; \
+	done
+	@echo "$(GREEN)✅ Rolled back $(steps) migration(s)$(NC)"
+
+# Создание backup
+backup-create: check-dependencies
+	@echo "$(BLUE)💾 Creating database backup...$(NC)"
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	backup_file="./backups/backup_$${timestamp}.sql"; \
+	mkdir -p ./backups; \
+	case "$(MIGRATION_DRIVER)" in \
+		"postgres") \
+			pg_dump --schema-only --no-owner --no-privileges --file="$${backup_file}" "$(MIGRATION_DSN)" 2>/dev/null || { \
+				echo "$(RED)❌ pg_dump failed. Make sure PostgreSQL client tools are installed$(NC)"; \
+				exit 1; \
+			}; \
+			;; \
+		"sqlite") \
+			sqlite3 "$(MIGRATION_DSN)" ".dump > $${backup_file}"; \
+			;; \
+		*) \
+			echo "$(RED)❌ Unsupported database driver for backup: $(MIGRATION_DRIVER)$(NC)"; \
+			exit 1; \
+			;; \
+	esac; \
+	echo "$(GREEN)✅ Backup created: $${backup_file}$(NC)"
+
+# Просмотр списка backup файлов
+backup-list: check-dependencies
+	@echo "$(BLUE)📋 Backup Files:$(NC)"
+	@echo "=================================================="
+	@if [ -d "./backups" ]; then \
+		ls -la ./backups/ | grep -E "\.(sql|dump|bak)$$" | head -10; \
+		echo ""; \
+		echo "$(YELLOW)Total backup files: $$(ls -1 ./backups/ | grep -E "\.(sql|dump|bak)$$" | wc -l)$(NC)"; \
+	else \
+		echo "$(YELLOW)No backup directory found$(NC)"; \
+	fi
+
+# Очистка старых backup файлов
+backup-cleanup: check-dependencies
+	@echo "$(BLUE)🧹 Cleaning up old backup files...$(NC)"
+	@retention_days=30; \
+	if [ -d "./backups" ]; then \
+		find ./backups/ -name "*.sql" -mtime +$$retention_days -delete 2>/dev/null; \
+		find ./backups/ -name "*.dump" -mtime +$$retention_days -delete 2>/dev/null; \
+		find ./backups/ -name "*.bak" -mtime +$$retention_days -delete 2>/dev/null; \
+		echo "$(GREEN)✅ Old backup files cleaned up (older than $$retention_days days)$(NC)"; \
+	else \
+		echo "$(YELLOW)No backup directory found$(NC)"; \
+	fi
+
+# Health check базы данных
+health-check: check-dependencies
+	@echo "$(BLUE)🏥 Running database health checks...$(NC)"
+	@case "$(MIGRATION_DRIVER)" in \
+		"postgres") \
+			echo "$(YELLOW)Checking PostgreSQL connection...$(NC)"; \
+			psql "$(MIGRATION_DSN)" -c "SELECT version();" >/dev/null 2>&1 && echo "$(GREEN)✅ PostgreSQL connection OK$(NC)" || echo "$(RED)❌ PostgreSQL connection failed$(NC)"; \
+			;; \
+		"sqlite") \
+			echo "$(YELLOW)Checking SQLite database...$(NC)"; \
+			sqlite3 "$(MIGRATION_DSN)" "SELECT sqlite_version();" >/dev/null 2>&1 && echo "$(GREEN)✅ SQLite database OK$(NC)" || echo "$(RED)❌ SQLite database check failed$(NC)"; \
+			;; \
+		*) \
+			echo "$(RED)❌ Unsupported database driver for health check: $(MIGRATION_DRIVER)$(NC)"; \
+			exit 1; \
+			;; \
+	esac
+	@echo "$(GREEN)✅ Health check completed$(NC)"
+
+# Установка goose (если не установлена)
+install-goose:
+	@echo "$(BLUE)📦 Installing goose...$(NC)"
+	@go install github.com/pressly/goose/v3/cmd/goose@latest
+	@echo "$(GREEN)✅ Goose installed$(NC)"
+
+# Показать информацию о базе данных
+db-info: check-dependencies
+	@echo "$(BLUE)ℹ️  Database Information:$(NC)"
+	@echo "=================================================="
+	@echo "Driver: $(MIGRATION_DRIVER)"
+	@echo "DSN: $(MIGRATION_DSN)"
+	@echo "Migration Directory: $(MIGRATION_DIR)"
+	@echo "Migration Table: $(MIGRATION_TABLE)"
+	@echo ""
+	@case "$(MIGRATION_DRIVER)" in \
+		"postgres") \
+			echo "$(YELLOW)PostgreSQL Info:$(NC)"; \
+			psql "$(MIGRATION_DSN)" -c "SELECT version();" 2>/dev/null || echo "Could not connect to PostgreSQL"; \
+			;; \
+		"sqlite") \
+			echo "$(YELLOW)SQLite Info:$(NC)"; \
+			sqlite3 "$(MIGRATION_DSN)" "SELECT sqlite_version();" 2>/dev/null || echo "Could not access SQLite database"; \
+			;; \
+	esac
+
+# Очистка временных файлов
+clean:
+	@echo "$(BLUE)🧹 Cleaning up...$(NC)"
+	@rm -rf bin/
+	@echo "$(GREEN)✅ Cleanup completed$(NC)"
+
+# Полная установка и настройка
+setup: install-goose
+	@echo "$(GREEN)✅ Migration system setup completed$(NC)"
+	@echo ""
+	@echo "$(BLUE)Next steps:$(NC)"
+	@echo "  1. Configure your database connection in environment variables"
+	@echo "  2. Create your first migration: make migrate-create name=initial_schema"
+	@echo "  3. Apply migrations: make migrate-up"
+	@echo "  4. Check status: make migrate-status"

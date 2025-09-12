@@ -218,6 +218,11 @@ async def _initialize_dependencies():
         await _initialize_target_discovery()
         health_checker.set_dependency_ready("target_discovery", True)
 
+        # Initialize application services (LLM classification, webhook processor, etc.)
+        from ..main import initialize_services
+
+        await initialize_services()
+
         logger.info("All dependencies initialized successfully")
 
     except Exception as e:

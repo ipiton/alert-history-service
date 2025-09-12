@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS migration_history (
 -- ===============================
 
 -- Alerts table indexes
-CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint ON alerts(fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_fingerprint_unique ON alerts(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alerts_alert_name ON alerts(alert_name);
 CREATE INDEX IF NOT EXISTS idx_alerts_namespace ON alerts(namespace);
 CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);

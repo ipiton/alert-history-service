@@ -5,7 +5,7 @@ Summary:
   Fastest:	0.0000 secs
   Average:	 NaN secs
   Requests/sec:	6888.2383
-  
+
 
 Response time histogram:
 
@@ -23,4 +23,3 @@ Status code distribution:
 
 Error distribution:
   [100]	Post "http://localhost:8082/api/alerts/bulk": dial tcp [::1]:8082: connect: connection refused
-

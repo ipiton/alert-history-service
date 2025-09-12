@@ -125,19 +125,39 @@ class RecommendationsResponse(BaseModel):
 
 
 # Dependency injection helpers
-def get_storage() -> SQLiteLegacyStorage:
+def get_storage():
     """Get storage instance from app state."""
     storage = getattr(app_state, "storage", None)
     if storage:
         return storage
 
-    # Fallback: initialize legacy SQLite storage if not present
+    # Fallback: initialize storage based on configuration
     try:
+        from ..config import get_config
+
+        config = get_config()
+
+        if config.database.url and config.database.url.startswith("postgresql://"):
+            # Try PostgreSQL first
+            try:
+                from ..database.postgresql_adapter import PostgreSQLStorage
+
+                storage = PostgreSQLStorage(config.database.url)
+                logger.info(
+                    "Created PostgreSQL storage (async initialization will happen on first use)"
+                )
+                app_state.storage = storage
+                return storage
+            except Exception as e:
+                logger.warning(f"PostgreSQL fallback failed: {e}, using SQLite")
+
+        # Use SQLite fallback
         db_path = os.getenv("SQLITE_PATH", "alert_history.sqlite3")
         storage = SQLiteLegacyStorage(db_path)
         app_state.storage = storage
         logger.info(f"Initialized fallback SQLite storage at {db_path}")
         return storage
+
     except Exception as e:
         logger.error(f"Failed to initialize fallback storage: {e}")
         raise HTTPException(status_code=503, detail="Storage not available") from e

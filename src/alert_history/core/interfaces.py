@@ -53,6 +53,7 @@ class Alert:
     starts_at: datetime
     ends_at: Optional[datetime] = None
     generator_url: Optional[str] = None
+    timestamp: Optional[datetime] = None
 
     @property
     def namespace(self) -> Optional[str]:

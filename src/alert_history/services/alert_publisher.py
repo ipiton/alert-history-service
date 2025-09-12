@@ -503,6 +503,32 @@ class AlertPublisher(IAlertPublisher):
         """Получить статистику для всех targets."""
         return self._publishing_stats.copy()
 
+    def get_publishing_stats(self) -> dict[str, any]:
+        """Получить агрегированную статистику публикации."""
+        all_stats = self.get_all_stats()
+
+        total_attempts = 0
+        total_successful = 0
+        total_failed = 0
+        total_blocks = 0
+
+        for stats in all_stats.values():
+            total_attempts += stats.total_attempts
+            total_successful += stats.successful_publishes
+            total_failed += stats.failed_publishes
+            total_blocks += stats.circuit_breaker_blocks
+
+        return {
+            "total_attempts": total_attempts,
+            "total_successful": total_successful,
+            "total_failed": total_failed,
+            "total_blocks": total_blocks,
+            "success_rate": (
+                total_successful / total_attempts if total_attempts > 0 else 0.0
+            ),
+            "targets_count": len(all_stats),
+        }
+
     def get_circuit_breaker_status(self, target_name: str) -> dict[str, any]:
         """Получить статус circuit breaker для target."""
         circuit_breaker = self._circuit_breakers.get(target_name)

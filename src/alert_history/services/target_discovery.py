@@ -393,7 +393,9 @@ class DynamicTargetManager:
             "enabled": self.config.enabled,
             "kubernetes_available": self.k8s_client is not None,
             "targets_count": len(self.current_targets),
-            "last_refresh_time": self._last_refresh_time,
+            "last_refresh_time": (
+                str(self._last_refresh_time) if self._last_refresh_time else None
+            ),
             "refresh_interval": self.config.config_refresh_interval,
             "watched_namespaces": self.config.secret_namespaces,
             "label_selectors": self.config.secret_labels,

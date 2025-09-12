@@ -6,36 +6,52 @@ import (
 	"time"
 
 	"log/slog"
+
+	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
 // Database определяет общий интерфейс для работы с базой данных
 // Поддерживает как PostgreSQL, так и SQLite адаптеры
 type Database interface {
-	// Lifecycle management
+	// Core database operations
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
 	IsConnected() bool
-
-	// Health monitoring
 	Health(ctx context.Context) error
 
-	// Query execution (обобщенные методы для совместимости)
+	// Alert operations
+	SaveAlert(ctx context.Context, alert *core.Alert) error
+	GetAlertByFingerprint(ctx context.Context, fingerprint string) (*core.Alert, error)
+	GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*core.Alert, error)
+	CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error)
+
+	// Classification operations
+	SaveClassification(ctx context.Context, fingerprint string, result *core.ClassificationResult) error
+	GetClassification(ctx context.Context, fingerprint string) (*core.ClassificationResult, error)
+
+	// Publishing operations
+	LogPublishingAttempt(ctx context.Context, fingerprint, targetName string, success bool, errorMessage *string, processingTime *float64) error
+	GetPublishingHistory(ctx context.Context, fingerprint string) ([]*core.PublishingLog, error)
+
+	// Migration operations
+	MigrateUp(ctx context.Context) error
+	MigrateDown(ctx context.Context, steps int) error
+
+	// Utility operations
+	GetStats(ctx context.Context) (map[string]interface{}, error)
+
+	// Low-level operations (for compatibility)
 	Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error)
 	Query(ctx context.Context, sql string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...interface{}) *sql.Row
-
-	// Transaction support
 	Begin(ctx context.Context) (*sql.Tx, error)
-
-	// Schema management
-	Migrate(ctx context.Context) error
 }
 
 // Config определяет конфигурацию для базы данных
 type Config struct {
-	Driver   string // "postgres" или "sqlite"
-	DSN      string
-	Logger   *slog.Logger
+	Driver string // "postgres" или "sqlite"
+	DSN    string
+	Logger *slog.Logger
 
 	// Connection pool settings
 	MaxOpenConns    int

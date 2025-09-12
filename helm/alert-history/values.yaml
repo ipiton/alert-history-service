@@ -1,7 +1,7 @@
 # ===============================
 # Application Configuration
 # ===============================
-replicaCount: 2
+replicaCount: 1
 environment: production
 logLevel: info
 namespace: ""
@@ -11,7 +11,7 @@ namespace: ""
 # ===============================
 image:
   repository: ipiton/alert-history-llm
-  tag: "1.0.0"
+  tag: "1.1.9"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -178,31 +178,15 @@ targetDiscovery:
   refreshInterval: "300s"
 
 # ===============================
-# CloudNativePG Database Configuration
+# PostgreSQL Database Configuration (Custom)
 # ===============================
 postgresql:
   enabled: true
-  cluster:
-    name: alert-history-postgres
-    instances: 3
-    postgresql:
-      parameters:
-        max_connections: "200"
-        shared_buffers: "256MB"
-        effective_cache_size: "1GB"
-    storage:
-      size: 10Gi
-      storageClass: ""
-    monitoring:
-      enabled: true
-    superuserSecret:
-      name: postgres-superuser
-    bootstrap:
-      initdb:
-        database: alert_history
-        owner: alert_history
-        secret:
-          name: postgres-app-user
+  # Database configuration
+  database: "alert_history"
+  username: "alert_history"
+  password: "secure_password_123"
+  # Resource limits
   resources:
     limits:
       cpu: 1000m
@@ -210,43 +194,32 @@ postgresql:
     requests:
       cpu: 500m
       memory: 512Mi
+  # Storage configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
 
 # ===============================
-# KeyDB Cache Configuration (High-Performance Redis Alternative)
+# Valkey Cache Configuration (Redis-compatible)
 # ===============================
 cache:
   enabled: true
-
-keydb:
-  enabled: true
-  image:
-    repository: eqalpha/keydb
-    tag: "v6.3.4"
+  # Valkey connection details
+  host: "{{ include \"alerthistory.fullname\" . }}-valkey"  # Service name of Valkey
+  port: 6379
+  # Valkey authentication (if needed)
   auth:
-    enabled: true
-    password: changeme123
-  replicaCount: 1
-  persistence:
-    enabled: true
-    size: 5Gi
-    storageClass: ""
+    enabled: false
+    password: ""
+  # Valkey resource limits
   resources:
     limits:
-      cpu: 1000m
-      memory: 1Gi
-    requests:
       cpu: 500m
       memory: 512Mi
-  keydb:
-    threads: 4
-    multimaster: "yes"
-    activereplica: "yes"
-    appendonly: "yes"
-    port: 6379
-  metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
+    requests:
+      cpu: 250m
+      memory: 256Mi
 
 # ===============================
 # Alert Processing Configuration
@@ -262,15 +235,27 @@ alerts:
 # ===============================
 llm:
   enabled: true
-  proxyUrl: "http://llm-proxy.default.svc.cluster.local:8080"
-  apiKey: ""  # Set in secrets (prefer external secrets in production)
-  authToken: ""  # Optional auth token
-  apiKeySecretRef: ""  # Reference to external secret
-  model: "gpt-4"
+  proxyUrl: "https://llm-proxy.b2broker.tech"
+  apiKey: "sk-eEyKBRlxsrWB81yZT5Mc1w"  # Set via LLM_API_KEY environment variable or secret
+  model: "openai/gpt-4o"
   timeout: 30
   maxRetries: 3
   retryDelay: 1.0
   cacheTtl: 3600
+  batchSize: 10
+
+  # LLM API Key Secret (prefer external secrets in production)
+  secret:
+    enabled: false
+    name: "llm-api-key"
+    key: "api-key"
+
+  # External secrets configuration
+  externalSecrets:
+    enabled: false
+    secretStore: ""
+    secretName: ""
+    secretKey: "api-key"
 
 # ===============================
 # Database Migration Configuration

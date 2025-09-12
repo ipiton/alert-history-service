@@ -38,7 +38,7 @@ def cli():
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be migrated without applying"
 )
-async def schema():
+async def schema(dry_run: bool):
     """Apply PostgreSQL schema migrations."""
     try:
         config = get_config()

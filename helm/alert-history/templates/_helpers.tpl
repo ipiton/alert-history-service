@@ -63,25 +63,21 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Create CloudNativePG cluster fullname
+Create PostgreSQL fullname (groundhog2k/postgres)
 */}}
 {{- define "alert-history.postgresql.fullname" -}}
 {{- if .Values.postgresql.enabled }}
-{{- .Values.postgresql.cluster.name | default (printf "%s-postgres" (include "alert-history.fullname" .)) }}
+{{- printf "%s-%s" (include "alert-history.fullname" .) "postgres" | trunc 63 | trimSuffix "-" }}
 {{- else }}
 {{- printf "%s-%s" (include "alert-history.fullname" .) "postgresql" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
 
 {{/*
-Create PostgreSQL secret name (CloudNativePG format)
+Create PostgreSQL secret name (Custom format)
 */}}
 {{- define "alert-history.postgresql.secretName" -}}
-{{- if .Values.postgresql.enabled }}
-{{- printf "postgres.%s.credentials.postgresql.acid.zalan.do" (include "alert-history.postgresql.fullname" .) }}
-{{- else }}
 {{- printf "%s-%s" (include "alert-history.fullname" .) "postgresql-secret" }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -103,25 +99,25 @@ Create KeyDB secret name
 {{- end }}
 
 {{/*
-Return the proper Database URL (CloudNativePG)
+Return the proper Database URL (groundhog2k/postgres)
 */}}
 {{- define "alert-history.databaseUrl" -}}
 {{- if .Values.postgresql.enabled }}
-{{- printf "postgresql://%s:$(POSTGRES_PASSWORD)@%s-rw:5432/%s" .Values.postgresql.cluster.bootstrap.initdb.owner (include "alert-history.postgresql.fullname" .) .Values.postgresql.cluster.bootstrap.initdb.database }}
+{{- printf "postgresql://%s:$(POSTGRES_PASSWORD)@%s:5432/%s" .Values.postgresql.username (include "alert-history.postgresql.fullname" .) .Values.postgresql.database }}
 {{- else }}
 {{- printf "sqlite:///data/alert_history.sqlite3" }}
 {{- end }}
 {{- end }}
 
 {{/*
-Return the proper KeyDB URL
+Return the proper Valkey/Redis URL
 */}}
-{{- define "alert-history.keydbUrl" -}}
+{{- define "alert-history.cacheUrl" -}}
 {{- if .Values.cache.enabled }}
-{{- if .Values.keydb.auth.enabled }}
-{{- printf "redis://:%s@%s:%g/0" .Values.keydb.auth.password (include "alert-history.keydb.fullname" .) .Values.keydb.keydb.port }}
+{{- if .Values.cache.auth.enabled }}
+{{- printf "redis://:%s@%s:%g/0" .Values.cache.auth.password .Values.cache.host .Values.cache.port }}
 {{- else }}
-{{- printf "redis://%s:%g/0" (include "alert-history.keydb.fullname" .) .Values.keydb.keydb.port }}
+{{- printf "redis://%s:%g/0" .Values.cache.host .Values.cache.port }}
 {{- end }}
 {{- else }}
 {{- printf "redis://localhost:6379/0" }}
@@ -132,5 +128,5 @@ Return the proper KeyDB URL
 Return the proper Redis URL (legacy compatibility)
 */}}
 {{- define "alert-history.redisUrl" -}}
-{{- include "alert-history.keydbUrl" . }}
+{{- include "alert-history.cacheUrl" . }}
 {{- end }}

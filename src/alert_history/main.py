@@ -52,8 +52,26 @@ performance_logger = get_performance_logger()
 
 async def initialize_services() -> None:
     """Initialize all services maintaining existing functionality."""
-    # Initialize storage (maintains existing SQLite compatibility)
-    storage = SQLiteLegacyStorage(config.database.sqlite_path)
+    # Initialize storage - prefer PostgreSQL if available
+    storage = None
+
+    if config.database.url and config.database.url.startswith("postgresql://"):
+        try:
+            from .database.postgresql_adapter import PostgreSQLStorage
+
+            storage = PostgreSQLStorage(config.database.url)
+            await storage.initialize()
+            logger.info("PostgreSQL storage initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize PostgreSQL storage: {e}")
+            logger.info("Falling back to SQLite storage")
+            storage = None
+
+    if storage is None:
+        # Fallback to SQLite
+        storage = SQLiteLegacyStorage(config.database.sqlite_path)
+        logger.info("SQLite storage initialized")
+
     # Expose storage via global app_state for APIs that depend on it
     try:
         from .core.app_state import app_state
@@ -76,8 +94,7 @@ async def initialize_services() -> None:
             )
 
             await redis_cache.initialize()
-            app.state.redis_cache = redis_cache
-            # Mirror to global app_state for convenience
+            # Store in global app_state
             try:
                 from .core.app_state import app_state as _as
 
@@ -114,7 +131,13 @@ async def initialize_services() -> None:
 
     # Update instance heartbeat
     await stateless_manager.update_instance_heartbeat()
-    app.state.stateless_manager = stateless_manager
+    # Store in global app_state
+    try:
+        from .core.app_state import app_state as _as
+
+        _as.stateless_manager = stateless_manager
+    except Exception:
+        pass
 
     logger.info(
         "Stateless manager initialized",
@@ -124,7 +147,7 @@ async def initialize_services() -> None:
 
     # Initialize metrics
     metrics = LegacyMetrics()
-    app.state.metrics = metrics
+    # Store in global app_state
     try:
         from .core.app_state import app_state as _as
 
@@ -139,12 +162,12 @@ async def initialize_services() -> None:
     if config.alerts.enable_classification and config.llm.api_key:
         try:
             llm_client = LLMProxyClient(
-                proxy_url=config.llm.proxy_url,
+                proxy_url=config.llm.base_url,
                 api_key=config.llm.api_key,
-                model=config.llm.model,
+                model=config.llm.model_name,
                 timeout=config.llm.timeout,
                 max_retries=config.llm.max_retries,
-                retry_delay=config.llm.retry_delay,
+                retry_delay=1.0,  # Default retry delay
             )
 
             # Initialize classification service
@@ -153,14 +176,13 @@ async def initialize_services() -> None:
                 storage=storage,
                 metrics=metrics,
                 cache=redis_cache,  # T1.3: Use Redis cache if available
-                cache_ttl=config.llm.cache_ttl,
+                cache_ttl=3600,  # Default cache TTL
                 enable_fallback=True,
             )
 
             await classification_service.initialize()
 
-            # Store services in app state for dependency injection
-            app.state.classification_service = classification_service
+            # Store services in global app_state for dependency injection
             try:
                 from .core.app_state import app_state as _as
 
@@ -170,9 +192,9 @@ async def initialize_services() -> None:
 
             logger.info(
                 "LLM Classification service initialized",
-                llm_proxy_url=config.llm.proxy_url,
-                llm_model=config.llm.model,
-                cache_ttl=config.llm.cache_ttl,
+                llm_proxy_url=config.llm.base_url,
+                llm_model=config.llm.model_name,
+                cache_ttl=3600,  # Default cache TTL
             )
 
         except Exception as e:
@@ -180,14 +202,26 @@ async def initialize_services() -> None:
                 "Failed to initialize LLM service, running without classification",
                 error=str(e),
             )
-            app.state.classification_service = None
+            # Store None in global app_state
+            try:
+                from .core.app_state import app_state as _as
+
+                _as.classification_service = None
+            except Exception:
+                pass
     else:
         logger.info(
             "LLM Classification disabled",
             classification_enabled=config.alerts.enable_classification,
             api_key_configured=bool(config.llm.api_key),
         )
-        app.state.classification_service = None
+        # Store None in global app_state
+        try:
+            from .core.app_state import app_state as _as
+
+            _as.classification_service = None
+        except Exception:
+            pass
 
     # Initialize Intelligent Proxy components (Phase 3)
     logger.info(
@@ -206,14 +240,26 @@ async def initialize_services() -> None:
             return None
 
     target_manager = _StaticTargetManager()
-    app.state.target_manager = target_manager
+    # Store in global app_state
+    try:
+        from .core.app_state import app_state as _as
+
+        _as.target_manager = target_manager
+    except Exception:
+        pass
 
     # Alert Formatter
     alert_formatter = AlertFormatter()
 
     # Filter Engine
     filter_engine = AlertFilterEngine()
-    app.state.filter_engine = filter_engine
+    # Store in global app_state
+    try:
+        from .core.app_state import app_state as _as
+
+        _as.filter_engine = filter_engine
+    except Exception:
+        pass
 
     # Alert Publisher
     alert_publisher = AlertPublisher(
@@ -227,7 +273,13 @@ async def initialize_services() -> None:
 
     # Initialize publisher session
     await alert_publisher._init_session()
-    app.state.alert_publisher = alert_publisher
+    # Store in global app_state
+    try:
+        from .core.app_state import app_state as _as
+
+        _as.alert_publisher = alert_publisher
+    except Exception:
+        pass
 
     # Initialize webhook processor
     webhook_processor = WebhookProcessor(
@@ -237,16 +289,14 @@ async def initialize_services() -> None:
         enable_auto_classification=config.alerts.enable_classification,
         classification_timeout=10.0,
     )
-    app.state.webhook_processor = webhook_processor
+    # Store in global app_state for dependency injection
+    try:
+        from .core.app_state import app_state
 
-    # Initialize legacy API adapter to maintain 100% compatibility
-    app.legacy_adapter = LegacyAPIAdapter(
-        app=app,
-        storage=storage,
-        db_path=config.database.sqlite_path,
-        retention_days=config.alerts.retention_days,
-        webhook_processor=webhook_processor,
-    )
+        app_state.webhook_processor = webhook_processor
+        app_state.storage = storage
+    except Exception as e:
+        logger.warning(f"Failed to store components in app_state: {e}")
 
     # Log proxy initialization status
     metrics_only_mode = target_manager.is_metrics_only_mode()
@@ -256,7 +306,7 @@ async def initialize_services() -> None:
         "Intelligent Alert Proxy initialized",
         metrics_only_mode=metrics_only_mode,
         active_targets=active_targets,
-        target_discovery_enabled=app_state.config.target_discovery.enabled,
+        target_discovery_enabled=False,  # Static target manager mode
     )
 
     logger.info(
@@ -334,15 +384,18 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Alert History Service with LLM Intelligence",
         lifespan=lifespan_manager,
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
         description="""
 Alert History Service for Alertmanager webhook processing with LLM classification.
 
-## Legacy Endpoints (100% compatible)
-- **POST /webhook** - Receive alert events from Alertmanager
+## Core Endpoints
+- **POST /webhook** - Universal webhook (auto-switches between legacy and intelligent modes)
 - **GET /history** - Get alert history with filters
 - **GET /report** - Get alert analytics and reports
 - **GET /metrics** - Prometheus metrics
-- **GET /dashboard** - HTML dashboard
+- **GET /dashboard** - Единый HTML dashboard
 - **GET /dashboard/grouped** - Grouped HTML dashboard
 
 ## New Endpoints (LLM + Publishing)
@@ -395,30 +448,45 @@ Alert History Service for Alertmanager webhook processing with LLM classificatio
 
     app.include_router(enrichment_router)
 
-    # Add modern dashboard endpoint (T6: Dashboard и UI интеграция)
+    # Add unified dashboard endpoints (T6: Dashboard и UI интеграция)
     from fastapi import Request
     from fastapi.responses import HTMLResponse
     from fastapi.templating import Jinja2Templates
 
     templates = Jinja2Templates(directory="templates")
 
+    @app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
+    async def main_dashboard(request: Request):
+        """Unified dashboard with all functionality in one interface."""
+        return templates.TemplateResponse(
+            "unified_dashboard.html", {"request": request}
+        )
+
     @app.get("/dashboard/modern", response_class=HTMLResponse, tags=["Dashboard"])
     async def modern_dashboard(request: Request):
-        """Modern HTML5 dashboard with CSS Grid, Flexbox and minimal JavaScript."""
-        return templates.TemplateResponse("html5_dashboard.html", {"request": request})
+        """Modern unified dashboard with CSS Grid, Flexbox and minimal JavaScript."""
+        return templates.TemplateResponse(
+            "unified_dashboard.html", {"request": request}
+        )
 
-    # Friendly routes to open specific sections in the same HTML5 dashboard
+    # Friendly routes to open specific sections in the unified dashboard
     @app.get("/dashboard/publishing", response_class=HTMLResponse, tags=["Dashboard"])
     async def dashboard_publishing(request: Request):
-        return templates.TemplateResponse("html5_dashboard.html", {"request": request})
+        return templates.TemplateResponse(
+            "unified_dashboard.html", {"request": request}
+        )
 
     @app.get("/dashboard/targets", response_class=HTMLResponse, tags=["Dashboard"])
     async def dashboard_targets(request: Request):
-        return templates.TemplateResponse("html5_dashboard.html", {"request": request})
+        return templates.TemplateResponse(
+            "unified_dashboard.html", {"request": request}
+        )
 
     @app.get("/dashboard/llm-metrics", response_class=HTMLResponse, tags=["Dashboard"])
     async def dashboard_llm_metrics(request: Request):
-        return templates.TemplateResponse("html5_dashboard.html", {"request": request})
+        return templates.TemplateResponse(
+            "unified_dashboard.html", {"request": request}
+        )
 
     # Add health check endpoints (12-Factor: health checks)
     @app.get("/healthz", tags=["Health"])
@@ -443,6 +511,21 @@ Alert History Service for Alertmanager webhook processing with LLM classificatio
             }
         else:
             raise HTTPException(status_code=503, detail="Service not ready")
+
+    # Add explicit documentation endpoints
+    @app.get("/api/docs", tags=["Documentation"])
+    async def api_docs():
+        """Redirect to Swagger UI documentation."""
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/docs")
+
+    @app.get("/api/redoc", tags=["Documentation"])
+    async def api_redoc():
+        """Redirect to ReDoc documentation."""
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/redoc")
 
     return app
 

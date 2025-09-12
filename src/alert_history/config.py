@@ -101,6 +101,15 @@ class SecurityConfig(BaseModel):
     rate_limit_per_minute: int = Field(default=60)
 
 
+class AlertsConfig(BaseModel):
+    """Alert processing configuration."""
+
+    retention_days: int = Field(default=30)
+    batch_size: int = Field(default=100)
+    max_concurrent_alerts: int = Field(default=10)
+    enable_classification: bool = Field(default=False)
+
+
 class Config(BaseModel):
     """Complete application configuration."""
 
@@ -112,6 +121,7 @@ class Config(BaseModel):
     # Component configurations
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    alerts: AlertsConfig = Field(default_factory=AlertsConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
@@ -160,14 +170,25 @@ def get_config() -> Config:
         socket_keepalive=os.getenv("REDIS_KEEPALIVE", "true").lower() == "true",
     )
 
+    # Alerts configuration
+    alerts_config = AlertsConfig(
+        retention_days=int(os.getenv("RETENTION_DAYS", "30")),
+        batch_size=int(os.getenv("ALERT_BATCH_SIZE", "100")),
+        max_concurrent_alerts=int(os.getenv("MAX_CONCURRENT_ALERTS", "10")),
+        enable_classification=os.getenv("ENABLE_CLASSIFICATION", "false").lower()
+        == "true",
+    )
+
     # LLM configuration
     llm_config = LLMConfig(
         enabled=os.getenv("LLM_ENABLED", "false").lower() == "true",
         api_key=os.getenv("LLM_API_KEY"),
-        base_url=os.getenv("LLM_BASE_URL", "http://localhost:8000"),
+        base_url=os.getenv(
+            "LLM_PROXY_URL", "http://localhost:8000"
+        ),  # Use LLM_PROXY_URL from Helm
         timeout=int(os.getenv("LLM_TIMEOUT", "30")),
         max_retries=int(os.getenv("LLM_MAX_RETRIES", "3")),
-        model_name=os.getenv("LLM_MODEL_NAME", "gpt-4"),
+        model_name=os.getenv("LLM_MODEL", "gpt-4"),  # Use LLM_MODEL from Helm
     )
 
     # Server configuration
@@ -220,6 +241,7 @@ def get_config() -> Config:
         environment=environment,
         database=database_config,
         redis=redis_config,
+        alerts=alerts_config,
         llm=llm_config,
         server=server_config,
         proxy=proxy_config,

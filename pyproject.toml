@@ -248,10 +248,12 @@ ignore = [
     "E501",  # line too long, handled by black
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
-    "B904",  # raise-without-from-inside-except (will fix gradually)
-    "UP035", # typing.Dict deprecated (will fix gradually)
-    "UP006", # Use `list` instead of `List` (will fix gradually)
+    # "B904",  # raise-without-from-inside-except - FIXED!
+        # "UP035", # typing.Dict deprecated - FIXED!
+    # "UP006", # Use `list` instead of `List` - FIXED!
 
+    "F401",  # Imported but unused (ignore in tests)
+    "F841",  # Local variable assigned but never used (ignore in tests)
     "E712",  # Avoid equality comparisons to True/False (will fix gradually)
     "B024",  # Abstract base class without abstract methods (will fix gradually)
     "B027",  # Empty method in abstract base class (will fix gradually)

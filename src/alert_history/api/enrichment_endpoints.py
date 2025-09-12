@@ -23,12 +23,12 @@ router = APIRouter(prefix="/enrichment", tags=["Enrichment Mode"])
 
 
 class EnrichmentModeResponse(BaseModel):
-    mode: Literal["transparent", "enriched"]
+    mode: Literal["transparent", "enriched", "transparent_with_recommendations"]
     source: str
 
 
 class EnrichmentModeRequest(BaseModel):
-    mode: Literal["transparent", "enriched"]
+    mode: Literal["transparent", "enriched", "transparent_with_recommendations"]
 
 
 REDIS_KEY = "enrichment:mode"
@@ -80,12 +80,12 @@ async def get_enrichment_mode() -> EnrichmentModeResponse:
 
     # 1) Try Redis
     mode = await _get_mode_from_redis()
-    if mode in ("transparent", "enriched"):
+    if mode in ("transparent", "enriched", "transparent_with_recommendations"):
         return EnrichmentModeResponse(mode=mode, source="redis")
 
     # 2) Try in-memory app_state
     state_mode = getattr(app_state, "enrichment_mode", None)
-    if state_mode in ("transparent", "enriched"):
+    if state_mode in ("transparent", "enriched", "transparent_with_recommendations"):
         return EnrichmentModeResponse(mode=state_mode, source="memory")
 
     # 3) Default from ENV
@@ -117,7 +117,7 @@ async def set_enrichment_mode(req: EnrichmentModeRequest) -> EnrichmentModeRespo
             ).inc()
 
         # Update mode status gauge
-        metrics.enrichment_mode_status.set(1 if mode == "enriched" else 0)
+        metrics.set_enrichment_mode(mode)
 
     except Exception:
         pass  # Metrics are optional

@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
 // TestAlert представляет тестовую структуру алерта
@@ -28,12 +30,12 @@ func TestSQLiteDatabase_Connect(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "test.db")
 
 	config := &Config{
-		Driver:         "sqlite",
-		SQLiteFile:     dbPath,
-		MaxOpenConns:   10,
-		MaxIdleConns:   5,
+		Driver:          "sqlite",
+		SQLiteFile:      dbPath,
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Hour,
-		Logger:         slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
+		Logger:          slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
 	}
 
 	db, err := NewSQLiteDatabase(config)
@@ -63,9 +65,9 @@ func TestSQLiteDatabase_Connect(t *testing.T) {
 
 func TestSQLiteDatabase_InMemory(t *testing.T) {
 	config := &Config{
-		Driver: "sqlite",
+		Driver:     "sqlite",
 		SQLiteFile: ":memory:",
-		Logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
+		Logger:     slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
 	}
 
 	db, err := NewSQLiteDatabase(config)
@@ -102,17 +104,20 @@ func TestSQLiteDatabase_Migrate(t *testing.T) {
 	defer db.Disconnect(ctx)
 
 	// Выполняем миграцию
-	err = db.Migrate(ctx)
+	err = db.MigrateUp(ctx)
 	require.NoError(t, err)
 
-	// Проверяем, что таблица создана
-	row := db.QueryRow(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name='alerts'")
-	var tableName string
-	err = row.Scan(&tableName)
-	require.NoError(t, err)
-	assert.Equal(t, "alerts", tableName)
+	// Проверяем, что все таблицы созданы
+	tables := []string{"alerts", "classifications", "publishing"}
+	for _, table := range tables {
+		row := db.QueryRow(ctx, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", table)
+		var tableName string
+		err = row.Scan(&tableName)
+		require.NoError(t, err, "Table %s should exist", table)
+		assert.Equal(t, table, tableName)
+	}
 
-	// Проверяем, что индексы созданы
+	// Проверяем, что индексы созданы для alerts
 	rows, err := db.Query(ctx, "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='alerts'")
 	require.NoError(t, err)
 	defer rows.Close()
@@ -125,8 +130,10 @@ func TestSQLiteDatabase_Migrate(t *testing.T) {
 		indexes = append(indexes, name)
 	}
 
-	assert.Contains(t, indexes, "idx_alerts_created_at")
-	assert.Contains(t, indexes, "idx_alerts_updated_at")
+	expectedIndexes := []string{"idx_alerts_status", "idx_alerts_starts_at", "idx_alerts_created_at"}
+	for _, expectedIndex := range expectedIndexes {
+		assert.Contains(t, indexes, expectedIndex, "Index %s should exist", expectedIndex)
+	}
 }
 
 func TestSQLiteDatabase_CRUD(t *testing.T) {
@@ -148,79 +155,54 @@ func TestSQLiteDatabase_CRUD(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Disconnect(ctx)
 
-	err = db.Migrate(ctx)
+	err = db.MigrateUp(ctx)
 	require.NoError(t, err)
 
 	// Создаем тестовый алерт
-	alert := TestAlert{
+	alert := &core.Alert{
 		Fingerprint: "test-fingerprint-123",
-		Data:        json.RawMessage(`{"alertname": "TestAlert", "severity": "warning"}`),
+		AlertName:   "TestAlert",
+		Status:      core.StatusFiring,
+		Labels:      map[string]string{"severity": "warning", "namespace": "test"},
+		Annotations: map[string]string{"description": "Test alert"},
+		StartsAt:    time.Now(),
 	}
 
-	// Вставляем алерт
-	result, err := db.Exec(ctx,
-		"INSERT INTO alerts (fingerprint, alert_data) VALUES (?, ?)",
-		alert.Fingerprint, string(alert.Data))
+	// Сохраняем алерт
+	err = db.SaveAlert(ctx, alert)
 	require.NoError(t, err)
-
-	rowsAffected, err := result.RowsAffected()
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), rowsAffected)
 
 	// Читаем алерт
-	row := db.QueryRow(ctx,
-		"SELECT fingerprint, alert_data, created_at, updated_at FROM alerts WHERE fingerprint = ?",
-		alert.Fingerprint)
-
-	var retrievedAlert TestAlert
-	var dataStr string
-	err = row.Scan(&retrievedAlert.Fingerprint, &dataStr, &retrievedAlert.CreatedAt, &retrievedAlert.UpdatedAt)
+	retrievedAlert, err := db.GetAlertByFingerprint(ctx, alert.Fingerprint)
 	require.NoError(t, err)
+	require.NotNil(t, retrievedAlert)
 
-	retrievedAlert.Data = json.RawMessage(dataStr)
 	assert.Equal(t, alert.Fingerprint, retrievedAlert.Fingerprint)
-	assert.JSONEq(t, string(alert.Data), string(retrievedAlert.Data))
+	assert.Equal(t, alert.AlertName, retrievedAlert.AlertName)
+	assert.Equal(t, alert.Status, retrievedAlert.Status)
+	assert.Equal(t, alert.Labels, retrievedAlert.Labels)
+	assert.Equal(t, alert.Annotations, retrievedAlert.Annotations)
 
 	// Обновляем алерт
-	newData := json.RawMessage(`{"alertname": "UpdatedAlert", "severity": "critical"}`)
-	result, err = db.Exec(ctx,
-		"UPDATE alerts SET alert_data = ? WHERE fingerprint = ?",
-		string(newData), alert.Fingerprint)
-	require.NoError(t, err)
+	alert.Status = core.StatusResolved
+	endsAt := time.Now()
+	alert.EndsAt = &endsAt
 
-	rowsAffected, err = result.RowsAffected()
+	err = db.SaveAlert(ctx, alert)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), rowsAffected)
 
 	// Проверяем обновление
-	row = db.QueryRow(ctx,
-		"SELECT alert_data FROM alerts WHERE fingerprint = ?",
-		alert.Fingerprint)
-
-	var updatedDataStr string
-	err = row.Scan(&updatedDataStr)
+	updatedAlert, err := db.GetAlertByFingerprint(ctx, alert.Fingerprint)
 	require.NoError(t, err)
-	assert.JSONEq(t, string(newData), updatedDataStr)
+	require.NotNil(t, updatedAlert)
+	assert.Equal(t, core.StatusResolved, updatedAlert.Status)
+	assert.NotNil(t, updatedAlert.EndsAt)
 
-	// Удаляем алерт
-	result, err = db.Exec(ctx,
-		"DELETE FROM alerts WHERE fingerprint = ?",
-		alert.Fingerprint)
+	// Проверяем получение списка алертов
+	alerts, err := db.GetAlerts(ctx, map[string]any{"status": "resolved"}, 10, 0)
 	require.NoError(t, err)
-
-	rowsAffected, err = result.RowsAffected()
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), rowsAffected)
-
-	// Проверяем, что алерт удален
-	row = db.QueryRow(ctx,
-		"SELECT COUNT(*) FROM alerts WHERE fingerprint = ?",
-		alert.Fingerprint)
-
-	var count int
-	err = row.Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
+	assert.Len(t, alerts, 1)
+	assert.Equal(t, alert.Fingerprint, alerts[0].Fingerprint)
 }
 
 func TestSQLiteDatabase_Transaction(t *testing.T) {
@@ -242,30 +224,43 @@ func TestSQLiteDatabase_Transaction(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Disconnect(ctx)
 
-	err = db.Migrate(ctx)
+	err = db.MigrateUp(ctx)
 	require.NoError(t, err)
+
+	// Создаем тестовые алерты
+	alert1 := &core.Alert{
+		Fingerprint: "tx-test-1",
+		AlertName:   "TxAlert1",
+		Status:      core.StatusFiring,
+		Labels:      map[string]string{"severity": "high"},
+		StartsAt:    time.Now(),
+	}
+
+	alert2 := &core.Alert{
+		Fingerprint: "tx-test-2",
+		AlertName:   "TxAlert2",
+		Status:      core.StatusFiring,
+		Labels:      map[string]string{"severity": "low"},
+		StartsAt:    time.Now(),
+	}
 
 	// Начинаем транзакцию
 	tx, err := db.Begin(ctx)
 	require.NoError(t, err)
 
 	// Выполняем операции в транзакции
-	alert1 := TestAlert{
-		Fingerprint: "tx-test-1",
-		Data:        json.RawMessage(`{"alertname": "TxAlert1"}`),
-	}
-
-	alert2 := TestAlert{
-		Fingerprint: "tx-test-2",
-		Data:        json.RawMessage(`{"alertname": "TxAlert2"}`),
-	}
-
-	_, err = tx.Exec("INSERT INTO alerts (fingerprint, alert_data) VALUES (?, ?)",
-		alert1.Fingerprint, string(alert1.Data))
+	_, err = tx.Exec(`
+		INSERT INTO alerts (fingerprint, alert_name, status, labels, annotations, starts_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		alert1.Fingerprint, alert1.AlertName, string(alert1.Status),
+		`{"severity": "high"}`, `{}`, alert1.StartsAt)
 	require.NoError(t, err)
 
-	_, err = tx.Exec("INSERT INTO alerts (fingerprint, alert_data) VALUES (?, ?)",
-		alert2.Fingerprint, string(alert2.Data))
+	_, err = tx.Exec(`
+		INSERT INTO alerts (fingerprint, alert_name, status, labels, annotations, starts_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		alert2.Fingerprint, alert2.AlertName, string(alert2.Status),
+		`{"severity": "low"}`, `{}`, alert2.StartsAt)
 	require.NoError(t, err)
 
 	// Коммитим транзакцию
@@ -273,13 +268,17 @@ func TestSQLiteDatabase_Transaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Проверяем, что данные сохранены
-	row := db.QueryRow(ctx, "SELECT COUNT(*) FROM alerts WHERE fingerprint IN (?, ?)",
-		alert1.Fingerprint, alert2.Fingerprint)
-
-	var count int
-	err = row.Scan(&count)
+	alerts, err := db.GetAlerts(ctx, map[string]any{}, 10, 0)
 	require.NoError(t, err)
-	assert.Equal(t, 2, count)
+	assert.Len(t, alerts, 2)
+
+	fingerprints := make([]string, len(alerts))
+	for i, alert := range alerts {
+		fingerprints[i] = alert.Fingerprint
+	}
+
+	assert.Contains(t, fingerprints, "tx-test-1")
+	assert.Contains(t, fingerprints, "tx-test-2")
 }
 
 func TestSQLiteDatabase_Health(t *testing.T) {
@@ -330,46 +329,47 @@ func TestSQLiteDatabase_Query(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Disconnect(ctx)
 
-	err = db.Migrate(ctx)
+	err = db.MigrateUp(ctx)
 	require.NoError(t, err)
 
-	// Вставляем тестовые данные
-	alerts := []TestAlert{
+	// Создаем тестовые алерты
+	alerts := []*core.Alert{
 		{
 			Fingerprint: "query-test-1",
-			Data:        json.RawMessage(`{"alertname": "QueryAlert1"}`),
+			AlertName:   "QueryAlert1",
+			Status:      core.StatusFiring,
+			Labels:      map[string]string{"severity": "high"},
+			StartsAt:    time.Now(),
 		},
 		{
 			Fingerprint: "query-test-2",
-			Data:        json.RawMessage(`{"alertname": "QueryAlert2"}`),
+			AlertName:   "QueryAlert2",
+			Status:      core.StatusResolved,
+			Labels:      map[string]string{"severity": "low"},
+			StartsAt:    time.Now(),
 		},
 	}
 
+	// Сохраняем алерты
 	for _, alert := range alerts {
-		_, err := db.Exec(ctx,
-			"INSERT INTO alerts (fingerprint, alert_data) VALUES (?, ?)",
-			alert.Fingerprint, string(alert.Data))
+		err := db.SaveAlert(ctx, alert)
 		require.NoError(t, err)
 	}
 
-	// Выполняем запрос
-	rows, err := db.Query(ctx, "SELECT fingerprint, alert_data FROM alerts ORDER BY fingerprint")
+	// Тестируем GetAlerts с фильтрами
+	highSeverityAlerts, err := db.GetAlerts(ctx, map[string]any{"severity": "high"}, 10, 0)
 	require.NoError(t, err)
-	defer rows.Close()
+	assert.Len(t, highSeverityAlerts, 1)
+	assert.Equal(t, "query-test-1", highSeverityAlerts[0].Fingerprint)
 
-	var retrievedAlerts []TestAlert
-	for rows.Next() {
-		var alert TestAlert
-		var dataStr string
-		err := rows.Scan(&alert.Fingerprint, &dataStr)
-		require.NoError(t, err)
-		alert.Data = json.RawMessage(dataStr)
-		retrievedAlerts = append(retrievedAlerts, alert)
-	}
+	// Тестируем GetAlerts без фильтров
+	allAlerts, err := db.GetAlerts(ctx, map[string]any{}, 10, 0)
+	require.NoError(t, err)
+	assert.Len(t, allAlerts, 2)
 
-	require.Len(t, retrievedAlerts, 2)
-	assert.Equal(t, alerts[0].Fingerprint, retrievedAlerts[0].Fingerprint)
-	assert.Equal(t, alerts[1].Fingerprint, retrievedAlerts[1].Fingerprint)
+	// Проверяем, что алерты отсортированы по starts_at DESC
+	assert.Equal(t, "query-test-2", allAlerts[0].Fingerprint) // Более поздний
+	assert.Equal(t, "query-test-1", allAlerts[1].Fingerprint) // Более ранний
 }
 
 // BenchmarkSQLiteDatabase_CRUD бенчмарк для CRUD операций
@@ -378,12 +378,12 @@ func BenchmarkSQLiteDatabase_CRUD(b *testing.B) {
 	dbPath := filepath.Join(tempDir, "benchmark.db")
 
 	config := &Config{
-		Driver:         "sqlite",
-		SQLiteFile:     dbPath,
-		MaxOpenConns:   10,
-		MaxIdleConns:   5,
+		Driver:          "sqlite",
+		SQLiteFile:      dbPath,
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Hour,
-		Logger:         slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
+		Logger:          slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
 	}
 
 	db, err := NewSQLiteDatabase(config)
@@ -394,40 +394,36 @@ func BenchmarkSQLiteDatabase_CRUD(b *testing.B) {
 	require.NoError(b, err)
 	defer db.Disconnect(ctx)
 
-	err = db.Migrate(ctx)
+	err = db.MigrateUp(ctx)
 	require.NoError(b, err)
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		fingerprint := fmt.Sprintf("bench-fingerprint-%d", i)
-		data := fmt.Sprintf(`{"alertname": "BenchAlert%d", "severity": "info"}`, i)
+		alert := &core.Alert{
+			Fingerprint: fmt.Sprintf("bench-fingerprint-%d", i),
+			AlertName:   fmt.Sprintf("BenchAlert%d", i),
+			Status:      core.StatusFiring,
+			Labels:      map[string]string{"severity": "info"},
+			Annotations: map[string]string{"description": "Benchmark alert"},
+			StartsAt:    time.Now(),
+		}
 
-		// Insert
-		_, err := db.Exec(ctx,
-			"INSERT INTO alerts (fingerprint, alert_data) VALUES (?, ?)",
-			fingerprint, data)
+		// Create
+		err := db.SaveAlert(ctx, alert)
 		require.NoError(b, err)
 
-		// Query
-		row := db.QueryRow(ctx,
-			"SELECT alert_data FROM alerts WHERE fingerprint = ?",
-			fingerprint)
-		var retrievedData string
-		err = row.Scan(&retrievedData)
+		// Read
+		_, err = db.GetAlertByFingerprint(ctx, alert.Fingerprint)
 		require.NoError(b, err)
 
 		// Update
-		newData := fmt.Sprintf(`{"alertname": "UpdatedBenchAlert%d", "severity": "warning"}`, i)
-		_, err = db.Exec(ctx,
-			"UPDATE alerts SET alert_data = ? WHERE fingerprint = ?",
-			newData, fingerprint)
+		alert.Status = core.StatusResolved
+		err = db.SaveAlert(ctx, alert)
 		require.NoError(b, err)
 
-		// Delete
-		_, err = db.Exec(ctx,
-			"DELETE FROM alerts WHERE fingerprint = ?",
-			fingerprint)
+		// Query with filters
+		_, err = db.GetAlerts(ctx, map[string]any{"status": "resolved"}, 1, 0)
 		require.NoError(b, err)
 	}
 }

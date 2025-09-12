@@ -86,18 +86,23 @@ class ClassificationStatsResponse(BaseModel):
 
 
 # Dependency injection для сервиса классификации
-def get_classification_service(request) -> AlertClassificationService:
+def get_classification_service() -> AlertClassificationService:
     """
     Dependency для получения сервиса классификации.
 
-    Получает сервис из app.state, инициализированного в main.py
+    Получает сервис из app_state, инициализированного в main.py
     """
-    if not hasattr(request.app.state, "classification_service"):
+    from ..core.app_state import app_state
+
+    if (
+        not hasattr(app_state, "classification_service")
+        or app_state.classification_service is None
+    ):
         raise HTTPException(
             status_code=503, detail="Classification service not available"
         )
 
-    service = request.app.state.classification_service
+    service = app_state.classification_service
     if service is None:
         raise HTTPException(
             status_code=503,

@@ -81,49 +81,9 @@ class LegacyAPIAdapter:
             AlertClassificationService или None если не настроен
         """
         try:
-            # Проверяем конфигурацию
-            from config import get_config
-
-            config = get_config()
-
-            # Проверяем что LLM настроен
-            if not (hasattr(config, "llm") and config.llm and config.llm.enabled):
-                return None
-
-            # Импортируем компоненты
-            from ..services.alert_classifier import AlertClassificationService
-            from ..services.llm_client import LLMProxyClient
-            from ..services.redis_cache import RedisCache
-
-            # Инициализируем LLM клиент
-            llm_client = LLMProxyClient(
-                proxy_url=config.llm.proxy_url,
-                api_key=config.llm.api_key,
-                model=config.llm.model,
-                timeout=config.llm.timeout,
-                max_retries=config.llm.max_retries,
-            )
-
-            # Инициализируем кеш (опционально)
-            cache = None
-            if config.redis:
-                cache = RedisCache(
-                    redis_url=config.redis.redis_url,
-                    default_ttl=3600,  # 1 час для классификаций
-                )
-
-            # Создаем classification service
-            classification_service = AlertClassificationService(
-                llm_client=llm_client,
-                storage=self.storage,
-                cache=cache,
-                cache_ttl=3600,
-                enable_fallback=True,
-            )
-
-            print("LLM Classification enabled for legacy webhook")
-            return classification_service
-
+            # Упрощенная инициализация - возвращаем None
+            # LLM будет доступен через webhook processor
+            return None
         except Exception as e:
             print(f"Failed to initialize classification service: {e}")
             return None
@@ -375,7 +335,7 @@ class LegacyAPIAdapter:
                 )
 
             return self.templates.TemplateResponse(
-                "html5_dashboard.html",
+                "unified_dashboard.html",
                 {
                     "request": request,
                     "alerts": dashboard_alerts,
@@ -420,7 +380,7 @@ class LegacyAPIAdapter:
                     grouped_alerts[alert_name]["latest"] = alert
 
             return self.templates.TemplateResponse(
-                "html5_dashboard.html",
+                "unified_dashboard.html",
                 {
                     "request": request,
                     "grouped_alerts": list(grouped_alerts.values()),
@@ -464,6 +424,7 @@ class LegacyAPIAdapter:
             starts_at=starts_at,
             ends_at=ends_at,
             generator_url=alert_data.get("generatorURL"),
+            timestamp=datetime.utcnow(),
         )
 
     async def _maybe_classify_alert(self, alert: "Alert") -> None:

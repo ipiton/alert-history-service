@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
+	"github.com/vitaliisemenov/alert-history/internal/database"
+	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 )
 
 const (
@@ -55,6 +57,27 @@ func main() {
 		"service", serviceName,
 		"version", serviceVersion,
 	)
+
+	// Initialize database connection and run migrations
+	slog.Info("Initializing database connection...")
+	config := postgres.LoadFromEnv()
+	pool := postgres.NewPostgresPool(config, logger)
+
+	ctx := context.Background()
+	if err := pool.Connect(ctx); err != nil {
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("✅ Successfully connected to PostgreSQL!")
+
+	// Run database migrations
+	if err := database.RunMigrations(ctx, pool, logger); err != nil {
+		slog.Error("Failed to run database migrations", "error", err)
+		// Не завершаем работу, если миграции не удались - даем возможность ручного исправления
+		slog.Warn("Continuing without migrations - manual intervention may be required")
+	} else {
+		slog.Info("✅ Database migrations completed successfully")
+	}
 
 	// Get port from environment or use default
 	port := os.Getenv("PORT")

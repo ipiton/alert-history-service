@@ -95,8 +95,8 @@ func TestMigrationsRunDown(t *testing.T) {
 	}
 
 	// Запускаем rollback миграций
-	cmd := exec.Command("goose", "-dir", "migrations", "postgres", databaseURL, "down")
-	output, err := cmd.CombinedOutput()
+	downCmd := exec.Command("goose", "-dir", "migrations", "postgres", databaseURL, "down")
+	output, err := downCmd.CombinedOutput()
 
 	if err != nil {
 		t.Logf("Migration rollback output: %s", string(output))

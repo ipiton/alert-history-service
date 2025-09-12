@@ -5,4 +5,4 @@
 - [x] 3. Настроить DATABASE_URL в CI. ✅ **ВЫПОЛНЕНО**
 - [x] 4. Создать тест проверки миграций. ✅ **ВЫПОЛНЕНО** (migrations_test.go)
 - [x] 5. Добавить тест rollback миграций. ✅ **ВЫПОЛНЕНО** (включен в migrations_test.go)
-- [ ] 6. Коммит: `ci(go): TN-15 integrate migrations in CI`.
+- [x] 6. Коммит: `ci(go): TN-15 integrate migrations in CI`. ✅ **ВЫПОЛНЕНО**

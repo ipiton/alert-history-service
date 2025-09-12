@@ -79,7 +79,7 @@ class LLMProxyClient(ILLMClient):
         timeout = aiohttp.ClientTimeout(total=self.timeout)
 
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "x-litellm-api-key": self.api_key,
             "Content-Type": "application/json",
             "User-Agent": "AlertHistory-LLM/1.0",
         }

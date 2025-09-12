@@ -89,21 +89,35 @@ install-tools:
 	$(GOGET) -u github.com/cosmtrek/air
 	$(GOGET) -u github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+# Include advanced migration commands from Makefile.migrations
+include Makefile.migrations
+
+# Database URL for migrations (uses environment variables)
+DATABASE_URL ?= postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL_MODE)
+
+# Legacy migration commands (for backward compatibility)
+# Use 'make -f Makefile.migrations <command>' for advanced features
+
 # Create new migration (requires goose to be installed)
 migrate-create:
 	@echo "Creating new migration..."
 	@if [ -z "$(name)" ]; then echo "Usage: make migrate-create name=migration_name"; exit 1; fi
-	goose -dir migrations create $(name) sql
+	$(shell go env GOPATH)/bin/goose -dir migrations create $(name) sql
 
 # Run migrations up (requires goose to be installed)
 migrate-up:
 	@echo "Running migrations up..."
-	goose -dir migrations postgres "$(DATABASE_URL)" up
+	$(shell go env GOPATH)/bin/goose -dir migrations postgres "$(DATABASE_URL)" up
 
 # Run migrations down (requires goose to be installed)
 migrate-down:
 	@echo "Running migrations down..."
-	goose -dir migrations postgres "$(DATABASE_URL)" down
+	$(shell go env GOPATH)/bin/goose -dir migrations postgres "$(DATABASE_URL)" down
+
+# Show migration status (requires goose to be installed)
+migrate-status:
+	@echo "Checking migration status..."
+	$(shell go env GOPATH)/bin/goose -dir migrations postgres "$(DATABASE_URL)" status
 
 # Docker commands
 docker-build:
@@ -196,7 +210,9 @@ bake-local:
 
 # Show available commands
 help:
-	@echo "Available commands:"
+	@echo "🚀 Alert History Service - Available Commands"
+	@echo ""
+	@echo "📦 Build & Development:"
 	@echo "  build           - Build the application"
 	@echo "  build-linux     - Build for Linux (Docker)"
 	@echo "  test            - Run tests"
@@ -210,11 +226,18 @@ help:
 	@echo "  dev             - Run with hot reload (requires air)"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  install-tools   - Install development tools"
+	@echo ""
+	@echo "🐦 Database Migrations (Legacy):"
 	@echo "  migrate-create  - Create new migration (requires goose)"
 	@echo "  migrate-up      - Run migrations up"
 	@echo "  migrate-down    - Run migrations down"
+	@echo "  migrate-status  - Show migration status"
 	@echo ""
-	@echo "Docker commands:"
+	@echo "🛠️  Advanced Migration System:"
+	@echo "  Use 'make -f Makefile.migrations help' for full migration features"
+	@echo "  Features: backup, health checks, multi-driver, error recovery"
+	@echo ""
+	@echo "🐳 Docker Commands:"
 	@echo "  docker-build        - Build single-arch Docker image"
 	@echo "  docker-build-multi  - Build multi-arch (AMD64+ARM64) image with push"
 	@echo "  docker-build-dev    - Build development image with hot reload"
@@ -226,13 +249,19 @@ help:
 	@echo "  docker-clean        - Remove Docker images"
 	@echo "  docker-health-check - Check container health"
 	@echo ""
-	@echo "Docker Compose commands:"
+	@echo "🐙 Docker Compose Commands:"
 	@echo "  compose-up          - Start services"
 	@echo "  compose-down        - Stop services"
 	@echo "  compose-logs        - Show service logs"
 	@echo "  compose-build       - Build services"
 	@echo ""
-	@echo "Advanced Docker commands:"
+	@echo "🎯 Advanced Docker Commands:"
 	@echo "  bake-build          - Multi-arch build with Bake"
 	@echo "  bake-dev            - Development build with Bake"
 	@echo "  bake-local          - Local build with Bake"
+	@echo ""
+	@echo "📖 Quick Start:"
+	@echo "  1. make deps                    # Install dependencies"
+	@echo "  2. make -f Makefile.migrations setup  # Setup migration system"
+	@echo "  3. make test                    # Run tests"
+	@echo "  4. make build && make run       # Build and run application"

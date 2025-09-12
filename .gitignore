@@ -13,6 +13,7 @@ data/*.sqlite3
 .DS_Store
 .idea/
 .vscode/
+.cursor/
 
 # Test & coverage
 .pytest_cache/
@@ -52,6 +53,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+charts
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -147,7 +147,7 @@ class LegacyMetrics:
 
         self.enrichment_mode_status = Gauge(
             "alert_history_enrichment_mode_status",
-            "Current enrichment mode (1=enriched, 0=transparent)",
+            "Current enrichment mode (0=transparent, 1=enriched, 2=transparent_with_recommendations)",
             registry=self.registry,
         )
 
@@ -244,6 +244,15 @@ class LegacyMetrics:
         """Increment classification error counter."""
         self.classification_errors_total.labels(error_type=error_type).inc()
 
+    def set_enrichment_mode(self, mode: str) -> None:
+        """Set enrichment mode status."""
+        mode_map = {
+            "transparent": 0,
+            "enriched": 1,
+            "transparent_with_recommendations": 2,
+        }
+        self.enrichment_mode_status.set(mode_map.get(mode, 0))
+
     def increment_classifications(
         self, severity: str, cached: bool = False, model: str = "unknown"
     ) -> None:
@@ -296,6 +305,64 @@ class LegacyMetrics:
     def set_active_connections(self, count: int) -> None:
         """Set active connections count."""
         self.active_connections.set(count)
+
+    def set_gauge(
+        self, name: str, value: float, labels: Optional[dict[str, str]] = None
+    ) -> None:
+        """Set gauge metric (generic interface)."""
+        # For now, we'll map to existing gauges or create a generic one
+        # This is a fallback implementation
+        if name == "alerts_stored":
+            self.set_alerts_stored(int(value))
+        elif name == "database_size":
+            self.set_database_size(int(value))
+        elif name == "active_connections":
+            self.set_active_connections(int(value))
+        else:
+            # For unknown metrics, we could create a dynamic gauge
+            # but for now, just log and ignore
+            pass
+
+    def increment_counter(
+        self, name: str, value: float = 1.0, labels: Optional[dict[str, str]] = None
+    ) -> None:
+        """Increment counter metric (generic interface)."""
+        # Map to existing counters or create fallback
+        if name == "classification":
+            severity = labels.get("severity", "unknown") if labels else "unknown"
+            model = labels.get("model", "unknown") if labels else "unknown"
+            self.increment_classification(severity, model)
+        elif name == "webhook_events":
+            alertname = labels.get("alertname", "unknown") if labels else "unknown"
+            status = labels.get("status", "unknown") if labels else "unknown"
+            self.increment_alerts_received(alertname, status)
+        elif name == "webhook_errors":
+            self.increment_webhook_errors()
+        else:
+            # For unknown counters, just log and ignore for now
+            pass
+
+    def observe_histogram(
+        self, name: str, value: float, labels: Optional[dict[str, str]] = None
+    ) -> None:
+        """Observe histogram metric (generic interface)."""
+        # Map to existing histograms
+        if name == "classification_duration":
+            model = labels.get("model", "unknown") if labels else "unknown"
+            self.observe_classification_duration(value, model)
+        elif name == "webhook_duration":
+            self.observe_webhook_duration(value)
+        elif name == "request_latency":
+            endpoint = labels.get("endpoint", "webhook") if labels else "webhook"
+            if endpoint == "webhook":
+                self.observe_webhook_duration(value)
+            elif endpoint == "history":
+                self.observe_history_duration(value)
+            elif endpoint == "report":
+                self.observe_report_duration(value)
+        else:
+            # For unknown histograms, just log and ignore for now
+            pass
 
 
 class MultiPodMetricsCompatibility:
@@ -410,3 +477,33 @@ groups:
           max(sum(rate(alert_history_webhook_events_total[5m])) by (pod)) -
           min(sum(rate(alert_history_webhook_events_total[5m])) by (pod))
 """
+
+
+# Global metrics instance for dependency injection
+_global_metrics: Optional[LegacyMetrics] = None
+
+
+def get_metrics() -> LegacyMetrics:
+    """
+    Get global metrics instance for dependency injection.
+
+    Returns:
+        LegacyMetrics: Global metrics instance
+    """
+    global _global_metrics
+
+    if _global_metrics is None:
+        _global_metrics = LegacyMetrics()
+
+    return _global_metrics
+
+
+def set_global_metrics(metrics: LegacyMetrics) -> None:
+    """
+    Set global metrics instance.
+
+    Args:
+        metrics: Metrics instance to set globally
+    """
+    global _global_metrics
+    _global_metrics = metrics

@@ -11,6 +11,7 @@ Webhook processor с интеграцией LLM классификации.
 # Standard library imports
 import asyncio
 import time
+from datetime import datetime
 from typing import Any, Optional
 
 # Local imports
@@ -258,6 +259,7 @@ class WebhookProcessor:
             starts_at=starts_at,
             ends_at=ends_at,
             generator_url=alert_data.get("generatorURL"),
+            timestamp=datetime.utcnow(),
         )
 
     def get_processing_stats(self) -> dict[str, Any]:

@@ -66,17 +66,17 @@ spec:
             # Database Configuration
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_HOST
-              value: {{ include "alert-history.postgresql.fullname" . }}-rw
+              value: {{ include "alert-history.postgresql.fullname" . }}
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_DATABASE
-              value: {{ .Values.postgresql.cluster.bootstrap.initdb.database | quote }}
+              value: {{ .Values.postgresql.database | quote }}
             - name: POSTGRES_USERNAME
-              value: {{ .Values.postgresql.cluster.bootstrap.initdb.owner | quote }}
+              value: {{ .Values.postgresql.username | quote }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.postgresql.cluster.bootstrap.initdb.secret.name | quote }}
+                  name: {{ include "alert-history.postgresql.secretName" . }}
                   key: password
             - name: DATABASE_URL
               value: {{ include "alert-history.databaseUrl" . | quote }}
@@ -88,18 +88,21 @@ spec:
               value: "sqlite:///data/alert_history.sqlite3"
             {{- end }}
 
-            # KeyDB Configuration (Redis-compatible)
+            # Valkey/Redis Configuration
             {{- if .Values.cache.enabled }}
             - name: REDIS_HOST
-              value: {{ include "alert-history.keydb.fullname" . }}
+              value: {{ .Values.cache.host | quote }}
             - name: REDIS_PORT
-              value: {{ .Values.keydb.keydb.port | quote }}
-            {{- if .Values.keydb.auth.enabled }}
+              value: {{ .Values.cache.port | quote }}
+            {{- if .Values.cache.auth.enabled }}
             - name: REDIS_PASSWORD
-              value: {{ .Values.keydb.auth.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "alert-history.fullname" . }}-secrets
+                  key: redis-password
             {{- end }}
             - name: REDIS_URL
-              value: {{ include "alert-history.keydbUrl" . | quote }}
+              value: {{ include "alert-history.cacheUrl" . | quote }}
             {{- else }}
             # Fallback to localhost for development
             - name: REDIS_HOST
@@ -112,6 +115,8 @@ spec:
 
             # LLM Configuration
             {{- if .Values.llm.enabled }}
+            - name: LLM_ENABLED
+              value: "true"
             - name: LLM_PROXY_URL
               valueFrom:
                 configMapKeyRef:
@@ -127,6 +132,9 @@ spec:
                 configMapKeyRef:
                   name: {{ include "alert-history.fullname" . }}-config
                   key: llm-model
+            {{- else }}
+            - name: LLM_ENABLED
+              value: "false"
             {{- end }}
 
             # Alert Processing Configuration

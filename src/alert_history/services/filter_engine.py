@@ -136,6 +136,45 @@ class AlertFilterEngine(IFilterEngine):
             )
         )
 
+        # Rule 5: Block alerts with low LLM confidence
+        self.global_rules.append(
+            FilterRule(
+                name="block_low_confidence",
+                action=FilterAction.DENY,
+                conditions={
+                    "llm_confidence_below": 0.5,
+                    "has_llm_classification": True,
+                },
+                priority=15,
+                enabled=True,
+            )
+        )
+
+        # Rule 6: Allow only high-confidence warnings and above
+        self.global_rules.append(
+            FilterRule(
+                name="high_confidence_only",
+                action=FilterAction.ALLOW,
+                conditions={
+                    "llm_confidence_above": 0.7,
+                    "has_llm_classification": True,
+                },
+                priority=5,
+                enabled=False,  # Can be enabled for strict filtering
+            )
+        )
+
+        # Rule 7: Block alerts classified as "false_positive"
+        self.global_rules.append(
+            FilterRule(
+                name="block_false_positives",
+                action=FilterAction.DENY,
+                conditions={"llm_severity": "false_positive"},
+                priority=8,
+                enabled=True,
+            )
+        )
+
         # Sort rules by priority
         self.global_rules.sort(key=lambda r: r.priority)
 
@@ -280,7 +319,7 @@ class AlertFilterEngine(IFilterEngine):
     ) -> FilterAction:
         """Применить список правил к алерту."""
         alert = enriched_alert.alert
-        # classification = enriched_alert.classification  # Available for future use
+        classification = enriched_alert.classification
 
         for rule in rules:
             if not rule.enabled:
@@ -303,7 +342,7 @@ class AlertFilterEngine(IFilterEngine):
     ) -> bool:
         """Оценить условия правила."""
         alert = enriched_alert.alert
-        # classification = enriched_alert.classification  # Available for future use
+        classification = enriched_alert.classification
 
         for condition_key, condition_value in conditions.items():
 

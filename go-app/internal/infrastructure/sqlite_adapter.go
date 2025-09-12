@@ -3,12 +3,17 @@ package infrastructure
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
 // SQLiteDatabase адаптер для SQLite, реализующий общий интерфейс Database
@@ -171,23 +176,31 @@ func (s *SQLiteDatabase) Begin(ctx context.Context) (*sql.Tx, error) {
 	return s.db.BeginTx(ctx, nil)
 }
 
-// Migrate выполняет миграции схемы для SQLite
-func (s *SQLiteDatabase) Migrate(ctx context.Context) error {
+// MigrateUp выполняет миграции схемы для SQLite
+func (s *SQLiteDatabase) MigrateUp(ctx context.Context) error {
 	if s.db == nil {
 		return fmt.Errorf("not connected")
 	}
 
 	// Создаем таблицу alerts если она не существует
-	createTableSQL := `
+	createAlertsTableSQL := `
 	CREATE TABLE IF NOT EXISTS alerts (
 		fingerprint TEXT PRIMARY KEY,
-		alert_data TEXT NOT NULL, -- JSON как текст для SQLite
+		alert_name TEXT NOT NULL,
+		status TEXT NOT NULL CHECK (status IN ('firing', 'resolved')),
+		labels TEXT NOT NULL, -- JSON format
+		annotations TEXT NOT NULL, -- JSON format
+		starts_at DATETIME NOT NULL,
+		ends_at DATETIME,
+		generator_url TEXT,
+		timestamp DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+	CREATE INDEX IF NOT EXISTS idx_alerts_starts_at ON alerts(starts_at);
 	CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at);
-	CREATE INDEX IF NOT EXISTS idx_alerts_updated_at ON alerts(updated_at);
 
 	-- Триггер для автоматического обновления updated_at
 	CREATE TRIGGER IF NOT EXISTS update_alerts_updated_at
@@ -198,10 +211,498 @@ func (s *SQLiteDatabase) Migrate(ctx context.Context) error {
 		END;
 	`
 
-	if _, err := s.db.ExecContext(ctx, createTableSQL); err != nil {
+	if _, err := s.db.ExecContext(ctx, createAlertsTableSQL); err != nil {
 		return fmt.Errorf("failed to create alerts table: %w", err)
 	}
 
-	s.logger.Info("SQLite schema migration completed successfully")
+	// Создаем таблицу classifications
+	createClassificationsTableSQL := `
+	CREATE TABLE IF NOT EXISTS classifications (
+		id TEXT PRIMARY KEY,
+		alert_fingerprint TEXT NOT NULL,
+		category TEXT NOT NULL, -- severity level
+		confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+		reasoning TEXT NOT NULL,
+		recommendations TEXT NOT NULL, -- JSON array
+		metadata TEXT, -- JSON object
+		processing_time REAL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (alert_fingerprint) REFERENCES alerts(fingerprint) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_classifications_alert_fingerprint ON classifications(alert_fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_classifications_category ON classifications(category);
+	CREATE INDEX IF NOT EXISTS idx_classifications_created_at ON classifications(created_at);
+	`
+
+	if _, err := s.db.ExecContext(ctx, createClassificationsTableSQL); err != nil {
+		return fmt.Errorf("failed to create classifications table: %w", err)
+	}
+
+	// Создаем таблицу publishing
+	createPublishingTableSQL := `
+	CREATE TABLE IF NOT EXISTS publishing (
+		id TEXT PRIMARY KEY,
+		alert_fingerprint TEXT NOT NULL,
+		channel TEXT NOT NULL, -- slack, pagerduty, email, etc.
+		status TEXT NOT NULL CHECK (status IN ('sent', 'failed')),
+		message_id TEXT,
+		error_message TEXT,
+		processing_time REAL,
+		sent_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (alert_fingerprint) REFERENCES alerts(fingerprint) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_publishing_alert_fingerprint ON publishing(alert_fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_publishing_channel ON publishing(channel);
+	CREATE INDEX IF NOT EXISTS idx_publishing_status ON publishing(status);
+	CREATE INDEX IF NOT EXISTS idx_publishing_created_at ON publishing(created_at);
+	`
+
+	if _, err := s.db.ExecContext(ctx, createPublishingTableSQL); err != nil {
+		return fmt.Errorf("failed to create publishing table: %w", err)
+	}
+
+	s.logger.Info("SQLite schema migration completed successfully",
+		"tables_created", []string{"alerts", "classifications", "publishing"})
 	return nil
+}
+
+// SaveAlert сохраняет алерт в базу данных
+func (s *SQLiteDatabase) SaveAlert(ctx context.Context, alert *core.Alert) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	// Сериализуем labels и annotations в JSON
+	labelsJSON, err := json.Marshal(alert.Labels)
+	if err != nil {
+		return fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	annotationsJSON, err := json.Marshal(alert.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal annotations: %w", err)
+	}
+
+	query := `
+		INSERT OR REPLACE INTO alerts (
+			fingerprint, alert_name, status, labels, annotations,
+			starts_at, ends_at, generator_url, timestamp, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	_, err = s.db.ExecContext(ctx, query,
+		alert.Fingerprint, alert.AlertName, string(alert.Status),
+		string(labelsJSON), string(annotationsJSON),
+		alert.StartsAt, alert.EndsAt, alert.GeneratorURL,
+		alert.Timestamp, now, now,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to save alert: %w", err)
+	}
+
+	return nil
+}
+
+// GetAlertByFingerprint получает алерт по fingerprint
+func (s *SQLiteDatabase) GetAlertByFingerprint(ctx context.Context, fingerprint string) (*core.Alert, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	query := `
+		SELECT fingerprint, alert_name, status, labels, annotations,
+			   starts_at, ends_at, generator_url, timestamp
+		FROM alerts WHERE fingerprint = ?`
+
+	row := s.db.QueryRowContext(ctx, query, fingerprint)
+
+	alert := &core.Alert{}
+	var labelsJSON, annotationsJSON string
+	var endsAt, generatorURL, timestamp interface{}
+
+	err := row.Scan(
+		&alert.Fingerprint, &alert.AlertName, &alert.Status,
+		&labelsJSON, &annotationsJSON, &alert.StartsAt,
+		&endsAt, &generatorURL, &timestamp,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Alert not found
+		}
+		return nil, fmt.Errorf("failed to get alert: %w", err)
+	}
+
+	// Десериализуем JSON поля
+	if err := json.Unmarshal([]byte(labelsJSON), &alert.Labels); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(annotationsJSON), &alert.Annotations); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+	}
+
+	// Обработка nullable полей
+	if endsAt != nil {
+		if t, ok := endsAt.(time.Time); ok {
+			alert.EndsAt = &t
+		}
+	}
+
+	if generatorURL != nil {
+		if s, ok := generatorURL.(string); ok {
+			alert.GeneratorURL = &s
+		}
+	}
+
+	if timestamp != nil {
+		if t, ok := timestamp.(time.Time); ok {
+			alert.Timestamp = &t
+		}
+	}
+
+	return alert, nil
+}
+
+// GetAlerts получает список алертов с фильтрами
+func (s *SQLiteDatabase) GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*core.Alert, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	query := `
+		SELECT fingerprint, alert_name, status, labels, annotations,
+			   starts_at, ends_at, generator_url, timestamp
+		FROM alerts WHERE 1=1`
+	args := []interface{}{}
+
+	// Добавляем фильтры
+	if status, ok := filters["status"].(string); ok {
+		query += " AND status = ?"
+		args = append(args, status)
+	}
+
+	if severity, ok := filters["severity"].(string); ok {
+		query += " AND json_extract(labels, '$.severity') = ?"
+		args = append(args, severity)
+	}
+
+	if namespace, ok := filters["namespace"].(string); ok {
+		query += " AND json_extract(labels, '$.namespace') = ?"
+		args = append(args, namespace)
+	}
+
+	// Добавляем сортировку
+	query += " ORDER BY starts_at DESC"
+
+	// Добавляем пагинацию
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+
+	if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query alerts: %w", err)
+	}
+	defer rows.Close()
+
+	var alerts []*core.Alert
+	for rows.Next() {
+		alert := &core.Alert{}
+		var labelsJSON, annotationsJSON string
+		var endsAt, generatorURL, timestamp interface{}
+
+		err := rows.Scan(
+			&alert.Fingerprint, &alert.AlertName, &alert.Status,
+			&labelsJSON, &annotationsJSON, &alert.StartsAt,
+			&endsAt, &generatorURL, &timestamp,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan alert: %w", err)
+		}
+
+		// Десериализуем JSON поля
+		if err := json.Unmarshal([]byte(labelsJSON), &alert.Labels); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
+		}
+
+		if err := json.Unmarshal([]byte(annotationsJSON), &alert.Annotations); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+		}
+
+		// Обработка nullable полей
+		if endsAt != nil {
+			if t, ok := endsAt.(time.Time); ok {
+				alert.EndsAt = &t
+			}
+		}
+
+		if generatorURL != nil {
+			if s, ok := generatorURL.(string); ok {
+				alert.GeneratorURL = &s
+			}
+		}
+
+		if timestamp != nil {
+			if t, ok := timestamp.(time.Time); ok {
+				alert.Timestamp = &t
+			}
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// CleanupOldAlerts удаляет старые алерты
+func (s *SQLiteDatabase) CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("not connected")
+	}
+
+	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
+
+	query := "DELETE FROM alerts WHERE starts_at < ?"
+	result, err := s.db.ExecContext(ctx, query, cutoffDate)
+	if err != nil {
+		return 0, fmt.Errorf("failed to cleanup old alerts: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return int(rowsAffected), nil
+}
+
+// SaveClassification сохраняет результат классификации
+func (s *SQLiteDatabase) SaveClassification(ctx context.Context, fingerprint string, result *core.ClassificationResult) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	metadataJSON, err := json.Marshal(result.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	recommendationsJSON, err := json.Marshal(result.Recommendations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal recommendations: %w", err)
+	}
+
+	query := `
+		INSERT OR REPLACE INTO classifications (
+			id, alert_fingerprint, category, confidence, reasoning,
+			recommendations, metadata, processing_time, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	id := fmt.Sprintf("%s_classification", fingerprint)
+	now := time.Now()
+
+	_, err = s.db.ExecContext(ctx, query,
+		id, fingerprint, string(result.Severity), result.Confidence,
+		result.Reasoning, string(recommendationsJSON),
+		string(metadataJSON), result.ProcessingTime, now,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to save classification: %w", err)
+	}
+
+	return nil
+}
+
+// GetClassification получает результат классификации
+func (s *SQLiteDatabase) GetClassification(ctx context.Context, fingerprint string) (*core.ClassificationResult, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	query := `
+		SELECT category, confidence, reasoning, recommendations, metadata, processing_time
+		FROM classifications WHERE alert_fingerprint = ?`
+
+	row := s.db.QueryRowContext(ctx, query, fingerprint)
+
+	result := &core.ClassificationResult{}
+	var recommendationsJSON, metadataJSON string
+
+	err := row.Scan(
+		&result.Severity, &result.Confidence, &result.Reasoning,
+		&recommendationsJSON, &metadataJSON, &result.ProcessingTime,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Classification not found
+		}
+		return nil, fmt.Errorf("failed to get classification: %w", err)
+	}
+
+	// Десериализуем JSON поля
+	if err := json.Unmarshal([]byte(recommendationsJSON), &result.Recommendations); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal recommendations: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(metadataJSON), &result.Metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
+
+	return result, nil
+}
+
+// LogPublishingAttempt логирует попытку публикации
+func (s *SQLiteDatabase) LogPublishingAttempt(ctx context.Context, fingerprint, targetName string, success bool, errorMessage *string, processingTime *float64) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	query := `
+		INSERT INTO publishing (
+			id, alert_fingerprint, channel, status, error_message,
+			processing_time, sent_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	id := fmt.Sprintf("%s_%s_%d", fingerprint, targetName, time.Now().Unix())
+	status := "failed"
+	var sentAt *time.Time
+
+	if success {
+		status = "sent"
+		now := time.Now()
+		sentAt = &now
+	}
+
+	_, err := s.db.ExecContext(ctx, query,
+		id, fingerprint, targetName, status, errorMessage,
+		processingTime, sentAt, time.Now(),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to log publishing attempt: %w", err)
+	}
+
+	return nil
+}
+
+// GetPublishingHistory получает историю публикаций для алерта
+func (s *SQLiteDatabase) GetPublishingHistory(ctx context.Context, fingerprint string) ([]*core.PublishingLog, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	query := `
+		SELECT id, alert_fingerprint, channel, status, error_message,
+			   processing_time, sent_at, created_at
+		FROM publishing WHERE alert_fingerprint = ?
+		ORDER BY created_at DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query publishing history: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*core.PublishingLog
+	for rows.Next() {
+		log := &core.PublishingLog{}
+		var sentAt interface{}
+
+		var status string
+		err := rows.Scan(
+			&log.ID, &log.Fingerprint, &log.TargetName, &status,
+			&log.ErrorMessage, &log.ProcessingTime, &sentAt, &log.CreatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan publishing log: %w", err)
+		}
+
+		// Конвертируем статус в bool
+		log.Success = strings.ToLower(status) == "sent"
+
+		logs = append(logs, log)
+	}
+
+	return logs, nil
+}
+
+// MigrateDown выполняет откат миграций (упрощенная версия для SQLite)
+func (s *SQLiteDatabase) MigrateDown(ctx context.Context, steps int) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	s.logger.Info("SQLite doesn't support complex migrations rollback",
+		"steps", steps,
+		"recommendation", "Use backup/restore for rollback")
+
+	return fmt.Errorf("SQLite doesn't support complex migrations rollback")
+}
+
+// GetStats возвращает статистику базы данных
+func (s *SQLiteDatabase) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	stats := make(map[string]interface{})
+
+	// Общая статистика
+	row := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM alerts")
+	var alertCount int
+	if err := row.Scan(&alertCount); err != nil {
+		return nil, fmt.Errorf("failed to get alert count: %w", err)
+	}
+	stats["alerts_count"] = alertCount
+
+	// Статистика по классификациям
+	row = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM classifications")
+	var classificationCount int
+	if err := row.Scan(&classificationCount); err != nil {
+		return nil, fmt.Errorf("failed to get classification count: %w", err)
+	}
+	stats["classifications_count"] = classificationCount
+
+	// Статистика по публикациям
+	row = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM publishing")
+	var publishingCount int
+	if err := row.Scan(&publishingCount); err != nil {
+		return nil, fmt.Errorf("failed to get publishing count: %w", err)
+	}
+	stats["publishing_count"] = publishingCount
+
+	// Размер базы данных
+	row = s.db.QueryRowContext(ctx, "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()")
+	var dbSize int64
+	if err := row.Scan(&dbSize); err != nil {
+		s.logger.Warn("Failed to get database size", "error", err)
+		stats["database_size"] = "unknown"
+	} else {
+		stats["database_size"] = fmt.Sprintf("%d bytes", dbSize)
+	}
+
+	// Connection pool stats
+	dbStats := s.db.Stats()
+	stats["open_connections"] = dbStats.OpenConnections
+	stats["in_use_connections"] = dbStats.InUse
+	stats["idle_connections"] = dbStats.Idle
+	stats["wait_count"] = dbStats.WaitCount
+	stats["wait_duration"] = dbStats.WaitDuration.String()
+
+	return stats, nil
 }
