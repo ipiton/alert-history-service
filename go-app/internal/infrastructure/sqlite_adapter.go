@@ -368,46 +368,83 @@ func (s *SQLiteDatabase) GetAlertByFingerprint(ctx context.Context, fingerprint 
 	return alert, nil
 }
 
-// GetAlerts получает список алертов с фильтрами
-func (s *SQLiteDatabase) GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*core.Alert, error) {
+// ListAlerts получает список алертов с типизированными фильтрами
+func (s *SQLiteDatabase) ListAlerts(ctx context.Context, filters *core.AlertFilters) (*core.AlertList, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	query := `
-		SELECT fingerprint, alert_name, status, labels, annotations,
-			   starts_at, ends_at, generator_url, timestamp
-		FROM alerts WHERE 1=1`
+	// Если filters nil, создаем дефолтный
+	if filters == nil {
+		filters = &core.AlertFilters{
+			Limit:  100,
+			Offset: 0,
+		}
+	}
+
+	// Строим WHERE clause
+	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 
-	// Добавляем фильтры
-	if status, ok := filters["status"].(string); ok {
-		query += " AND status = ?"
-		args = append(args, status)
+	// Фильтр по статусу
+	if filters.Status != nil {
+		whereClause += " AND status = ?"
+		args = append(args, string(*filters.Status))
 	}
 
-	if severity, ok := filters["severity"].(string); ok {
-		query += " AND json_extract(labels, '$.severity') = ?"
-		args = append(args, severity)
+	// Фильтр по severity (из labels)
+	if filters.Severity != nil {
+		whereClause += " AND json_extract(labels, '$.severity') = ?"
+		args = append(args, *filters.Severity)
 	}
 
-	if namespace, ok := filters["namespace"].(string); ok {
-		query += " AND json_extract(labels, '$.namespace') = ?"
-		args = append(args, namespace)
+	// Фильтр по namespace
+	if filters.Namespace != nil {
+		whereClause += " AND json_extract(labels, '$.namespace') = ?"
+		args = append(args, *filters.Namespace)
 	}
 
-	// Добавляем сортировку
-	query += " ORDER BY starts_at DESC"
+	// Фильтр по времени
+	if filters.TimeRange != nil {
+		if filters.TimeRange.From != nil {
+			whereClause += " AND starts_at >= ?"
+			args = append(args, *filters.TimeRange.From)
+		}
+		if filters.TimeRange.To != nil {
+			whereClause += " AND starts_at <= ?"
+			args = append(args, *filters.TimeRange.To)
+		}
+	}
+
+	// Фильтры по labels (JSON contains - упрощённая версия для SQLite)
+	for key, value := range filters.Labels {
+		whereClause += " AND json_extract(labels, '$." + key + "') = ?"
+		args = append(args, value)
+	}
+
+	// Получаем общее количество
+	countQuery := "SELECT COUNT(*) FROM alerts " + whereClause
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("failed to count alerts: %w", err)
+	}
+
+	// Получаем alerts с пагинацией
+	query := `
+		SELECT fingerprint, alert_name, status, labels, annotations,
+		       starts_at, ends_at, generator_url, timestamp
+		FROM alerts ` + whereClause + `
+		ORDER BY starts_at DESC`
 
 	// Добавляем пагинацию
-	if limit > 0 {
+	if filters.Limit > 0 {
 		query += " LIMIT ?"
-		args = append(args, limit)
+		args = append(args, filters.Limit)
 	}
 
-	if offset > 0 {
+	if filters.Offset > 0 {
 		query += " OFFSET ?"
-		args = append(args, offset)
+		args = append(args, filters.Offset)
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -427,7 +464,6 @@ func (s *SQLiteDatabase) GetAlerts(ctx context.Context, filters map[string]any, 
 			&labelsJSON, &annotationsJSON, &alert.StartsAt,
 			&endsAt, &generatorURL, &timestamp,
 		)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan alert: %w", err)
 		}
@@ -463,7 +499,183 @@ func (s *SQLiteDatabase) GetAlerts(ctx context.Context, filters map[string]any, 
 		alerts = append(alerts, alert)
 	}
 
-	return alerts, nil
+	return &core.AlertList{
+		Alerts: alerts,
+		Total:  total,
+		Limit:  filters.Limit,
+		Offset: filters.Offset,
+	}, nil
+}
+
+// UpdateAlert обновляет существующий алерт
+func (s *SQLiteDatabase) UpdateAlert(ctx context.Context, alert *core.Alert) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	// Сериализуем labels и annotations в JSON
+	labelsJSON, err := json.Marshal(alert.Labels)
+	if err != nil {
+		return fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	annotationsJSON, err := json.Marshal(alert.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal annotations: %w", err)
+	}
+
+	query := `
+		UPDATE alerts SET
+			alert_name = ?,
+			status = ?,
+			labels = ?,
+			annotations = ?,
+			starts_at = ?,
+			ends_at = ?,
+			generator_url = ?,
+			timestamp = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE fingerprint = ?`
+
+	result, err := s.db.ExecContext(ctx, query,
+		alert.AlertName,
+		string(alert.Status),
+		string(labelsJSON),
+		string(annotationsJSON),
+		alert.StartsAt,
+		alert.EndsAt,
+		alert.GeneratorURL,
+		alert.Timestamp,
+		alert.Fingerprint,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update alert: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("alert not found: %s", alert.Fingerprint)
+	}
+
+	return nil
+}
+
+// DeleteAlert удаляет алерт по fingerprint
+func (s *SQLiteDatabase) DeleteAlert(ctx context.Context, fingerprint string) error {
+	if s.db == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	query := "DELETE FROM alerts WHERE fingerprint = ?"
+
+	result, err := s.db.ExecContext(ctx, query, fingerprint)
+	if err != nil {
+		return fmt.Errorf("failed to delete alert: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("alert not found: %s", fingerprint)
+	}
+
+	return nil
+}
+
+// GetAlertStats возвращает статистику по алертам (реализация AlertStorage интерфейса)
+func (s *SQLiteDatabase) GetAlertStats(ctx context.Context) (*core.AlertStats, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	stats := &core.AlertStats{
+		AlertsByStatus:    make(map[string]int),
+		AlertsBySeverity:  make(map[string]int),
+		AlertsByNamespace: make(map[string]int),
+	}
+
+	// Общее количество алертов
+	row := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM alerts")
+	if err := row.Scan(&stats.TotalAlerts); err != nil {
+		return nil, fmt.Errorf("failed to get total alerts count: %w", err)
+	}
+
+	// Статистика по статусам
+	rows, err := s.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM alerts GROUP BY status")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan status stats: %w", err)
+		}
+		stats.AlertsByStatus[status] = count
+	}
+
+	// Статистика по severity (из labels)
+	rows, err = s.db.QueryContext(ctx, `
+		SELECT json_extract(labels, '$.severity') as severity, COUNT(*)
+		FROM alerts
+		WHERE json_extract(labels, '$.severity') IS NOT NULL
+		GROUP BY json_extract(labels, '$.severity')
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get severity stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var severity string
+		var count int
+		if err := rows.Scan(&severity, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan severity stats: %w", err)
+		}
+		stats.AlertsBySeverity[severity] = count
+	}
+
+	// Статистика по namespace
+	rows, err = s.db.QueryContext(ctx, `
+		SELECT json_extract(labels, '$.namespace') as namespace, COUNT(*)
+		FROM alerts
+		WHERE json_extract(labels, '$.namespace') IS NOT NULL
+		GROUP BY json_extract(labels, '$.namespace')
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get namespace stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var namespace string
+		var count int
+		if err := rows.Scan(&namespace, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan namespace stats: %w", err)
+		}
+		stats.AlertsByNamespace[namespace] = count
+	}
+
+	// Самый старый и новый алерты
+	var oldestAlert, newestAlert *time.Time
+	row = s.db.QueryRowContext(ctx, "SELECT MIN(starts_at), MAX(starts_at) FROM alerts")
+	if err := row.Scan(&oldestAlert, &newestAlert); err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to get alert time range: %w", err)
+	}
+
+	stats.OldestAlert = oldestAlert
+	stats.NewestAlert = newestAlert
+
+	return stats, nil
 }
 
 // CleanupOldAlerts удаляет старые алерты
@@ -484,6 +696,10 @@ func (s *SQLiteDatabase) CleanupOldAlerts(ctx context.Context, retentionDays int
 	if err != nil {
 		return 0, fmt.Errorf("failed to get rows affected: %w", err)
 	}
+
+	s.logger.Info("Old alerts cleaned up",
+		"retention_days", retentionDays,
+		"deleted_count", int(rowsAffected))
 
 	return int(rowsAffected), nil
 }

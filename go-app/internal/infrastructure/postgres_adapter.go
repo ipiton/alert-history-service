@@ -159,22 +159,39 @@ func (p *PostgresDatabase) Begin(ctx context.Context) (*sql.Tx, error) {
 }
 
 // MigrateUp выполняет миграции схемы для PostgreSQL
+// NOTE: В production используйте goose миграции из migrations/
+// Этот метод для dev/test окружений
 func (p *PostgresDatabase) MigrateUp(ctx context.Context) error {
 	if p.pool == nil {
 		return fmt.Errorf("not connected")
 	}
 
-	// Создаем таблицу alerts если она не существует
+	p.logger.Info("Running in-code migrations (simplified schema for dev/test)")
+
+	// Создаём таблицу alerts (синхронизировано с миграцией 20250911094416)
 	createAlertsTableSQL := `
 	CREATE TABLE IF NOT EXISTS alerts (
-		fingerprint TEXT PRIMARY KEY,
-		alert_data JSONB NOT NULL,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		id BIGSERIAL PRIMARY KEY,
+		fingerprint VARCHAR(64) NOT NULL UNIQUE,
+		alert_name VARCHAR(255) NOT NULL,
+		namespace VARCHAR(255),
+		status VARCHAR(20) NOT NULL DEFAULT 'firing',
+		labels JSONB NOT NULL DEFAULT '{}',
+		annotations JSONB NOT NULL DEFAULT '{}',
+		starts_at TIMESTAMP WITH TIME ZONE,
+		ends_at TIMESTAMP WITH TIME ZONE,
+		generator_url TEXT,
+		timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at);
-	CREATE INDEX IF NOT EXISTS idx_alerts_updated_at ON alerts(updated_at);
+	CREATE INDEX IF NOT EXISTS idx_alerts_fingerprint ON alerts(fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+	CREATE INDEX IF NOT EXISTS idx_alerts_namespace ON alerts(namespace);
+	CREATE INDEX IF NOT EXISTS idx_alerts_starts_at ON alerts(starts_at);
+	CREATE INDEX IF NOT EXISTS idx_alerts_labels_gin ON alerts USING GIN(labels);
+	CREATE INDEX IF NOT EXISTS idx_alerts_annotations_gin ON alerts USING GIN(annotations);
 	`
 
 	_, err := p.pool.Exec(ctx, createAlertsTableSQL)
@@ -182,22 +199,27 @@ func (p *PostgresDatabase) MigrateUp(ctx context.Context) error {
 		return fmt.Errorf("failed to create alerts table: %w", err)
 	}
 
-	// Создаем таблицу classifications
+	// Создаем таблицу alert_classifications (синхронизировано с миграцией)
 	createClassificationsTableSQL := `
-	CREATE TABLE IF NOT EXISTS classifications (
-		id SERIAL PRIMARY KEY,
-		alert_fingerprint TEXT NOT NULL REFERENCES alerts(fingerprint) ON DELETE CASCADE,
-		classification_data JSONB NOT NULL,
-		confidence REAL NOT NULL,
-		category TEXT NOT NULL,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		UNIQUE(alert_fingerprint)
+	CREATE TABLE IF NOT EXISTS alert_classifications (
+		id BIGSERIAL PRIMARY KEY,
+		alert_fingerprint VARCHAR(64) NOT NULL,
+		severity VARCHAR(20) NOT NULL,
+		confidence DECIMAL(4,3) NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+		reasoning TEXT,
+		recommendations JSONB DEFAULT '[]',
+		processing_time DECIMAL(8,3),
+		metadata JSONB DEFAULT '{}',
+		llm_model VARCHAR(100),
+		llm_version VARCHAR(50),
+		cache_hit BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_classifications_alert_fingerprint ON classifications(alert_fingerprint);
-	CREATE INDEX IF NOT EXISTS idx_classifications_category ON classifications(category);
-	CREATE INDEX IF NOT EXISTS idx_classifications_created_at ON classifications(created_at);
+	CREATE INDEX IF NOT EXISTS idx_classifications_alert_fingerprint ON alert_classifications(alert_fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_classifications_severity ON alert_classifications(severity);
+	CREATE INDEX IF NOT EXISTS idx_classifications_created_at ON alert_classifications(created_at);
 	`
 
 	_, err = p.pool.Exec(ctx, createClassificationsTableSQL)
@@ -205,58 +227,99 @@ func (p *PostgresDatabase) MigrateUp(ctx context.Context) error {
 		return fmt.Errorf("failed to create classifications table: %w", err)
 	}
 
-	// Создаем таблицу publishing_logs
+	// Создаем таблицу alert_publishing_history (синхронизировано с миграцией)
 	createPublishingTableSQL := `
-	CREATE TABLE IF NOT EXISTS publishing_logs (
-		id SERIAL PRIMARY KEY,
-		alert_fingerprint TEXT NOT NULL REFERENCES alerts(fingerprint) ON DELETE CASCADE,
-		target_name TEXT NOT NULL,
-		success BOOLEAN NOT NULL,
-		error_message TEXT,
-		processing_time REAL,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	CREATE TABLE IF NOT EXISTS alert_publishing_history (
+		id BIGSERIAL PRIMARY KEY,
+		alert_fingerprint VARCHAR(64) NOT NULL,
+		target_name VARCHAR(100) NOT NULL,
+		target_type VARCHAR(50) NOT NULL,
+		target_format VARCHAR(50) NOT NULL,
+		status VARCHAR(20) NOT NULL,
+		attempt_number INTEGER NOT NULL DEFAULT 1,
+		response_code INTEGER,
+		response_message TEXT,
+		payload_size INTEGER,
+		processing_time DECIMAL(8,3),
+		error_details JSONB,
+		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_publishing_alert_fingerprint ON publishing_logs(alert_fingerprint);
-	CREATE INDEX IF NOT EXISTS idx_publishing_target_name ON publishing_logs(target_name);
-	CREATE INDEX IF NOT EXISTS idx_publishing_success ON publishing_logs(success);
-	CREATE INDEX IF NOT EXISTS idx_publishing_created_at ON publishing_logs(created_at);
+	CREATE INDEX IF NOT EXISTS idx_publishing_history_fingerprint ON alert_publishing_history(alert_fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_publishing_history_target ON alert_publishing_history(target_name);
+	CREATE INDEX IF NOT EXISTS idx_publishing_history_status ON alert_publishing_history(status);
+	CREATE INDEX IF NOT EXISTS idx_publishing_history_created_at ON alert_publishing_history(created_at);
 	`
 
 	_, err = p.pool.Exec(ctx, createPublishingTableSQL)
 	if err != nil {
-		return fmt.Errorf("failed to create publishing_logs table: %w", err)
+		return fmt.Errorf("failed to create publishing_history table: %w", err)
 	}
 
-	p.logger.Info("PostgreSQL schema migration completed successfully",
-		"tables_created", []string{"alerts", "classifications", "publishing_logs"})
+	p.logger.Info("PostgreSQL in-code migration completed successfully",
+		"tables_created", []string{"alerts", "alert_classifications", "alert_publishing_history"},
+		"note", "For production use goose migrations")
 	return nil
 }
 
-// SaveAlert сохраняет алерт в PostgreSQL
+// SaveAlert сохраняет алерт в PostgreSQL (UPSERT)
 func (p *PostgresDatabase) SaveAlert(ctx context.Context, alert *core.Alert) error {
 	if p.pool == nil {
 		return fmt.Errorf("not connected")
 	}
 
-	alertData, err := json.Marshal(alert)
+	// Сериализуем labels и annotations в JSONB
+	labelsJSON, err := json.Marshal(alert.Labels)
 	if err != nil {
-		return fmt.Errorf("failed to marshal alert: %w", err)
+		return fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	annotationsJSON, err := json.Marshal(alert.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal annotations: %w", err)
+	}
+
+	// Извлекаем namespace из labels
+	var namespace *string
+	if ns := alert.Namespace(); ns != nil {
+		namespace = ns
 	}
 
 	query := `
-		INSERT INTO alerts (fingerprint, alert_data)
-		VALUES ($1, $2)
+		INSERT INTO alerts (
+			fingerprint, alert_name, status, labels, annotations,
+			starts_at, ends_at, generator_url, namespace, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (fingerprint)
 		DO UPDATE SET
-			alert_data = EXCLUDED.alert_data,
+			alert_name = EXCLUDED.alert_name,
+			status = EXCLUDED.status,
+			labels = EXCLUDED.labels,
+			annotations = EXCLUDED.annotations,
+			starts_at = EXCLUDED.starts_at,
+			ends_at = EXCLUDED.ends_at,
+			generator_url = EXCLUDED.generator_url,
+			namespace = EXCLUDED.namespace,
+			timestamp = EXCLUDED.timestamp,
 			updated_at = NOW()`
 
-	_, err = p.pool.Exec(ctx, query, alert.Fingerprint, alertData)
+	_, err = p.pool.Exec(ctx, query,
+		alert.Fingerprint,
+		alert.AlertName,
+		string(alert.Status),
+		labelsJSON,
+		annotationsJSON,
+		alert.StartsAt,
+		alert.EndsAt,
+		alert.GeneratorURL,
+		namespace,
+		alert.Timestamp,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to save alert: %w", err)
 	}
 
+	p.logger.Debug("Alert saved successfully", "fingerprint", alert.Fingerprint)
 	return nil
 }
 
@@ -266,10 +329,30 @@ func (p *PostgresDatabase) GetAlertByFingerprint(ctx context.Context, fingerprin
 		return nil, fmt.Errorf("not connected")
 	}
 
-	query := "SELECT alert_data FROM alerts WHERE fingerprint = $1"
+	query := `
+		SELECT fingerprint, alert_name, status, labels, annotations,
+		       starts_at, ends_at, generator_url, timestamp
+		FROM alerts
+		WHERE fingerprint = $1`
 
-	var alertData []byte
-	err := p.pool.QueryRow(ctx, query, fingerprint).Scan(&alertData)
+	row := p.pool.QueryRow(ctx, query, fingerprint)
+
+	alert := &core.Alert{}
+	var labelsJSON, annotationsJSON []byte
+	var endsAt, generatorURL, timestamp interface{}
+
+	err := row.Scan(
+		&alert.Fingerprint,
+		&alert.AlertName,
+		&alert.Status,
+		&labelsJSON,
+		&annotationsJSON,
+		&alert.StartsAt,
+		&endsAt,
+		&generatorURL,
+		&timestamp,
+	)
+
 	if err != nil {
 		if err.Error() == "no rows in result set" {
 			return nil, nil // Alert not found
@@ -277,57 +360,127 @@ func (p *PostgresDatabase) GetAlertByFingerprint(ctx context.Context, fingerprin
 		return nil, fmt.Errorf("failed to get alert: %w", err)
 	}
 
-	var alert core.Alert
-	if err := json.Unmarshal(alertData, &alert); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal alert: %w", err)
+	// Десериализуем JSONB поля
+	if err := json.Unmarshal(labelsJSON, &alert.Labels); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
 	}
 
-	return &alert, nil
+	if err := json.Unmarshal(annotationsJSON, &alert.Annotations); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+	}
+
+	// Обработка nullable полей
+	if endsAt != nil {
+		if t, ok := endsAt.(time.Time); ok {
+			alert.EndsAt = &t
+		}
+	}
+
+	if generatorURL != nil {
+		if s, ok := generatorURL.(string); ok {
+			alert.GeneratorURL = &s
+		}
+	}
+
+	if timestamp != nil {
+		if t, ok := timestamp.(time.Time); ok {
+			alert.Timestamp = &t
+		}
+	}
+
+	return alert, nil
 }
 
-// GetAlerts получает список алертов с фильтрами
-func (p *PostgresDatabase) GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*core.Alert, error) {
+// ListAlerts получает список алертов с фильтрами и пагинацией
+func (p *PostgresDatabase) ListAlerts(ctx context.Context, filters *core.AlertFilters) (*core.AlertList, error) {
 	if p.pool == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	query := "SELECT alert_data FROM alerts WHERE 1=1"
+	// Если filters nil, создаем дефолтный
+	if filters == nil {
+		filters = &core.AlertFilters{
+			Limit:  100,
+			Offset: 0,
+		}
+	}
+
+	// Строим WHERE clause
+	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 	argCount := 0
 
-	// Добавляем фильтры
-	if status, ok := filters["status"].(string); ok {
+	// Фильтр по статусу
+	if filters.Status != nil {
 		argCount++
-		query += fmt.Sprintf(" AND alert_data->>'status' = $%d", argCount)
-		args = append(args, status)
+		whereClause += fmt.Sprintf(" AND status = $%d", argCount)
+		args = append(args, string(*filters.Status))
 	}
 
-	if severity, ok := filters["severity"].(string); ok {
+	// Фильтр по severity (из labels)
+	if filters.Severity != nil {
 		argCount++
-		query += fmt.Sprintf(" AND alert_data->'labels'->>'severity' = $%d", argCount)
-		args = append(args, severity)
+		whereClause += fmt.Sprintf(" AND labels->>'severity' = $%d", argCount)
+		args = append(args, *filters.Severity)
 	}
 
-	if namespace, ok := filters["namespace"].(string); ok {
+	// Фильтр по namespace
+	if filters.Namespace != nil {
 		argCount++
-		query += fmt.Sprintf(" AND alert_data->'labels'->>'namespace' = $%d", argCount)
-		args = append(args, namespace)
+		whereClause += fmt.Sprintf(" AND namespace = $%d", argCount)
+		args = append(args, *filters.Namespace)
 	}
 
-	// Добавляем сортировку
-	query += " ORDER BY alert_data->>'starts_at' DESC"
+	// Фильтр по времени
+	if filters.TimeRange != nil {
+		if filters.TimeRange.From != nil {
+			argCount++
+			whereClause += fmt.Sprintf(" AND starts_at >= $%d", argCount)
+			args = append(args, *filters.TimeRange.From)
+		}
+		if filters.TimeRange.To != nil {
+			argCount++
+			whereClause += fmt.Sprintf(" AND starts_at <= $%d", argCount)
+			args = append(args, *filters.TimeRange.To)
+		}
+	}
+
+	// Фильтры по labels (JSONB contains)
+	if len(filters.Labels) > 0 {
+		labelsFilter, err := json.Marshal(filters.Labels)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal labels filter: %w", err)
+		}
+		argCount++
+		whereClause += fmt.Sprintf(" AND labels @> $%d", argCount)
+		args = append(args, labelsFilter)
+	}
+
+	// Получаем общее количество
+	countQuery := "SELECT COUNT(*) FROM alerts " + whereClause
+	var total int
+	if err := p.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("failed to count alerts: %w", err)
+	}
+
+	// Получаем alerts с пагинацией
+	query := `
+		SELECT fingerprint, alert_name, status, labels, annotations,
+		       starts_at, ends_at, generator_url, timestamp
+		FROM alerts ` + whereClause + `
+		ORDER BY starts_at DESC`
 
 	// Добавляем пагинацию
-	if limit > 0 {
+	if filters.Limit > 0 {
 		argCount++
 		query += fmt.Sprintf(" LIMIT $%d", argCount)
-		args = append(args, limit)
+		args = append(args, filters.Limit)
 	}
 
-	if offset > 0 {
+	if filters.Offset > 0 {
 		argCount++
 		query += fmt.Sprintf(" OFFSET $%d", argCount)
-		args = append(args, offset)
+		args = append(args, filters.Offset)
 	}
 
 	rows, err := p.pool.Query(ctx, query, args...)
@@ -338,20 +491,233 @@ func (p *PostgresDatabase) GetAlerts(ctx context.Context, filters map[string]any
 
 	var alerts []*core.Alert
 	for rows.Next() {
-		var alertData []byte
-		if err := rows.Scan(&alertData); err != nil {
+		alert := &core.Alert{}
+		var labelsJSON, annotationsJSON []byte
+		var endsAt, generatorURL, timestamp interface{}
+
+		err := rows.Scan(
+			&alert.Fingerprint,
+			&alert.AlertName,
+			&alert.Status,
+			&labelsJSON,
+			&annotationsJSON,
+			&alert.StartsAt,
+			&endsAt,
+			&generatorURL,
+			&timestamp,
+		)
+		if err != nil {
 			return nil, fmt.Errorf("failed to scan alert: %w", err)
 		}
 
-		var alert core.Alert
-		if err := json.Unmarshal(alertData, &alert); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal alert: %w", err)
+		// Десериализуем JSONB поля
+		if err := json.Unmarshal(labelsJSON, &alert.Labels); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
 		}
 
-		alerts = append(alerts, &alert)
+		if err := json.Unmarshal(annotationsJSON, &alert.Annotations); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+		}
+
+		// Обработка nullable полей
+		if endsAt != nil {
+			if t, ok := endsAt.(time.Time); ok {
+				alert.EndsAt = &t
+			}
+		}
+
+		if generatorURL != nil {
+			if s, ok := generatorURL.(string); ok {
+				alert.GeneratorURL = &s
+			}
+		}
+
+		if timestamp != nil {
+			if t, ok := timestamp.(time.Time); ok {
+				alert.Timestamp = &t
+			}
+		}
+
+		alerts = append(alerts, alert)
 	}
 
-	return alerts, nil
+	return &core.AlertList{
+		Alerts: alerts,
+		Total:  total,
+		Limit:  filters.Limit,
+		Offset: filters.Offset,
+	}, nil
+}
+
+// UpdateAlert обновляет существующий алерт
+func (p *PostgresDatabase) UpdateAlert(ctx context.Context, alert *core.Alert) error {
+	if p.pool == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	// Сериализуем labels и annotations в JSONB
+	labelsJSON, err := json.Marshal(alert.Labels)
+	if err != nil {
+		return fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	annotationsJSON, err := json.Marshal(alert.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal annotations: %w", err)
+	}
+
+	// Извлекаем namespace из labels
+	var namespace *string
+	if ns := alert.Namespace(); ns != nil {
+		namespace = ns
+	}
+
+	query := `
+		UPDATE alerts SET
+			alert_name = $2,
+			status = $3,
+			labels = $4,
+			annotations = $5,
+			starts_at = $6,
+			ends_at = $7,
+			generator_url = $8,
+			namespace = $9,
+			timestamp = $10,
+			updated_at = NOW()
+		WHERE fingerprint = $1`
+
+	result, err := p.pool.Exec(ctx, query,
+		alert.Fingerprint,
+		alert.AlertName,
+		string(alert.Status),
+		labelsJSON,
+		annotationsJSON,
+		alert.StartsAt,
+		alert.EndsAt,
+		alert.GeneratorURL,
+		namespace,
+		alert.Timestamp,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update alert: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert not found: %s", alert.Fingerprint)
+	}
+
+	p.logger.Debug("Alert updated successfully", "fingerprint", alert.Fingerprint)
+	return nil
+}
+
+// DeleteAlert удаляет алерт по fingerprint
+func (p *PostgresDatabase) DeleteAlert(ctx context.Context, fingerprint string) error {
+	if p.pool == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	query := "DELETE FROM alerts WHERE fingerprint = $1"
+
+	result, err := p.pool.Exec(ctx, query, fingerprint)
+	if err != nil {
+		return fmt.Errorf("failed to delete alert: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert not found: %s", fingerprint)
+	}
+
+	p.logger.Debug("Alert deleted successfully", "fingerprint", fingerprint)
+	return nil
+}
+
+// GetAlertStats возвращает статистику по алертам (реализация AlertStorage интерфейса)
+func (p *PostgresDatabase) GetAlertStats(ctx context.Context) (*core.AlertStats, error) {
+	if p.pool == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	stats := &core.AlertStats{
+		AlertsByStatus:    make(map[string]int),
+		AlertsBySeverity:  make(map[string]int),
+		AlertsByNamespace: make(map[string]int),
+	}
+
+	// Общее количество алертов
+	row := p.pool.QueryRow(ctx, "SELECT COUNT(*) FROM alerts")
+	if err := row.Scan(&stats.TotalAlerts); err != nil {
+		return nil, fmt.Errorf("failed to get total alerts count: %w", err)
+	}
+
+	// Статистика по статусам
+	rows, err := p.pool.Query(ctx, "SELECT status, COUNT(*) FROM alerts GROUP BY status")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan status stats: %w", err)
+		}
+		stats.AlertsByStatus[status] = count
+	}
+
+	// Статистика по severity (из labels)
+	rows, err = p.pool.Query(ctx, `
+		SELECT labels->>'severity' as severity, COUNT(*)
+		FROM alerts
+		WHERE labels->>'severity' IS NOT NULL
+		GROUP BY labels->>'severity'
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get severity stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var severity string
+		var count int
+		if err := rows.Scan(&severity, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan severity stats: %w", err)
+		}
+		stats.AlertsBySeverity[severity] = count
+	}
+
+	// Статистика по namespace
+	rows, err = p.pool.Query(ctx, `
+		SELECT namespace, COUNT(*)
+		FROM alerts
+		WHERE namespace IS NOT NULL
+		GROUP BY namespace
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get namespace stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var namespace string
+		var count int
+		if err := rows.Scan(&namespace, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan namespace stats: %w", err)
+		}
+		stats.AlertsByNamespace[namespace] = count
+	}
+
+	// Самый старый и новый алерты
+	var oldestAlert, newestAlert *time.Time
+	row = p.pool.QueryRow(ctx, "SELECT MIN(starts_at), MAX(starts_at) FROM alerts")
+	if err := row.Scan(&oldestAlert, &newestAlert); err != nil && err.Error() != "no rows in result set" {
+		return nil, fmt.Errorf("failed to get alert time range: %w", err)
+	}
+
+	stats.OldestAlert = oldestAlert
+	stats.NewestAlert = newestAlert
+
+	return stats, nil
 }
 
 // CleanupOldAlerts удаляет старые алерты из PostgreSQL
@@ -362,14 +728,17 @@ func (p *PostgresDatabase) CleanupOldAlerts(ctx context.Context, retentionDays i
 
 	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
 
-	query := "DELETE FROM alerts WHERE alert_data->>'starts_at' < $1"
+	query := "DELETE FROM alerts WHERE starts_at < $1"
 
-	result, err := p.pool.Exec(ctx, query, cutoffDate.Format(time.RFC3339))
+	result, err := p.pool.Exec(ctx, query, cutoffDate)
 	if err != nil {
 		return 0, fmt.Errorf("failed to cleanup old alerts: %w", err)
 	}
 
 	rowsAffected := result.RowsAffected()
+	p.logger.Info("Old alerts cleaned up",
+		"retention_days", retentionDays,
+		"deleted_count", int(rowsAffected))
 
 	return int(rowsAffected), nil
 }
