@@ -36,14 +36,14 @@ const (
 
 // Alert represents alert data model
 type Alert struct {
-	Fingerprint  string            `json:"fingerprint"`
-	AlertName    string            `json:"alert_name"`
-	Status       AlertStatus       `json:"status"`
+	Fingerprint  string            `json:"fingerprint" validate:"required"`
+	AlertName    string            `json:"alert_name" validate:"required"`
+	Status       AlertStatus       `json:"status" validate:"required,oneof=firing resolved"`
 	Labels       map[string]string `json:"labels"`
 	Annotations  map[string]string `json:"annotations"`
-	StartsAt     time.Time         `json:"starts_at"`
+	StartsAt     time.Time         `json:"starts_at" validate:"required"`
 	EndsAt       *time.Time        `json:"ends_at,omitempty"`
-	GeneratorURL *string           `json:"generator_url,omitempty"`
+	GeneratorURL *string           `json:"generator_url,omitempty" validate:"omitempty,url"`
 	Timestamp    *time.Time        `json:"timestamp,omitempty"`
 }
 
@@ -65,23 +65,23 @@ func (a *Alert) Severity() *string {
 
 // ClassificationResult represents LLM classification result
 type ClassificationResult struct {
-	Severity        AlertSeverity  `json:"severity"`
-	Confidence      float64        `json:"confidence"`
-	Reasoning       string         `json:"reasoning"`
+	Severity        AlertSeverity  `json:"severity" validate:"required,oneof=critical warning info noise"`
+	Confidence      float64        `json:"confidence" validate:"gte=0,lte=1"`
+	Reasoning       string         `json:"reasoning" validate:"required"`
 	Recommendations []string       `json:"recommendations"`
-	ProcessingTime  float64        `json:"processing_time"`
+	ProcessingTime  float64        `json:"processing_time" validate:"gte=0"`
 	Metadata        map[string]any `json:"metadata,omitempty"`
 }
 
 // PublishingTarget represents publishing target configuration
 type PublishingTarget struct {
-	Name         string            `json:"name"`
-	Type         string            `json:"type"`
-	URL          string            `json:"url"`
+	Name         string            `json:"name" validate:"required"`
+	Type         string            `json:"type" validate:"required"`
+	URL          string            `json:"url" validate:"required,url"`
 	Enabled      bool              `json:"enabled"`
 	FilterConfig map[string]any    `json:"filter_config"`
 	Headers      map[string]string `json:"headers"`
-	Format       PublishingFormat  `json:"format"`
+	Format       PublishingFormat  `json:"format" validate:"required,oneof=alertmanager rootly pagerduty slack webhook"`
 }
 
 // EnrichedAlert represents alert enriched with classification data
