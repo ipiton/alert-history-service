@@ -221,3 +221,30 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Go
+go-app/bin/
+go-app/server
+*.test
+*.out
+go-app/*.exe
+go-app/*.dll
+go-app/*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+go-app/coverage.txt
+
+# Go workspace file
+go.work
+
+# Kilo Code (AI assistant)
+.kilocode/
+
+# Performance test results
+**/results/
+k6-results/
+*.json.gz
