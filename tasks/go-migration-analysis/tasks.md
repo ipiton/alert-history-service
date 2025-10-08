@@ -54,7 +54,7 @@
 
 ## 📝 ФАЗА 4: Core Business Logic (NEW)
 - [x] **TN-31** Alert domain models (Alert, Classification, Publishing) ✅ **ЗАВЕРШЕНА** (2025-10-08)
-- [ ] **TN-32** AlertStorage interface и PostgreSQL implementation
+- [x] **TN-32** AlertStorage interface и PostgreSQL implementation ⚠️ **70% ЗАВЕРШЕНА** (2025-10-08, требуются критические исправления)
 - [ ] **TN-33** Alert classification service с LLM integration
 - [ ] **TN-34** Enrichment mode system (transparent/enriched)
 - [ ] **TN-35** Alert filtering engine (severity, namespace, labels)

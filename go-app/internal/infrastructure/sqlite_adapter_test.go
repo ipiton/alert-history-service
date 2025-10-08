@@ -199,10 +199,16 @@ func TestSQLiteDatabase_CRUD(t *testing.T) {
 	assert.NotNil(t, updatedAlert.EndsAt)
 
 	// Проверяем получение списка алертов
-	alerts, err := db.GetAlerts(ctx, map[string]any{"status": "resolved"}, 10, 0)
+	status := core.StatusResolved
+	alertList, err := db.ListAlerts(ctx, &core.AlertFilters{
+		Status: &status,
+		Limit:  10,
+		Offset: 0,
+	})
 	require.NoError(t, err)
-	assert.Len(t, alerts, 1)
-	assert.Equal(t, alert.Fingerprint, alerts[0].Fingerprint)
+	assert.Len(t, alertList.Alerts, 1)
+	assert.Equal(t, alert.Fingerprint, alertList.Alerts[0].Fingerprint)
+	assert.Equal(t, 1, alertList.Total)
 }
 
 func TestSQLiteDatabase_Transaction(t *testing.T) {
@@ -268,12 +274,16 @@ func TestSQLiteDatabase_Transaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Проверяем, что данные сохранены
-	alerts, err := db.GetAlerts(ctx, map[string]any{}, 10, 0)
+	alertList, err := db.ListAlerts(ctx, &core.AlertFilters{
+		Limit:  10,
+		Offset: 0,
+	})
 	require.NoError(t, err)
-	assert.Len(t, alerts, 2)
+	assert.Len(t, alertList.Alerts, 2)
+	assert.Equal(t, 2, alertList.Total)
 
-	fingerprints := make([]string, len(alerts))
-	for i, alert := range alerts {
+	fingerprints := make([]string, len(alertList.Alerts))
+	for i, alert := range alertList.Alerts {
 		fingerprints[i] = alert.Fingerprint
 	}
 
@@ -356,20 +366,30 @@ func TestSQLiteDatabase_Query(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Тестируем GetAlerts с фильтрами
-	highSeverityAlerts, err := db.GetAlerts(ctx, map[string]any{"severity": "high"}, 10, 0)
+	// Тестируем ListAlerts с фильтрами
+	severity := "high"
+	highSeverityList, err := db.ListAlerts(ctx, &core.AlertFilters{
+		Severity: &severity,
+		Limit:    10,
+		Offset:   0,
+	})
 	require.NoError(t, err)
-	assert.Len(t, highSeverityAlerts, 1)
-	assert.Equal(t, "query-test-1", highSeverityAlerts[0].Fingerprint)
+	assert.Len(t, highSeverityList.Alerts, 1)
+	assert.Equal(t, "query-test-1", highSeverityList.Alerts[0].Fingerprint)
+	assert.Equal(t, 1, highSeverityList.Total)
 
-	// Тестируем GetAlerts без фильтров
-	allAlerts, err := db.GetAlerts(ctx, map[string]any{}, 10, 0)
+	// Тестируем ListAlerts без фильтров
+	allAlertsList, err := db.ListAlerts(ctx, &core.AlertFilters{
+		Limit:  10,
+		Offset: 0,
+	})
 	require.NoError(t, err)
-	assert.Len(t, allAlerts, 2)
+	assert.Len(t, allAlertsList.Alerts, 2)
+	assert.Equal(t, 2, allAlertsList.Total)
 
 	// Проверяем, что алерты отсортированы по starts_at DESC
-	assert.Equal(t, "query-test-2", allAlerts[0].Fingerprint) // Более поздний
-	assert.Equal(t, "query-test-1", allAlerts[1].Fingerprint) // Более ранний
+	assert.Equal(t, "query-test-2", allAlertsList.Alerts[0].Fingerprint) // Более поздний
+	assert.Equal(t, "query-test-1", allAlertsList.Alerts[1].Fingerprint) // Более ранний
 }
 
 // BenchmarkSQLiteDatabase_CRUD бенчмарк для CRUD операций
@@ -423,7 +443,12 @@ func BenchmarkSQLiteDatabase_CRUD(b *testing.B) {
 		require.NoError(b, err)
 
 		// Query with filters
-		_, err = db.GetAlerts(ctx, map[string]any{"status": "resolved"}, 1, 0)
+		status := core.StatusResolved
+		_, err = db.ListAlerts(ctx, &core.AlertFilters{
+			Status: &status,
+			Limit:  1,
+			Offset: 0,
+		})
 		require.NoError(b, err)
 	}
 }

@@ -94,11 +94,52 @@ type EnrichedAlert struct {
 
 // Database interfaces following SOLID principles
 
+// TimeRange represents time range filter
+type TimeRange struct {
+	From *time.Time `json:"from,omitempty"`
+	To   *time.Time `json:"to,omitempty"`
+}
+
+// AlertFilters represents filters for alert queries
+type AlertFilters struct {
+	Status    *AlertStatus      `json:"status,omitempty"`
+	Severity  *string           `json:"severity,omitempty"`
+	Namespace *string           `json:"namespace,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	TimeRange *TimeRange        `json:"time_range,omitempty"`
+	Limit     int               `json:"limit" validate:"gte=0,lte=1000"`
+	Offset    int               `json:"offset" validate:"gte=0"`
+}
+
+// AlertList represents paginated list of alerts
+type AlertList struct {
+	Alerts []*Alert `json:"alerts"`
+	Total  int      `json:"total"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
+}
+
+// AlertStats represents alert statistics
+type AlertStats struct {
+	TotalAlerts       int            `json:"total_alerts"`
+	AlertsByStatus    map[string]int `json:"alerts_by_status"`
+	AlertsBySeverity  map[string]int `json:"alerts_by_severity"`
+	AlertsByNamespace map[string]int `json:"alerts_by_namespace"`
+	OldestAlert       *time.Time     `json:"oldest_alert,omitempty"`
+	NewestAlert       *time.Time     `json:"newest_alert,omitempty"`
+}
+
 // AlertStorage interface for alert storage operations
 type AlertStorage interface {
+	// Basic CRUD operations
 	SaveAlert(ctx context.Context, alert *Alert) error
 	GetAlertByFingerprint(ctx context.Context, fingerprint string) (*Alert, error)
-	GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*Alert, error)
+	ListAlerts(ctx context.Context, filters *AlertFilters) (*AlertList, error)
+	UpdateAlert(ctx context.Context, alert *Alert) error
+	DeleteAlert(ctx context.Context, fingerprint string) error
+
+	// Additional operations
+	GetAlertStats(ctx context.Context) (*AlertStats, error)
 	CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error)
 }
 

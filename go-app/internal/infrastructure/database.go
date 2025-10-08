@@ -19,10 +19,13 @@ type Database interface {
 	IsConnected() bool
 	Health(ctx context.Context) error
 
-	// Alert operations
+	// Alert operations (AlertStorage interface)
 	SaveAlert(ctx context.Context, alert *core.Alert) error
 	GetAlertByFingerprint(ctx context.Context, fingerprint string) (*core.Alert, error)
-	GetAlerts(ctx context.Context, filters map[string]any, limit, offset int) ([]*core.Alert, error)
+	ListAlerts(ctx context.Context, filters *core.AlertFilters) (*core.AlertList, error)
+	UpdateAlert(ctx context.Context, alert *core.Alert) error
+	DeleteAlert(ctx context.Context, fingerprint string) error
+	GetAlertStats(ctx context.Context) (*core.AlertStats, error)
 	CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error)
 
 	// Classification operations
@@ -37,7 +40,7 @@ type Database interface {
 	MigrateUp(ctx context.Context) error
 	MigrateDown(ctx context.Context, steps int) error
 
-	// Utility operations
+	// Utility operations (for database stats, not alert stats)
 	GetStats(ctx context.Context) (map[string]interface{}, error)
 
 	// Low-level operations (for compatibility)
