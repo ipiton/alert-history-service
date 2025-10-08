@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" // Import pprof for profiling endpoints
 	"os"
 	"os/signal"
 	"strings"
@@ -18,6 +19,8 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
+	"github.com/vitaliisemenov/alert-history/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -30,12 +33,32 @@ func main() {
 	// Parse command line flags
 	var showVersion = flag.Bool("version", false, "Show version information")
 	var showHelp = flag.Bool("help", false, "Show help information")
+	var healthCheck = flag.Bool("health-check", false, "Perform health check and exit")
 	var configPathFlag = flag.String("config", "", "Path to config file (YAML)")
 	flag.Parse()
 
 	// Handle version flag
 	if *showVersion {
 		fmt.Printf("%s version %s\n", serviceName, serviceVersion)
+		os.Exit(0)
+	}
+
+	// Handle health check flag (for Docker health check)
+	if *healthCheck {
+		// Simple health check - try to connect to the health endpoint
+		resp, err := http.Get("http://localhost:8080/healthz")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Health check failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "Health check failed: status %d\n", resp.StatusCode)
+			os.Exit(1)
+		}
+
+		fmt.Println("Health check passed")
 		os.Exit(0)
 	}
 
@@ -46,6 +69,7 @@ func main() {
 		fmt.Printf("Options:\n")
 		fmt.Printf("  -version           Show version information\n")
 		fmt.Printf("  -help              Show this help message\n")
+		fmt.Printf("  -health-check      Perform health check and exit\n")
 		fmt.Printf("  -config <path>     Path to YAML config file\n\n")
 		fmt.Printf("Environment variables:\n")
 		fmt.Printf("  CONFIG_FILE        YAML config path (used if -config is not set)\n")
@@ -140,35 +164,82 @@ func main() {
 	// Initialize database connection and run migrations
 	slog.Info("Initializing database connection...",
 		"host", dbCfg.Host, "port", dbCfg.Port, "db", dbCfg.Database, "user", dbCfg.User)
-	pool := postgres.NewPostgresPool(dbCfg, appLogger)
 
-	ctx := context.Background()
-	if err := pool.Connect(ctx); err != nil {
-		slog.Error("Failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	slog.Info("✅ Successfully connected to PostgreSQL!")
+	// Check if we should use mock mode for performance testing
+	useMockMode := os.Getenv("MOCK_MODE") == "true" || os.Getenv("PERFORMANCE_TEST") == "true"
 
-	// Run database migrations
-	if err := database.RunMigrations(ctx, pool, appLogger); err != nil {
-		slog.Error("Failed to run database migrations", "error", err)
-		// Не завершаем работу, если миграции не удались - даем возможность ручного исправления
-		slog.Warn("Continuing without migrations - manual intervention may be required")
+	if useMockMode {
+		slog.Info("🚀 Running in MOCK MODE for performance testing - no database required")
 	} else {
-		slog.Info("✅ Database migrations completed successfully")
+		pool := postgres.NewPostgresPool(dbCfg, appLogger)
+
+		ctx := context.Background()
+		if err := pool.Connect(ctx); err != nil {
+			slog.Warn("Failed to connect to database, switching to MOCK MODE", "error", err)
+			useMockMode = true
+		} else {
+			slog.Info("✅ Successfully connected to PostgreSQL!")
+
+			// Run database migrations
+			if err := database.RunMigrations(ctx, pool, appLogger); err != nil {
+				slog.Error("Failed to run database migrations", "error", err)
+				// Не завершаем работу, если миграции не удались - даем возможность ручного исправления
+				slog.Warn("Continuing without migrations - manual intervention may be required")
+			} else {
+				slog.Info("✅ Database migrations completed successfully")
+			}
+		}
+	}
+
+	// Initialize Prometheus metrics if enabled
+	var metricsManager *metrics.MetricsManager
+	if cfg.Metrics.Enabled {
+		slog.Info("Initializing Prometheus metrics", "path", cfg.Metrics.Path)
+		metricsConfig := metrics.Config{
+			Namespace: "alert_history",
+			Subsystem: "http",
+		}
+		metricsManager = metrics.NewMetricsManager(metricsConfig)
 	}
 
 	// Setup HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
+	mux.HandleFunc("/webhook", handlers.WebhookHandler)
+	mux.HandleFunc("/history", handlers.HistoryHandler)
+
+	// Add Prometheus metrics endpoint if enabled
+	if cfg.Metrics.Enabled {
+		mux.Handle(cfg.Metrics.Path, promhttp.Handler())
+		slog.Info("Prometheus metrics endpoint enabled", "path", cfg.Metrics.Path)
+	}
+
+	// Add pprof endpoints for performance profiling
+	// These endpoints are automatically registered by importing net/http/pprof
+	mux.HandleFunc("/debug/pprof/", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/cmdline", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/profile", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/symbol", http.DefaultServeMux.ServeHTTP)
+	mux.HandleFunc("/debug/pprof/trace", http.DefaultServeMux.ServeHTTP)
+	slog.Info("pprof endpoints enabled for performance profiling", "base_path", "/debug/pprof/")
+
+	slog.Info("Webhook endpoint enabled", "path", "/webhook")
+
+	// Add middleware chain
+	var handler http.Handler = mux
+
+	// Add Prometheus metrics middleware if enabled
+	if cfg.Metrics.Enabled && metricsManager != nil {
+		handler = metricsManager.Middleware(handler)
+	}
 
 	// Add logging middleware
-	loggedMux := logger.LoggingMiddleware(appLogger)(mux)
+	handler = logger.LoggingMiddleware(appLogger)(handler)
 
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      loggedMux,
+		Handler:      handler,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,

@@ -69,9 +69,9 @@ COPY --from=builder /app/server /server
 # Expose port
 EXPOSE 8080
 
-# Health check using the application itself
+# Health check using the application itself (no external tools needed)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/server", "--version"] || exit 1
+    CMD ["/server", "--health-check"] || exit 1
 
 # Set the binary as entrypoint
 ENTRYPOINT ["/server"]

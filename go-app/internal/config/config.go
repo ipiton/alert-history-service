@@ -18,6 +18,7 @@ type Config struct {
 	Cache    CacheConfig    `mapstructure:"cache"`
 	Lock     LockConfig     `mapstructure:"lock"`
 	App      AppConfig      `mapstructure:"app"`
+	Metrics  MetricsConfig  `mapstructure:"metrics"`
 }
 
 // ServerConfig holds server-related configuration
@@ -115,6 +116,13 @@ type AppConfig struct {
 	Timezone      string        `mapstructure:"timezone"`
 	MaxWorkers    int           `mapstructure:"max_workers"`
 	WorkerTimeout time.Duration `mapstructure:"worker_timeout"`
+}
+
+// MetricsConfig holds metrics-related configuration
+type MetricsConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Path    string `mapstructure:"path"`
+	Port    int    `mapstructure:"port"`
 }
 
 // LoadConfig loads configuration from file and environment variables
@@ -256,6 +264,11 @@ func setDefaults() {
 	viper.SetDefault("app.timezone", "UTC")
 	viper.SetDefault("app.max_workers", 10)
 	viper.SetDefault("app.worker_timeout", "5m")
+
+	// Metrics defaults
+	viper.SetDefault("metrics.enabled", true)
+	viper.SetDefault("metrics.path", "/metrics")
+	viper.SetDefault("metrics.port", 8080)
 }
 
 // Validate validates the configuration
