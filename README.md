@@ -11,9 +11,34 @@
 
 **GitHub Repository:** [https://github.com/ipiton/alert-history-service.git](https://github.com/ipiton/alert-history-service.git)
 
-## 🔄 Go Version (Beta)
+---
 
-⚠️ **Go версия находится в активной разработке.** Python версия остается основной для production использования.
+## 🚨 IMPORTANT: Go Version is Now PRIMARY
+
+> **📢 Announcement** (2025-01-09): **Go version is now the PRIMARY codebase**
+> **🔴 Python version is DEPRECATED** and will be sunset on **April 1, 2025**
+
+### Migration Required
+
+- ✅ **Use Go version** for all new deployments
+- ⚠️ **Migrate from Python** before April 1, 2025
+- 📖 **Read the migration guide**: [MIGRATION.md](MIGRATION.md)
+- 📅 **Deprecation timeline**: [DEPRECATION.md](DEPRECATION.md)
+
+### Why Migrate?
+
+| Feature | Python | Go | Improvement |
+|---------|--------|----|----|
+| Performance | Baseline | **2-5x faster** | 🚀 |
+| Memory | 300 MB | **50 MB** | 83% ⬇️ |
+| Docker Image | 500 MB | **20 MB** | 96% ⬇️ |
+| Startup Time | 5s | **<1s** | 80% ⬇️ |
+| Type Safety | Runtime | **Compile-time** | ✅ |
+| Concurrency | asyncio | **Goroutines** | ✅ |
+
+---
+
+## 🚀 Quick Start (Go Version - Recommended)
 
 ### Быстрый старт с Go
 
@@ -441,8 +466,60 @@ mypy src/
 
 ---
 
+---
+
+## 🔴 Python Version (DEPRECATED)
+
+> **⚠️ WARNING**: Python version is deprecated and will be sunset on **April 1, 2025**
+
+### Deprecation Status
+
+| Phase | Date | Status |
+|-------|------|--------|
+| Deprecation Announced | 2025-02-01 | 📢 Upcoming |
+| Security Fixes Only | 2025-03-01 | ⏳ 51 days |
+| **Python Sunset** | 2025-04-01 | 🔴 **82 days** |
+
+### For Existing Python Users
+
+**You MUST migrate to Go before April 1, 2025**
+
+1. 📖 Read [MIGRATION.md](MIGRATION.md) - Complete migration guide
+2. 📅 Review [DEPRECATION.md](DEPRECATION.md) - Timeline and support policy
+3. 🧪 Test Go version in staging environment
+4. 🚀 Plan your migration (recommended: 1-2 weeks)
+5. 📧 Get help: #alert-history-migration on Slack
+
+### Python Quick Start (For Legacy Deployments Only)
+
+> **Not recommended** for new deployments. Use Go version instead.
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run locally
+uvicorn src.alert_history.main:app --reload
+
+# Health check
+curl http://localhost:8000/health
+```
+
+**Docker** (Python):
+```bash
+docker build -t alert-history:python .
+docker run -p 8000:8000 alert-history:python
+```
+
+**Important**: Python version will stop receiving updates after March 1, 2025.
+
+---
+
 ## 📋 Roadmap
 
+- [x] **Go Migration** - Core features complete ✅
+- [ ] **Publishing System** (TN-46 to TN-60) - In progress
+- [ ] **Alertmanager++** (TN-121 to TN-180) - Planned
 - [ ] **ML локальная классификация** (Phase 9)
 - [ ] **Advanced analytics** с predictive capabilities
 - [ ] **Multi-cluster coordination** для enterprise
