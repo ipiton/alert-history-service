@@ -16,6 +16,7 @@ import (
 
 	appconfig "github.com/vitaliisemenov/alert-history/internal/config"
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
+	"github.com/vitaliisemenov/alert-history/cmd/server/middleware"
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
@@ -331,6 +332,10 @@ func main() {
 
 	// Add middleware chain
 	var handler http.Handler = mux
+
+	// Add enrichment mode middleware (adds mode to context and response headers)
+	enrichmentMiddleware := middleware.NewEnrichmentModeMiddleware(enrichmentManager, appLogger)
+	handler = enrichmentMiddleware.Middleware(handler)
 
 	// Add Prometheus metrics middleware if enabled
 	if cfg.Metrics.Enabled && metricsManager != nil {
