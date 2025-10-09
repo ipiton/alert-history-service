@@ -16,8 +16,10 @@ import (
 
 	appconfig "github.com/vitaliisemenov/alert-history/internal/config"
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
+	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -191,16 +193,77 @@ func main() {
 		}
 	}
 
+	// Initialize Redis cache for enrichment mode
+	var redisCache cache.Cache
+	if cfg.Redis.Addr != "" {
+		slog.Info("Initializing Redis cache", "addr", cfg.Redis.Addr)
+		cacheConfig := cache.CacheConfig{
+			Addr:                  cfg.Redis.Addr,
+			Password:              cfg.Redis.Password,
+			DB:                    cfg.Redis.DB,
+			PoolSize:              cfg.Redis.PoolSize,
+			MinIdleConns:          cfg.Redis.MinIdleConns,
+			DialTimeout:           cfg.Redis.DialTimeout,
+			ReadTimeout:           cfg.Redis.ReadTimeout,
+			WriteTimeout:          cfg.Redis.WriteTimeout,
+			MaxRetries:            cfg.Redis.MaxRetries,
+			MinRetryBackoff:       cfg.Redis.MinRetryBackoff,
+			MaxRetryBackoff:       cfg.Redis.MaxRetryBackoff,
+			CircuitBreakerEnabled: true,
+			MetricsEnabled:        cfg.Metrics.Enabled,
+		}
+
+		var err error
+		redisCache, err = cache.NewRedisCache(&cacheConfig, appLogger)
+		if err != nil {
+			slog.Warn("Failed to initialize Redis cache, enrichment mode will fallback to ENV/default",
+				"error", err)
+			redisCache = nil
+		} else {
+			// Test connection
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := redisCache.Ping(ctx); err != nil {
+				slog.Warn("Redis ping failed, enrichment mode will fallback to ENV/default",
+					"error", err)
+				redisCache = nil
+			} else {
+				slog.Info("✅ Redis cache initialized successfully")
+			}
+		}
+	} else {
+		slog.Info("Redis not configured, enrichment mode will use ENV/default fallback")
+	}
+
 	// Initialize Prometheus metrics if enabled
 	var metricsManager *metrics.MetricsManager
 	if cfg.Metrics.Enabled {
 		slog.Info("Initializing Prometheus metrics", "path", cfg.Metrics.Path)
 		metricsConfig := metrics.Config{
+			Enabled:   true,
 			Namespace: "alert_history",
 			Subsystem: "http",
 		}
 		metricsManager = metrics.NewMetricsManager(metricsConfig)
 	}
+
+	// Initialize Enrichment Mode Manager
+	slog.Info("Initializing Enrichment Mode Manager")
+	enrichmentManager := services.NewEnrichmentModeManager(redisCache, appLogger, metricsManager)
+
+	// Get and log current enrichment mode
+	ctx := context.Background()
+	currentMode, source, err := enrichmentManager.GetModeWithSource(ctx)
+	if err != nil {
+		slog.Warn("Failed to get initial enrichment mode", "error", err)
+	} else {
+		slog.Info("✅ Enrichment Mode Manager initialized",
+			"mode", currentMode,
+			"source", source)
+	}
+
+	// Create enrichment handlers
+	enrichmentHandlers := handlers.NewEnrichmentHandlers(enrichmentManager, appLogger)
 
 	// Setup HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -208,6 +271,21 @@ func main() {
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
 	mux.HandleFunc("/webhook", handlers.WebhookHandler)
 	mux.HandleFunc("/history", handlers.HistoryHandler)
+
+	// Register enrichment mode endpoints
+	mux.HandleFunc("/enrichment/mode", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			enrichmentHandlers.GetMode(w, r)
+		case http.MethodPost:
+			enrichmentHandlers.SetMode(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	slog.Info("Enrichment mode endpoints enabled",
+		"get_path", "GET /enrichment/mode",
+		"set_path", "POST /enrichment/mode")
 
 	// Add Prometheus metrics endpoint if enabled
 	if cfg.Metrics.Enabled {
