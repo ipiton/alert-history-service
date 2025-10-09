@@ -246,6 +246,41 @@
 
 ---
 
+## 📊 SPECIAL: Prometheus Metrics Audit & Unification (NEW - 2025-10-09)
+
+**Цель**: Унификация именования Prometheus метрик для консистентности и масштабируемости
+
+- [ ] **TN-181** Prometheus Metrics Audit & Unification
+  - **Приоритет**: HIGH
+  - **Статус**: NOT_STARTED
+  - **Timeline**: 20 часов (2.5 рабочих дня)
+  - **Scope**:
+    - Phase 1: Аудит всех существующих метрик (2 часа)
+    - Phase 2: Design taxonomy и naming conventions (3 часа)
+    - Phase 3: Implementation MetricsRegistry + Database Pool metrics (8 часов)
+    - Phase 4: Migration Support (recording rules, Grafana dashboards) (3 часа)
+    - Phase 5: Testing & Validation (2 часа)
+    - Phase 6: Documentation (2 часа)
+  - **Deliverables**:
+    - ✅ Unified naming convention для всех метрик
+    - ✅ Database Pool metrics в Prometheus
+    - ✅ MetricsRegistry (centralized management)
+    - ✅ Recording rules для backwards compatibility
+    - ✅ Updated Grafana dashboards
+    - ✅ Developer guidelines для новых метрик
+  - **Breaking Changes**:
+    - `alert_history_query_*` → `alert_history_infra_repository_query_*`
+    - `alert_history_llm_circuit_breaker_*` → `alert_history_technical_llm_cb_*`
+    - Migration period: 30 дней с recording rules support
+  - **Dependencies**: TN-021 (Prometheus middleware), TN-039 (Circuit Breaker)
+  - **Documentation**: `tasks/TN-181-metrics-audit-unification/` (requirements, design, tasks)
+
+**Статус**: 📋 READY TO START (0% - 0/68 задач)
+**Can run parallel**: ⚠️ Partial (не блокирует новые фичи, но требует coordination с SRE)
+**Impact**: 🔥 HIGH - критично для Alertmanager++ (TN-121+) и production observability
+
+---
+
 ## 🚀 ФАЗА B: Alertmanager++ Advanced Features (NEW - 2025-01-09)
 
 ### Модуль 4: Advanced Routing
@@ -377,13 +412,15 @@ sed -i 's/go-version: '\''1.21'\''/go-version: '\''1.24.6'\''/' .github/workflow
 3. **✅ Health check оптимизирован** - использует встроенный флаг без внешних утилит
 4. **🚀 Можно переходить к Фазе 3** - Observability
 
-### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА (обновлено 2025-01-09)
-- **Всего задач**: 180 (было 122, добавлено 60 задач Alertmanager++)
-- **Завершено полностью**: 38 (21.1%) - Фазы 1, 2, 3, частично Фаза 4 (TN-031 до TN-037), TN-121 ✅
+### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА (обновлено 2025-10-09)
+- **Всего задач**: 181 (было 180, добавлена TN-181 Metrics Audit)
+- **Завершено полностью**: 38 (21.0%) - Фазы 1, 2, 3, частично Фаза 4 (TN-031 до TN-037), TN-121 ✅
 - **В процессе**: 1 (0.6%) - TN-121 (документация готова, код в разработке)
-- **Осталось реализовать**: 141 (78.3%)
+- **Осталось реализовать**: 142 (78.4%)
 - **Критические компоненты готовы**: ✅ Infrastructure, Data Layer, Observability, Domain Models, AlertStorage, Classification, Enrichment, Filtering, Fingerprinting, History Repository
-- **Новый фокус**: 🎯 **Alertmanager++ Implementation** - полная замена Alertmanager с AI/ML (TN-121 до TN-180)
+- **Новые приоритеты**:
+  - 🔥 **TN-181 Metrics Audit** (HIGH priority) - унификация метрик перед масштабированием
+  - 🎯 **Alertmanager++ Implementation** - полная замена Alertmanager с AI/ML (TN-121 до TN-180)
 - **Готовность к production**: 🚀 Core business logic готов для деплоя (TN-31 до TN-37) - **150% на TN-35 и TN-37!** 🎉
 
 ### 📈 ПРОГРЕСС ПО ФАЗАМ ALERTMANAGER++
@@ -1124,6 +1161,7 @@ sed -i 's/go-version: '\''1.21'\''/go-version: '\''1.24.6'\''/' .github/workflow
 
 ### To-dos
 
+- [ ] Prometheus Metrics Audit & Unification (TN-181) - унификация именования метрик, taxonomy разработка, MetricsRegistry implementation, Database Pool metrics export, recording rules, Grafana dashboards update, developer guidelines (HIGH priority, 20 часов)
 - [ ] Grouping Configuration Parser - парсинг YAML конфигурации для grouping rules, структуры GroupingConfig, валидация, hot reload
 - [ ] Group Key Generator - генерация уникальных ключей группировки на основе labels, hash-based grouping, dynamic label sets
 - [ ] Alert Group Manager - управление жизненным циклом групп алертов, добавление/удаление, обновление состояния, метрики
