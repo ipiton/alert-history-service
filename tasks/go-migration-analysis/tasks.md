@@ -61,7 +61,7 @@
 - [x] **TN-36** Alert deduplication и fingerprinting ✅ **ЗАВЕРШЕНО НА 100%** (2025-10-09, Grade A-, Production-Ready, FNV64a Alertmanager-compatible)
 - [x] **TN-37** Alert history repository с pagination ✅ **ЗАВЕРШЕНО НА 150%** (2025-10-09, Grade A+, Production-Ready! 6 methods, 5 endpoints, 90%+ coverage, 28KB docs 🎉)
 - [x] **TN-38** Alert analytics service (top alerts, flapping) ✅ **100% ЗАВЕРШЕНА** (2025-10-09, Grade A-, Production-Ready! GetTopAlerts, GetFlappingAlerts, GetAggregatedStats, 4 HTTP endpoints, 11 tests, интегрировано в main.go)
-- [ ] **TN-39** Circuit breaker для LLM calls
+- [ ] **TN-39** Circuit breaker для LLM calls 📋 **СПЛАНИРОВАНА** (2025-10-09, Grade A+, 44KB docs, 42 tasks, 9-10 days, ready for implementation, branch: feature/TN-039-circuit-breaker-llm)
 - [ ] **TN-40** Retry logic с exponential backoff
 - [ ] **TN-41** Alertmanager webhook parser
 - [ ] **TN-42** Universal webhook handler (auto-detect format)
@@ -518,3 +518,669 @@ sed -i 's/go-version: '\''1.21'\''/go-version: '\''1.24.6'\''/' .github/workflow
 2. **✅ Версии Go обновлены** - 1.24.6 во всех конфигурационных файлах
 3. **✅ Health check оптимизирован** - scratch образ + встроенный --health-check флаг
 4. **✅ Компиляция проверена** - `go build` выполняется успешно
+
+
+
+<!-- f05b7557-11b6-4fee-b2cf-d1ce3cf331ef cfc40a42-5ad1-4bfe-853c-86ee7d3ff13e -->
+# Alertmanager++ Extended Implementation Plan
+
+## Цель проекта
+
+Трансформировать Alert History Service из "Intelligent Alert Proxy" в полноценную **замену Alertmanager** с расширенными AI/ML возможностями.
+
+## Текущее состояние (Baseline)
+
+### Уже реализовано (TN-01 до TN-37):
+
+- Infrastructure Foundation (Фаза 1) - 100%
+- Data Layer (Фаза 2) - 100%
+- Observability (Фаза 3) - 100%
+- Core Business Logic (TN-31 до TN-37):
+- Alert domain models
+- AlertStorage (PostgreSQL/SQLite)
+- LLM Classification service
+- Enrichment modes (transparent/enriched)
+- Alert filtering engine
+- Deduplication & fingerprinting (FNV64a)
+- History repository с pagination
+
+### Что отсутствует (критично для замены Alertmanager):
+
+- Alert Grouping (группировка по labels)
+- Inhibition Rules (подавление зависимых алертов)
+- Silencing (временное отключение)
+- Routing Tree (иерархическая маршрутизация)
+- Time-based Aggregation (group_wait, group_interval, repeat_interval)
+- Prometheus /api/v2/alerts endpoint
+- Configuration Management API
+- Template System
+- Clustering (HA)
+
+---
+
+## ФАЗА A: Критические компоненты Alertmanager (8-10 недель)
+
+### Модуль 1: Alert Grouping System
+
+**TN-121: Grouping Configuration Parser**
+
+- Парсинг YAML конфигурации для grouping rules
+- Структуры: GroupingConfig, GroupBy, Timers
+- Валидация конфигурации
+- Hot reload support
+
+**TN-122: Group Key Generator**
+
+- Генерация уникальных ключей группировки на основе labels
+- Hash-based grouping (совместимость с Alertmanager)
+- Support для dynamic label sets
+- Unit тесты (>80% coverage)
+
+**TN-123: Alert Group Manager**
+
+- Управление жизненным циклом групп алертов
+- Добавление/удаление алертов из групп
+- Обновление состояния групп
+- Метрики: active_groups, alerts_per_group
+
+**TN-124: Group Wait/Interval Timers**
+
+- Реализация group_wait (задержка перед первой отправкой)
+- Реализация group_interval (интервал между обновлениями)
+- Timer management с graceful cancellation
+- Persistence таймеров в Redis для HA
+
+**TN-125: Group Storage (Redis Backend)**
+
+- Distributed storage для групп алертов
+- TTL management для expired групп
+- State synchronization между репликами
+- Benchmark: <5ms latency для read/write
+
+### Модуль 2: Inhibition Rules Engine
+
+**TN-126: Inhibition Rule Parser**
+
+- Парсинг inhibit_rules из YAML конфигурации
+- Структуры: InhibitionRule, SourceMatch, TargetMatch, Equal
+- Rule validation и syntax checking
+- Config reload без рестарта
+
+**TN-127: Inhibition Matcher Engine**
+
+- Matching алертов по source/target conditions
+- Label equality checking
+- Regex support для матчинга
+- Performance: <1ms на проверку
+
+**TN-128: Active Alert Cache (Redis)**
+
+- Кеширование активных firing алертов
+- Fast lookup для inhibition checks
+- Automatic cleanup resolved алертов
+- Distributed cache для multi-instance
+
+**TN-129: Inhibition State Manager**
+
+- Управление состоянием inhibited алертов
+- Tracking inhibiting relationships
+- Метрики: inhibited_alerts_total, active_inhibition_rules
+- Logging для debugging
+
+**TN-130: Inhibition API Endpoints**
+
+- GET /api/v2/inhibition/rules - список правил
+- GET /api/v2/inhibition/status - активные inhibitions
+- POST /api/v2/inhibition/check - проверка алерта
+- OpenAPI spec
+
+### Модуль 3: Silencing System
+
+**TN-131: Silence Data Models**
+
+- Структуры: Silence, Matcher, SilenceState
+- Validation для matchers (name, value, regex, isEqual)
+- CRUD операции
+- Database migration (PostgreSQL)
+
+**TN-132: Silence Matcher Engine**
+
+- Label matching с поддержкой regex
+- Equality/inequality operators (=, !=, =~, !~)
+- Multi-matcher support (AND logic)
+- Performance optimization (<1ms match)
+
+**TN-133: Silence Storage (PostgreSQL)**
+
+- Таблица silences с indexes
+- Query optimization для fast lookup
+- TTL management и auto-cleanup
+- Audit log для silence operations
+
+**TN-134: Silence Manager Service**
+
+- Lifecycle management (active, pending, expired)
+- Background GC для expired silences
+- State notifications
+- Метрики: active_silences, expired_silences, silenced_alerts
+
+**TN-135: Silence API Endpoints**
+
+- POST /api/v2/silences - создать silence
+- GET /api/v2/silences - список с фильтрацией
+- GET /api/v2/silences/{id} - детали
+- DELETE /api/v2/silences/{id} - удалить
+- Alertmanager-compatible API
+
+**TN-136: Silence UI Components**
+
+- Dashboard widget для active silences
+- Форма создания silence с preview
+- Bulk silence operations
+- Silence history и audit trail
+
+---
+
+## ФАЗА B: Важные компоненты (4-6 недель)
+
+### Модуль 4: Advanced Routing
+
+**TN-137: Route Config Parser (YAML)**
+
+- Парсинг route tree из alertmanager.yml
+- Nested routes support
+- Match/MatchRE/Continue parsing
+- Config validation
+
+**TN-138: Route Tree Builder**
+
+- Построение иерархии маршрутов
+- Tree traversal algorithm
+- Default route fallback
+- Hot reload mechanism
+
+**TN-139: Route Matcher (Regex Support)**
+
+- Label matching (exact, regex)
+- Multi-condition matching
+- Performance optimization (pre-compiled regex)
+- Unit тесты для edge cases
+
+**TN-140: Route Evaluator**
+
+- Evaluating алертов через route tree
+- Multiple receiver support (continue: true)
+- Route-specific grouping/timers
+- Метрики: routes_evaluated, matched_routes
+
+**TN-141: Multi-Receiver Support**
+
+- Parallel publishing к multiple receivers
+- Per-receiver configuration
+- Failure handling и retry
+- Publishing результаты aggregation
+
+### Модуль 5: Time-based Aggregation
+
+**TN-142: Timer Manager Service**
+
+- Centralized timer management
+- Distributed timers (Redis-backed)
+- Timer persistence для HA
+- Graceful cancellation
+
+**TN-143: Group Wait Implementation**
+
+- Accumulation period перед первой отправкой
+- Dynamic adjustment based на alert rate
+- Метрики: group_wait_duration, accumulated_alerts
+- Integration с Group Manager
+
+**TN-144: Group Interval Implementation**
+
+- Periodic updates для активных групп
+- Batching updates
+- Smart scheduling (avoid thundering herd)
+- Configurable per route
+
+**TN-145: Repeat Interval Implementation**
+
+- Re-notification для long-running alerts
+- Exponential backoff support (опционально)
+- Per-receiver repeat intervals
+- Метрики: repeated_notifications
+
+---
+
+## ФАЗА C: Дополнительные компоненты (6-8 недель)
+
+### Модуль 6: Prometheus Integration
+
+**TN-146: Prometheus Alert Parser**
+
+- Парсинг Prometheus alert format
+- Conversion к internal Alert model
+- Fingerprint generation (совместимость)
+- Validation
+
+**TN-147: POST /api/v2/alerts Endpoint**
+
+- Alertmanager-compatible endpoint
+- Batch alert ingestion
+- Rate limiting
+- Response format (Prometheus-compatible)
+
+**TN-148: Prometheus-compatible Response**
+
+- Status codes (200, 400, 500)
+- Error messages format
+- Metrics export
+- Integration тесты
+
+### Модуль 7: Configuration Management
+
+**TN-149: GET /api/v2/config - Current Config**
+
+- Экспорт текущей конфигурации (JSON/YAML)
+- Sanitization secrets
+- Version tracking
+- Config diff visualization
+
+**TN-150: POST /api/v2/config - Update Config**
+
+- Dynamic config update без рестарта
+- Validation перед применением
+- Rollback mechanism
+- Audit logging
+
+**TN-151: Config Validator**
+
+- Syntax validation (YAML, JSON)
+- Semantic validation (routes, receivers)
+- Cross-reference checking
+- Helpful error messages
+
+**TN-152: Hot Reload Mechanism**
+
+- Signal-based reload (SIGHUP)
+- API-triggered reload
+- Zero-downtime updates
+- State migration
+
+### Модуль 8: Template System
+
+**TN-153: Template Engine Integration**
+
+- Go text/template integration
+- Custom functions (toUpper, title, etc.)
+- Template caching
+- Error handling
+
+**TN-154: Default Templates**
+
+- Slack notification template
+- PagerDuty incident template
+- Email notification template
+- Webhook payload template
+
+**TN-155: Template API (CRUD)**
+
+- GET /api/v2/templates - список
+- POST /api/v2/templates - создать
+- PUT /api/v2/templates/{name} - обновить
+- DELETE /api/v2/templates/{name} - удалить
+
+**TN-156: Template Validator**
+
+- Syntax validation
+- Test execution с mock data
+- Security checks (injection prevention)
+- Preview functionality
+
+### Модуль 9: Clustering (High Availability)
+
+**TN-157: Gossip Protocol Integration**
+
+- hashicorp/memberlist integration
+- Cluster membership management
+- Health checks
+- Network partition handling
+
+**TN-158: Cluster State Manager**
+
+- Distributed state synchronization
+- Conflict resolution (CRDT)
+- State replication
+- Eventual consistency
+
+**TN-159: Leader Election**
+
+- Raft-based leader election (опционально)
+- Leader responsibilities (timers, GC)
+- Failover mechanism
+- Metrics: cluster_leader, cluster_members
+
+**TN-160: State Replication**
+
+- Replication silences, groups
+- Incremental updates
+- Full sync mechanism
+- Conflict resolution
+
+---
+
+## ФАЗА D: Уникальные AI/ML фичи (4-6 недель)
+
+### Модуль 10: ML Pattern Detection
+
+**TN-161: Alert Pattern Analyzer**
+
+- Time-series analysis алертов
+- Frequency detection
+- Correlation analysis
+- Pattern clustering
+
+**TN-162: Anomaly Detection Service**
+
+- Statistical anomaly detection
+- Baseline learning
+- Threshold auto-adjustment
+- Real-time detection
+
+**TN-163: Flapping Detection (Enhanced)**
+
+- ML-based flapping prediction
+- Root cause suggestions
+- Auto-silencing recommendations
+- Visualization
+
+**TN-164: Alert Correlation Engine**
+
+- Cross-alert correlation
+- Incident grouping
+- Causal relationship detection
+- Graph visualization
+
+### Модуль 11: Advanced Analytics
+
+**TN-165: Alert Trend Analysis**
+
+- Historical trend analysis
+- Forecast modeling
+- Seasonality detection
+- Dashboard widgets
+
+**TN-166: Team Performance Analytics**
+
+- MTTR (Mean Time To Resolve) tracking
+- Alert handling statistics
+- Team workload analysis
+- SLA monitoring
+
+**TN-167: Cost Analytics**
+
+- Notification cost tracking (PagerDuty, etc.)
+- ROI calculation for noise reduction
+- Resource usage analytics
+- Budget forecasting
+
+**TN-168: Recommendation System (Enhanced)**
+
+- ML-powered recommendations
+- A/B testing framework
+- Recommendation confidence scoring
+- Feedback loop
+
+### Модуль 12: Advanced UI/Dashboard
+
+**TN-169: Real-time Alert Dashboard**
+
+- WebSocket-based real-time updates
+- Alert map visualization
+- Interactive filtering
+- Export functionality
+
+**TN-170: Configuration UI**
+
+- Visual route editor (drag-drop)
+- Rule builder (no-code)
+- Template editor с preview
+- Config version control
+
+**TN-171: Analytics Dashboard**
+
+- Grafana-compatible dashboards
+- Custom metrics panels
+- Alert heatmaps
+- Trend visualization
+
+**TN-172: Mobile-Responsive UI**
+
+- Mobile-first design
+- Touch-friendly controls
+- Offline support
+- Push notifications
+
+---
+
+## Интеграция и Production Readiness
+
+### Модуль 13: Testing & Quality
+
+**TN-173: Integration Test Suite**
+
+- End-to-end тесты для всех flows
+- Load testing (k6/vegeta)
+- Chaos engineering tests
+- Performance benchmarks
+
+**TN-174: Compatibility Testing**
+
+- Alertmanager config compatibility
+- Migration testing (Alertmanager → Alert History)
+- API compatibility tests
+- Rollback procedures
+
+**TN-175: Security Audit**
+
+- OWASP Top 10 compliance
+- Penetration testing
+- Secrets management review
+- RBAC implementation
+
+### Модуль 14: Documentation & Operations
+
+**TN-176: Migration Guide**
+
+- Alertmanager → Alert History migration
+- Config conversion tool
+- Data migration scripts
+- Rollback procedures
+
+**TN-177: Operations Runbook**
+
+- Common scenarios playbook
+- Troubleshooting guide
+- Performance tuning guide
+- Disaster recovery plan
+
+**TN-178: API Documentation**
+
+- OpenAPI 3.0 spec (complete)
+- Interactive API explorer
+- Code examples (curl, Go, Python)
+- Postman collection
+
+**TN-179: Architecture Documentation**
+
+- System design docs
+- Component diagrams
+- Data flow diagrams
+- Decision records (ADRs)
+
+**TN-180: Production Deployment**
+
+- Blue-green deployment setup
+- Canary release strategy
+- Monitoring dashboards
+- Alerting rules
+
+---
+
+## Ожидаемые результаты
+
+### Функциональность
+
+- 100% feature parity с Alertmanager
+- + LLM-powered classification (уникально)
+- + ML anomaly detection (уникально)
+- + Advanced analytics (уникально)
+- + Auto-recommendations (уникально)
+
+### Производительность
+
+- <10ms latency для alert ingestion
+- <5ms latency для grouping/routing decisions
+- 10,000+ alerts/sec throughput
+- <500MB memory на instance
+
+### Надежность
+
+- 99.95% uptime (3-node cluster)
+- Zero-downtime updates
+- Automatic failover <30s
+- Data durability 99.999%
+
+### Масштабируемость
+
+- Horizontal scaling (2-50 replicas)
+- Multi-region deployment support
+- 1M+ alerts/day capacity
+- Distributed state management
+
+---
+
+## Timeline & Milestones
+
+### Milestone 1: Alertmanager Core (Week 10)
+
+- Grouping, Inhibition, Silencing работают
+- API endpoints реализованы
+- Basic UI функциональность
+
+### Milestone 2: Advanced Features (Week 16)
+
+- Routing Tree полностью работает
+- Time-based aggregation
+- Prometheus API compatibility
+
+### Milestone 3: Configuration & HA (Week 22)
+
+- Config Management API
+- Template System
+- Clustering (3-node tested)
+
+### Milestone 4: AI/ML Features (Week 28)
+
+- Pattern Detection
+- Advanced Analytics
+- Enhanced Recommendations
+
+### Milestone 5: Production Ready (Week 30)
+
+- Full test coverage (>85%)
+- Documentation complete
+- Production deployment успешен
+- Performance benchmarks passed
+
+---
+
+## Риски и митigation
+
+### Технические риски
+
+- **Сложность distributed state**: Mitigation - использовать Redis + eventual consistency
+- **Performance с ML**: Mitigation - async processing, caching
+- **Alertmanager compatibility**: Mitigation - comprehensive test suite
+
+### Организационные риски
+
+- **Длительный срок**: Mitigation - поэтапная delivery, MVP approach
+- **Изменение requirements**: Mitigation - agile methodology, 2-week sprints
+- **Ресурсы**: Mitigation - приоритизация критических задач
+
+---
+
+## Критерии успеха
+
+1. Может заменить Alertmanager в production без loss функциональности
+2. LLM classification снижает alert noise на 30-50%
+3. API полностью совместим с Alertmanager clients
+4. Performance benchmarks: 10K alerts/sec, <10ms p99 latency
+5. Zero-downtime updates работают
+6. Clustering обеспечивает 99.95% uptime
+7. Documentation complete и reviewed
+8. 3+ production deployments успешны
+
+### To-dos
+
+- [ ] Grouping Configuration Parser - парсинг YAML конфигурации для grouping rules, структуры GroupingConfig, валидация, hot reload
+- [ ] Group Key Generator - генерация уникальных ключей группировки на основе labels, hash-based grouping, dynamic label sets
+- [ ] Alert Group Manager - управление жизненным циклом групп алертов, добавление/удаление, обновление состояния, метрики
+- [ ] Group Wait/Interval Timers - реализация group_wait и group_interval, timer management, persistence в Redis
+- [ ] Group Storage (Redis Backend) - distributed storage для групп, TTL management, state synchronization, benchmark <5ms
+- [ ] Inhibition Rule Parser - парсинг inhibit_rules из YAML, структуры InhibitionRule, validation, config reload
+- [ ] Inhibition Matcher Engine - matching алертов по source/target, label equality, regex support, performance <1ms
+- [ ] Active Alert Cache (Redis) - кеширование активных firing алертов, fast lookup, automatic cleanup, distributed cache
+- [ ] Inhibition State Manager - управление состоянием inhibited алертов, tracking relationships, метрики, logging
+- [ ] Inhibition API Endpoints - GET/POST /api/v2/inhibition/*, OpenAPI spec, Alertmanager-compatible
+- [ ] Silence Data Models - структуры Silence/Matcher, validation, CRUD операции, database migration
+- [ ] Silence Matcher Engine - label matching с regex, operators (=, !=, =~, !~), multi-matcher support, performance <1ms
+- [ ] Silence Storage (PostgreSQL) - таблица silences с indexes, query optimization, TTL management, audit log
+- [ ] Silence Manager Service - lifecycle management, background GC, state notifications, метрики
+- [ ] Silence API Endpoints - POST/GET/DELETE /api/v2/silences/*, Alertmanager-compatible API
+- [ ] Silence UI Components - dashboard widget, форма создания с preview, bulk operations, history
+- [ ] Route Config Parser (YAML) - парсинг route tree, nested routes, Match/MatchRE/Continue, validation
+- [ ] Route Tree Builder - построение иерархии маршрутов, tree traversal, default route fallback, hot reload
+- [ ] Route Matcher (Regex Support) - label matching (exact, regex), multi-condition, performance optimization
+- [ ] Route Evaluator - evaluating алертов через route tree, multiple receiver support, route-specific config, метрики
+- [ ] Multi-Receiver Support - parallel publishing, per-receiver config, failure handling, результаты aggregation
+- [ ] Timer Manager Service - centralized timer management, distributed timers (Redis-backed), persistence, graceful cancellation
+- [ ] Group Wait Implementation - accumulation period перед отправкой, dynamic adjustment, метрики, integration с Group Manager
+- [ ] Group Interval Implementation - periodic updates для групп, batching, smart scheduling, configurable per route
+- [ ] Repeat Interval Implementation - re-notification для long-running alerts, exponential backoff, per-receiver intervals, метрики
+- [ ] Prometheus Alert Parser - парсинг Prometheus format, conversion к internal model, fingerprint generation, validation
+- [ ] POST /api/v2/alerts Endpoint - Alertmanager-compatible endpoint, batch ingestion, rate limiting, response format
+- [ ] Prometheus-compatible Response - status codes, error messages, metrics export, integration тесты
+- [ ] GET /api/v2/config - Current Config - экспорт конфигурации (JSON/YAML), sanitization secrets, version tracking, diff visualization
+- [ ] POST /api/v2/config - Update Config - dynamic update без рестарта, validation, rollback mechanism, audit logging
+- [ ] Config Validator - syntax validation (YAML, JSON), semantic validation, cross-reference checking, helpful errors
+- [ ] Hot Reload Mechanism - signal-based reload (SIGHUP), API-triggered, zero-downtime updates, state migration
+- [ ] Template Engine Integration - Go text/template, custom functions, template caching, error handling
+- [ ] Default Templates - Slack, PagerDuty, Email, Webhook templates
+- [ ] Template API (CRUD) - GET/POST/PUT/DELETE /api/v2/templates/*
+- [ ] Template Validator - syntax validation, test execution, security checks, preview functionality
+- [ ] Gossip Protocol Integration - hashicorp/memberlist, cluster membership, health checks, network partition handling
+- [ ] Cluster State Manager - distributed state sync, conflict resolution (CRDT), state replication, eventual consistency
+- [ ] Leader Election - Raft-based election, leader responsibilities (timers, GC), failover, метрики
+- [ ] State Replication - replication silences/groups, incremental updates, full sync, conflict resolution
+- [ ] Alert Pattern Analyzer - time-series analysis, frequency detection, correlation analysis, pattern clustering
+- [ ] Anomaly Detection Service - statistical anomaly detection, baseline learning, threshold auto-adjustment, real-time detection
+- [ ] Flapping Detection (Enhanced) - ML-based flapping prediction, root cause suggestions, auto-silencing recommendations, visualization
+- [ ] Alert Correlation Engine - cross-alert correlation, incident grouping, causal relationship detection, graph visualization
+- [ ] Alert Trend Analysis - historical trend analysis, forecast modeling, seasonality detection, dashboard widgets
+- [ ] Team Performance Analytics - MTTR tracking, alert handling statistics, team workload analysis, SLA monitoring
+- [ ] Cost Analytics - notification cost tracking, ROI calculation, resource usage analytics, budget forecasting
+- [ ] Recommendation System (Enhanced) - ML-powered recommendations, A/B testing framework, confidence scoring, feedback loop
+- [ ] Real-time Alert Dashboard - WebSocket-based updates, alert map visualization, interactive filtering, export functionality
+- [ ] Configuration UI - visual route editor (drag-drop), rule builder (no-code), template editor с preview, version control
+- [ ] Analytics Dashboard - Grafana-compatible, custom metrics panels, alert heatmaps, trend visualization
+- [ ] Mobile-Responsive UI - mobile-first design, touch-friendly controls, offline support, push notifications
+- [ ] Integration Test Suite - end-to-end тесты, load testing (k6/vegeta), chaos engineering, performance benchmarks
+- [ ] Compatibility Testing - Alertmanager config compatibility, migration testing, API compatibility, rollback procedures
+- [ ] Security Audit - OWASP Top 10 compliance, penetration testing, secrets management review, RBAC implementation
+- [ ] Migration Guide - Alertmanager → Alert History migration, config conversion tool, data migration scripts, rollback procedures
+- [ ] Operations Runbook - common scenarios playbook, troubleshooting guide, performance tuning, disaster recovery plan
+- [ ] API Documentation - OpenAPI 3.0 spec (complete), interactive API explorer, code examples, Postman collection
+- [ ] Architecture Documentation - system design docs, component diagrams, data flow diagrams, decision records (ADRs)
+- [ ] Production Deployment - blue-green deployment setup, canary release strategy, monitoring dashboards, alerting rules
