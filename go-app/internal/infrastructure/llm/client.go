@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,37 +38,40 @@ type LLMClient interface {
 
 // Config holds configuration for LLM client.
 type Config struct {
-	BaseURL       string        `mapstructure:"base_url"`
-	APIKey        string        `mapstructure:"api_key"`
-	Model         string        `mapstructure:"model"`
-	Timeout       time.Duration `mapstructure:"timeout"`
-	MaxRetries    int           `mapstructure:"max_retries"`
-	RetryDelay    time.Duration `mapstructure:"retry_delay"`
-	RetryBackoff  float64       `mapstructure:"retry_backoff"`
-	EnableMetrics bool          `mapstructure:"enable_metrics"`
+	BaseURL        string               `mapstructure:"base_url"`
+	APIKey         string               `mapstructure:"api_key"`
+	Model          string               `mapstructure:"model"`
+	Timeout        time.Duration        `mapstructure:"timeout"`
+	MaxRetries     int                  `mapstructure:"max_retries"`
+	RetryDelay     time.Duration        `mapstructure:"retry_delay"`
+	RetryBackoff   float64              `mapstructure:"retry_backoff"`
+	EnableMetrics  bool                 `mapstructure:"enable_metrics"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
 }
 
 // DefaultConfig returns default LLM client configuration.
 func DefaultConfig() Config {
 	return Config{
-		BaseURL:       "https://llm-proxy.b2broker.tech",
-		Model:         "openai/gpt-4o",
-		Timeout:       30 * time.Second,
-		MaxRetries:    3,
-		RetryDelay:    1 * time.Second,
-		RetryBackoff:  2.0,
-		EnableMetrics: true,
+		BaseURL:        "https://llm-proxy.b2broker.tech",
+		Model:          "openai/gpt-4o",
+		Timeout:        30 * time.Second,
+		MaxRetries:     3,
+		RetryDelay:     1 * time.Second,
+		RetryBackoff:   2.0,
+		EnableMetrics:  true,
+		CircuitBreaker: DefaultCircuitBreakerConfig(),
 	}
 }
 
-// HTTPLLMClient implements LLMClient interface using HTTP.
+// HTTPLLMClient implements LLMClient interface using HTTP with circuit breaker protection.
 type HTTPLLMClient struct {
-	config     Config
-	httpClient *http.Client
-	logger     *slog.Logger
+	config         Config
+	httpClient     *http.Client
+	logger         *slog.Logger
+	circuitBreaker *CircuitBreaker
 }
 
-// NewHTTPLLMClient creates a new HTTP LLM client.
+// NewHTTPLLMClient creates a new HTTP LLM client with optional circuit breaker.
 func NewHTTPLLMClient(config Config, logger *slog.Logger) *HTTPLLMClient {
 	if logger == nil {
 		logger = slog.Default()
@@ -77,19 +81,64 @@ func NewHTTPLLMClient(config Config, logger *slog.Logger) *HTTPLLMClient {
 		Timeout: config.Timeout,
 	}
 
+	// Create circuit breaker if enabled
+	var cb *CircuitBreaker
+	if config.CircuitBreaker.Enabled {
+		cbMetrics := NewCircuitBreakerMetrics()
+		var err error
+		cb, err = NewCircuitBreaker(config.CircuitBreaker, logger, cbMetrics)
+		if err != nil {
+			logger.Error("Failed to create circuit breaker, continuing without it",
+				"error", err,
+			)
+			cb = nil
+		}
+	}
+
 	return &HTTPLLMClient{
-		config:     config,
-		httpClient: httpClient,
-		logger:     logger,
+		config:         config,
+		httpClient:     httpClient,
+		logger:         logger,
+		circuitBreaker: cb,
 	}
 }
 
-// ClassifyAlert classifies an alert using LLM API with retry logic.
+// ClassifyAlert classifies an alert using LLM API with circuit breaker and retry logic.
 func (c *HTTPLLMClient) ClassifyAlert(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
 	if alert == nil {
 		return nil, fmt.Errorf("alert cannot be nil")
 	}
 
+	// If circuit breaker is disabled, use legacy logic
+	if c.circuitBreaker == nil {
+		return c.classifyAlertWithRetry(ctx, alert)
+	}
+
+	// Wrap retry logic in circuit breaker
+	var result *core.ClassificationResult
+	var lastErr error
+
+	err := c.circuitBreaker.Call(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = c.classifyAlertWithRetry(ctx, alert)
+		lastErr = err
+		return err
+	})
+
+	// If circuit breaker is open, return specific error for fallback handling
+	if errors.Is(err, ErrCircuitBreakerOpen) {
+		c.logger.Debug("Circuit breaker is open, skipping LLM call",
+			"alert", alert.AlertName,
+			"state", c.circuitBreaker.GetState(),
+		)
+		return nil, ErrCircuitBreakerOpen
+	}
+
+	return result, lastErr
+}
+
+// classifyAlertWithRetry implements retry logic (extracted from ClassifyAlert for CB integration).
+func (c *HTTPLLMClient) classifyAlertWithRetry(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
 	var lastErr error
 	retryDelay := c.config.RetryDelay
 
@@ -127,11 +176,16 @@ func (c *HTTPLLMClient) ClassifyAlert(ctx context.Context, alert *core.Alert) (*
 		c.logger.Warn("LLM classification attempt failed",
 			"attempt", attempt+1,
 			"error", err,
+			"error_type", ClassifyError(err),
 			"alert", alert.AlertName,
 		)
 
 		// Don't retry on certain errors
-		if isNonRetryableError(err) {
+		if !IsRetryableError(err) {
+			c.logger.Debug("Error is non-retryable, stopping retry loop",
+				"error", err,
+				"error_type", ClassifyError(err),
+			)
 			break
 		}
 	}
@@ -140,6 +194,7 @@ func (c *HTTPLLMClient) ClassifyAlert(ctx context.Context, alert *core.Alert) (*
 		"alert", alert.AlertName,
 		"attempts", c.config.MaxRetries+1,
 		"error", lastErr,
+		"error_type", ClassifyError(lastErr),
 	)
 
 	return nil, fmt.Errorf("LLM classification failed after %d attempts: %w", c.config.MaxRetries+1, lastErr)
@@ -268,11 +323,22 @@ func (c *HTTPLLMClient) Health(ctx context.Context) error {
 	return nil
 }
 
-// isNonRetryableError determines if an error should not be retried.
-func isNonRetryableError(err error) bool {
-	// Add logic to identify non-retryable errors
-	// For example: authentication errors, invalid request format, etc.
-	return false
+// GetCircuitBreakerState returns current circuit breaker state.
+// Returns StateClosed if circuit breaker is disabled.
+func (c *HTTPLLMClient) GetCircuitBreakerState() CircuitBreakerState {
+	if c.circuitBreaker == nil {
+		return StateClosed // No circuit breaker = always closed
+	}
+	return c.circuitBreaker.GetState()
+}
+
+// GetCircuitBreakerStats returns circuit breaker statistics.
+// Returns empty stats if circuit breaker is disabled.
+func (c *HTTPLLMClient) GetCircuitBreakerStats() CircuitBreakerStats {
+	if c.circuitBreaker == nil {
+		return CircuitBreakerStats{State: StateClosed}
+	}
+	return c.circuitBreaker.GetStats()
 }
 
 // MockLLMClient implements LLMClient interface for testing.
