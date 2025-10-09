@@ -13,11 +13,11 @@ import (
 
 // HTTPMetrics holds Prometheus metrics for HTTP requests.
 type HTTPMetrics struct {
-	requestsTotal    *prometheus.CounterVec
-	requestDuration  *prometheus.HistogramVec
-	requestSize      *prometheus.HistogramVec
-	responseSize     *prometheus.HistogramVec
-	activeRequests   prometheus.Gauge
+	requestsTotal   *prometheus.CounterVec
+	requestDuration *prometheus.HistogramVec
+	requestSize     *prometheus.HistogramVec
+	responseSize    *prometheus.HistogramVec
+	activeRequests  prometheus.Gauge
 }
 
 // NewHTTPMetrics creates a new HTTPMetrics instance with default configuration.
@@ -172,20 +172,25 @@ func DefaultConfig() Config {
 
 // MetricsManager manages HTTP metrics collection and configuration.
 type MetricsManager struct {
-	config  Config
-	metrics *HTTPMetrics
+	config            Config
+	metrics           *HTTPMetrics
+	enrichmentMetrics *EnrichmentMetrics
 }
 
 // NewMetricsManager creates a new MetricsManager with the given configuration.
 func NewMetricsManager(config Config) *MetricsManager {
 	var metrics *HTTPMetrics
+	var enrichmentMetrics *EnrichmentMetrics
+
 	if config.Enabled {
 		metrics = NewHTTPMetricsWithNamespace(config.Namespace, config.Subsystem)
+		enrichmentMetrics = NewEnrichmentMetricsWithNamespace(config.Namespace, "enrichment")
 	}
 
 	return &MetricsManager{
-		config:  config,
-		metrics: metrics,
+		config:            config,
+		metrics:           metrics,
+		enrichmentMetrics: enrichmentMetrics,
 	}
 }
 
@@ -215,4 +220,9 @@ func (mm *MetricsManager) IsEnabled() bool {
 // GetPath returns the metrics endpoint path.
 func (mm *MetricsManager) GetPath() string {
 	return mm.config.Path
+}
+
+// Enrichment returns the enrichment metrics if enabled, otherwise returns nil.
+func (mm *MetricsManager) Enrichment() *EnrichmentMetrics {
+	return mm.enrichmentMetrics
 }
