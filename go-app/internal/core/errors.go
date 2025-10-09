@@ -23,4 +23,14 @@ var (
 	ErrEmptyLabelKey      = errors.New("label key cannot be empty")
 	ErrLabelKeyTooLong    = errors.New("label key too long: maximum 255 characters")
 	ErrLabelValueTooLong  = errors.New("label value too long: maximum 255 characters")
+
+	// Pagination errors
+	ErrInvalidPagination = errors.New("pagination parameters are required")
+	ErrInvalidPage       = errors.New("page must be >= 1")
+	ErrInvalidPerPage    = errors.New("per_page must be >= 1")
+	ErrPerPageTooLarge   = errors.New("per_page must be <= 1000")
+
+	// Sorting errors
+	ErrInvalidSortField = errors.New("invalid sort field")
+	ErrInvalidSortOrder = errors.New("invalid sort order: must be 'asc' or 'desc'")
 )
