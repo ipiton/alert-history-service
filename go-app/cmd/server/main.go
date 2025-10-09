@@ -18,10 +18,13 @@ import (
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 	"github.com/vitaliisemenov/alert-history/cmd/server/middleware"
 	appconfig "github.com/vitaliisemenov/alert-history/internal/config"
+	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
@@ -171,10 +174,15 @@ func main() {
 	// Check if we should use mock mode for performance testing
 	useMockMode := os.Getenv("MOCK_MODE") == "true" || os.Getenv("PERFORMANCE_TEST") == "true"
 
+	// Initialize database pool and storage (available globally for handlers)
+	var pool *postgres.PostgresPool
+	var alertStorage core.AlertStorage
+	var historyRepo core.AlertHistoryRepository
+
 	if useMockMode {
 		slog.Info("🚀 Running in MOCK MODE for performance testing - no database required")
 	} else {
-		pool := postgres.NewPostgresPool(dbCfg, appLogger)
+		pool = postgres.NewPostgresPool(dbCfg, appLogger)
 
 		ctx := context.Background()
 		if err := pool.Connect(ctx); err != nil {
@@ -190,6 +198,27 @@ func main() {
 				slog.Warn("Continuing without migrations - manual intervention may be required")
 			} else {
 				slog.Info("✅ Database migrations completed successfully")
+			}
+
+			// Initialize AlertStorage (PostgreSQL implementation)
+			pgConfig := &infrastructure.Config{
+				DSN:             fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, dbCfg.Database, dbCfg.SSLMode),
+				MaxOpenConns:    int(dbCfg.MaxConns),
+				MaxIdleConns:    int(dbCfg.MinConns),
+				ConnMaxLifetime: dbCfg.MaxConnLifetime,
+				ConnMaxIdleTime: dbCfg.MaxConnIdleTime,
+				Logger:          appLogger,
+			}
+			pgStorage, err := infrastructure.NewPostgresDatabase(pgConfig)
+			if err != nil {
+				slog.Error("Failed to create PostgreSQL storage", "error", err)
+			} else {
+				// Use the existing pool connection
+				alertStorage = pgStorage
+
+				// TN-038: Initialize Alert History Repository with analytics
+				historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
+				slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
 			}
 		}
 	}
@@ -291,12 +320,38 @@ func main() {
 	// Create webhook handlers
 	webhookHandlers := handlers.NewWebhookHandlers(alertProcessor, appLogger)
 
+	// TN-038: Initialize History Handlers V2 with analytics support
+	var historyHandlerV2 *handlers.HistoryHandlerV2
+	if historyRepo != nil {
+		historyHandlerV2 = handlers.NewHistoryHandlerV2(historyRepo, appLogger)
+		slog.Info("✅ History Handlers V2 initialized with analytics support")
+	}
+
 	// Setup HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
 	mux.HandleFunc("/webhook", webhookHandlers.HandleWebhook)
+
+	// Legacy history endpoint (for backward compatibility)
 	mux.HandleFunc("/history", handlers.HistoryHandler)
+
+	// TN-038: Register analytics endpoints (if historyRepo available)
+	if historyHandlerV2 != nil {
+		mux.HandleFunc("/history/top", historyHandlerV2.HandleTopAlerts)
+		mux.HandleFunc("/history/flapping", historyHandlerV2.HandleFlappingAlerts)
+		mux.HandleFunc("/history/stats", historyHandlerV2.HandleStats)
+		mux.HandleFunc("/history/recent", historyHandlerV2.HandleRecentAlerts)
+		slog.Info("✅ Analytics endpoints registered",
+			"endpoints", []string{
+				"GET /history/top - Top firing alerts",
+				"GET /history/flapping - Flapping detection",
+				"GET /history/stats - Aggregated statistics",
+				"GET /history/recent - Recent alerts",
+			})
+	} else {
+		slog.Warn("⚠️ Analytics endpoints NOT available (database not connected or MOCK_MODE)")
+	}
 
 	// Register enrichment mode endpoints
 	mux.HandleFunc("/enrichment/mode", func(w http.ResponseWriter, r *http.Request) {

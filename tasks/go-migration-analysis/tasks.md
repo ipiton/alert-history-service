@@ -60,7 +60,7 @@
 - [x] **TN-35** Alert filtering engine (severity, namespace, labels) ✅ **ЗАВЕРШЕНО НА 150%** (2025-10-09, Grade A+, Production-Ready! 🎉)
 - [x] **TN-36** Alert deduplication и fingerprinting ✅ **ЗАВЕРШЕНО НА 100%** (2025-10-09, Grade A-, Production-Ready, FNV64a Alertmanager-compatible)
 - [x] **TN-37** Alert history repository с pagination ✅ **ЗАВЕРШЕНО НА 150%** (2025-10-09, Grade A+, Production-Ready! 6 methods, 5 endpoints, 90%+ coverage, 28KB docs 🎉)
-- [ ] **TN-38** Alert analytics service (top alerts, flapping)
+- [x] **TN-38** Alert analytics service (top alerts, flapping) ✅ **100% ЗАВЕРШЕНА** (2025-10-09, Grade A-, Production-Ready! GetTopAlerts, GetFlappingAlerts, GetAggregatedStats, 4 HTTP endpoints, 11 tests, интегрировано в main.go)
 - [ ] **TN-39** Circuit breaker для LLM calls
 - [ ] **TN-40** Retry logic с exponential backoff
 - [ ] **TN-41** Alertmanager webhook parser
