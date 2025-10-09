@@ -349,6 +349,12 @@ func (p *PostgresPool) GetHealthChecker() HealthChecker {
 	return p.health
 }
 
+// Pool returns the underlying pgxpool.Pool for advanced operations
+// This is useful when you need direct access to pgxpool features
+func (p *PostgresPool) Pool() *pgxpool.Pool {
+	return p.pool
+}
+
 // errorRow implements pgx.Row for error cases
 type errorRow struct {
 	err error
