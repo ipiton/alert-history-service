@@ -265,11 +265,36 @@ func main() {
 	// Create enrichment handlers
 	enrichmentHandlers := handlers.NewEnrichmentHandlers(enrichmentManager, appLogger)
 
+	// Initialize filter engine and publisher
+	filterEngine := services.NewSimpleFilterEngine(appLogger)
+	publisher := services.NewSimplePublisher(appLogger)
+
+	// Initialize AlertProcessor
+	alertProcessorConfig := services.AlertProcessorConfig{
+		EnrichmentManager: enrichmentManager,
+		LLMClient:         nil, // TODO: Initialize LLM client from config
+		FilterEngine:      filterEngine,
+		Publisher:         publisher,
+		Logger:            appLogger,
+		Metrics:           metricsManager,
+	}
+
+	alertProcessor, err := services.NewAlertProcessor(alertProcessorConfig)
+	if err != nil {
+		slog.Error("Failed to create alert processor", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("✅ Alert Processor initialized successfully")
+
+	// Create webhook handlers
+	webhookHandlers := handlers.NewWebhookHandlers(alertProcessor, appLogger)
+
 	// Setup HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
-	mux.HandleFunc("/webhook", handlers.WebhookHandler)
+	mux.HandleFunc("/webhook", webhookHandlers.HandleWebhook)
 	mux.HandleFunc("/history", handlers.HistoryHandler)
 
 	// Register enrichment mode endpoints
