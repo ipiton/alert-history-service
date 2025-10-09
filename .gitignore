@@ -1,3 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# SQLite / local data
+alert_history.db
+data/*.sqlite3
+*.sqlite3
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+
+# Test & coverage
+.pytest_cache/
+htmlcov/
+.coverage*
+coverage.xml
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -25,6 +53,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+charts
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -174,9 +203,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the enitre vscode folder
 # .vscode/
 
@@ -192,3 +221,30 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Go
+go-app/bin/
+go-app/server
+*.test
+*.out
+go-app/*.exe
+go-app/*.dll
+go-app/*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+go-app/coverage.txt
+
+# Go workspace file
+go.work
+
+# Kilo Code (AI assistant)
+.kilocode/
+
+# Performance test results
+**/results/
+k6-results/
+*.json.gz

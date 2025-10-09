@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert History - Единый Dashboard</title>
+
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #059669;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --info-color: #0891b2;
+            --dark-color: #1f2937;
+            --light-color: #f9fafb;
+            --border-color: #e5e7eb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--light-color), #f0f9ff);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-color), #3b82f6);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            list-style: none;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .nav-links a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-healthy { background-color: var(--success-color); }
+        .status-unhealthy { background-color: var(--danger-color); }
+        .status-degraded { background-color: var(--warning-color); }
+        .status-unknown { background-color: var(--text-secondary); }
+
+        /* Main Content */
+        main {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* Quick Stats Grid */
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            text-align: center;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--info-color));
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .stat-primary { color: var(--primary-color); }
+        .stat-danger { color: var(--danger-color); }
+        .stat-success { color: var(--success-color); }
+        .stat-info { color: var(--info-color); }
+        .stat-warning { color: var(--warning-color); }
+
+        /* Dashboard Sections */
+        .dashboard-sections {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .main-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .sidebar-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Alert List */
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            background: var(--light-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            border-left: 4px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .alert-item:hover {
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        .alert-item.critical { border-left-color: var(--danger-color); }
+        .alert-item.warning { border-left-color: var(--warning-color); }
+        .alert-item.info { border-left-color: var(--info-color); }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .alert-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .alert-namespace {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .alert-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-firing { background: var(--danger-color); color: white; }
+        .badge-resolved { background: var(--success-color); color: white; }
+        .badge-critical { background: var(--danger-color); color: white; }
+        .badge-warning { background: var(--warning-color); color: white; }
+        .badge-info { background: var(--info-color); color: white; }
+
+        /* Charts */
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Bar Chart */
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1rem 0;
+        }
+
+        .bar-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .bar-label {
+            min-width: 120px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .bar-container {
+            flex: 1;
+            height: 24px;
+            background: var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 1s ease;
+            background: linear-gradient(90deg, var(--primary-color), #60a5fa);
+        }
+
+        .bar-value {
+            min-width: 40px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-label {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .control-value {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .control-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--text-secondary);
+            color: white;
+        }
+
+        .btn-small {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* Loading States */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .loading::after {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            margin: -20px 0 0 -20px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            z-index: 1000;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .dashboard-sections {
+                grid-template-columns: 1fr;
+            }
+
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            main {
+                padding: 0 1rem;
+            }
+
+            .quick-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <span>📊</span>
+                Alert History Dashboard
+            </div>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="/metrics">📊 Metrics</a></li>
+                    <li><a href="/docs" target="_blank">📚 Swagger UI</a></li>
+                    <li><a href="/redoc" target="_blank">📖 ReDoc</a></li>
+                    <li><span id="last-updated">🔄 Loading...</span></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Quick Stats -->
+        <section class="quick-stats fade-in">
+            <div class="stat-card">
+                <div class="stat-value stat-primary" id="total-alerts">-</div>
+                <div class="stat-label">Всего алертов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-danger" id="active-alerts">-</div>
+                <div class="stat-label">Активные</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-success" id="resolved-alerts">-</div>
+                <div class="stat-label">Разрешённые</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-info" id="alerts-24h">-</div>
+                <div class="stat-label">За 24 часа</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-warning" id="publishing-targets">-</div>
+                <div class="stat-label">Publishing Targets</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value stat-info" id="cache-hit-rate">-</div>
+                <div class="stat-label">Cache Hit Rate</div>
+            </div>
+        </section>
+
+        <!-- Control Panel -->
+        <section class="control-panel fade-in">
+            <h2 class="section-title">🎛️ Панель управления</h2>
+            <div class="control-grid">
+                <div class="control-item">
+                    <div class="control-label">Режим обогащения</div>
+                    <div class="control-value">Текущий: <span id="enrichment-current">Загрузка...</span></div>
+                    <div class="control-actions">
+                        <button class="btn btn-primary btn-small" id="btn-transparent">Transparent</button>
+                        <button class="btn btn-primary btn-small" id="btn-transparent-recommendations">Transparent + Recommendations</button>
+                        <button class="btn btn-primary btn-small" id="btn-enriched">Enriched</button>
+                    </div>
+                </div>
+                <div class="control-item">
+                    <div class="control-label">Режим публикации</div>
+                    <div class="control-value">Текущий: <span id="publishing-mode">Загрузка...</span></div>
+                </div>
+                <div class="control-item">
+                    <div class="control-label">LLM классификация</div>
+                    <div class="control-value">Статус: <span id="classification-status">Загрузка...</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Sections -->
+        <section class="dashboard-sections fade-in">
+            <!-- Main Section -->
+            <div class="main-section">
+                <h2 class="section-title">🚨 Последние алерты</h2>
+                <div class="alert-list" id="recent-alerts">
+                    <div class="alert-item">Загрузка алертов...</div>
+                </div>
+            </div>
+
+            <!-- Sidebar Section -->
+            <div class="sidebar-section">
+                <h2 class="section-title">📊 Системное здоровье</h2>
+                <div id="system-health">
+                    <div class="alert-item">Загрузка статуса...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="charts-section fade-in">
+            <div class="chart-card">
+                <h3 class="section-title">📈 Топ алерты по частоте</h3>
+                <div class="bar-chart" id="top-alerts-chart">
+                    <div>Загрузка графиков...</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3 class="section-title">🧠 LLM метрики</h3>
+                <div id="llm-metrics">
+                    <div>Загрузка метрик...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Publishing Overview -->
+        <section class="control-panel fade-in">
+            <h2 class="section-title">🚀 Обзор публикации</h2>
+            <div id="publishing-overview">
+                <div>Загрузка данных публикации...</div>
+            </div>
+        </section>
+
+        <!-- Targets List -->
+        <section class="main-section fade-in">
+            <h2 class="section-title">🎯 Publishing Targets</h2>
+            <div class="alert-list" id="targets-list">
+                <div class="alert-item">Загрузка targets...</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div>Alert History Service - Единый Dashboard</div>
+        <div style="margin-top: 0.5rem;">
+            Автообновление каждые 30 секунд • <span id="footer-timestamp">Загрузка...</span>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        class UnifiedDashboard {
+            constructor() {
+                this.refreshInterval = null;
+                this.init();
+            }
+
+            init() {
+                this.loadData();
+                this.startAutoRefresh();
+                this.bindControls();
+            }
+
+            async loadData() {
+                try {
+                    await Promise.all([
+                        this.loadOverview(),
+                        this.loadHealth(),
+                        this.loadTopAlerts(),
+                        this.loadRecentAlerts(),
+                        this.loadPublishing(),
+                        this.loadTargets(),
+                        this.loadLlmMetrics()
+                    ]);
+                } catch (error) {
+                    console.error('Error loading dashboard data:', error);
+                }
+            }
+
+            async loadOverview() {
+                try {
+                    const response = await fetch('/api/dashboard/overview');
+                    const data = await response.json();
+
+                    document.getElementById('total-alerts').textContent = data.total_alerts || 0;
+                    document.getElementById('active-alerts').textContent = data.active_alerts || 0;
+                    document.getElementById('resolved-alerts').textContent = data.resolved_alerts || 0;
+                    document.getElementById('alerts-24h').textContent = data.alerts_last_24h || 0;
+                    document.getElementById('publishing-targets').textContent = data.publishing_targets || 0;
+                    document.getElementById('cache-hit-rate').textContent =
+                        `${Math.round((data.classification_cache_hit_rate || 0) * 100)}%`;
+
+                    const modeEl = document.getElementById('publishing-mode');
+                    modeEl.textContent = data.publishing_mode || 'Unknown';
+                    modeEl.className = `badge badge-${data.publishing_mode === 'intelligent' ? 'info' : 'warning'}`;
+
+                    const classEl = document.getElementById('classification-status');
+                    classEl.textContent = data.classification_enabled ? 'Enabled' : 'Disabled';
+                    classEl.className = `badge badge-${data.classification_enabled ? 'info' : 'warning'}`;
+
+                } catch (error) {
+                    console.error('Error loading overview:', error);
+                }
+            }
+
+            async loadHealth() {
+                try {
+                    const response = await fetch('/api/dashboard/health');
+                    const healthData = await response.json();
+
+                    const container = document.getElementById('system-health');
+                    container.innerHTML = '';
+
+                    healthData.forEach(component => {
+                        const statusClass = component.status.replace('_', '-');
+                        const item = document.createElement('div');
+                        item.className = `alert-item`;
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <span class="status-indicator status-${statusClass}"></span>
+                                <strong>${this.capitalize(component.component)}</strong>
+                            </div>
+                            <div class="alert-badges">
+                                <span class="badge badge-${statusClass === 'healthy' ? 'success' :
+                                    statusClass === 'unhealthy' ? 'danger' :
+                                    statusClass === 'degraded' ? 'warning' : 'info'}">
+                                    ${this.capitalize(component.status.replace('_', ' '))}
+                                </span>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading health:', error);
+                }
+            }
+
+            async loadTopAlerts() {
+                try {
+                    const response = await fetch('/api/dashboard/charts');
+                    const data = await response.json();
+
+                    const container = document.getElementById('top-alerts-chart');
+                    container.innerHTML = '';
+
+                    if (data.top_alerts_by_frequency.length === 0) {
+                        container.innerHTML = '<div>Нет алертов</div>';
+                        return;
+                    }
+
+                    const maxCount = Math.max(...data.top_alerts_by_frequency.map(a => a.count));
+
+                    data.top_alerts_by_frequency.slice(0, 5).forEach(alert => {
+                        const percentage = (alert.count / maxCount) * 100;
+                        const item = document.createElement('div');
+                        item.className = 'bar-item';
+                        item.innerHTML = `
+                            <div class="bar-label">${alert.alert_name}</div>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: ${percentage}%"></div>
+                            </div>
+                            <div class="bar-value">${alert.count}</div>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading top alerts:', error);
+                }
+            }
+
+            async loadRecentAlerts() {
+                try {
+                    const response = await fetch('/api/dashboard/alerts/recent?limit=10');
+                    const data = await response.json();
+
+                    const container = document.getElementById('recent-alerts');
+                    container.innerHTML = '';
+
+                    if (data.alerts.length === 0) {
+                        container.innerHTML = '<div class="alert-item">Нет недавних алертов</div>';
+                        return;
+                    }
+
+                    data.alerts.forEach(alert => {
+                        const item = document.createElement('div');
+                        item.className = `alert-item ${alert.severity || 'info'}`;
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <div class="alert-name">${alert.alert_name}</div>
+                                <div class="alert-namespace">${alert.namespace || 'No namespace'}</div>
+                            </div>
+                            <div class="alert-badges">
+                                <span class="badge badge-${alert.status === 'firing' ? 'firing' : 'resolved'}">
+                                    ${alert.status}
+                                </span>
+                                <span class="badge badge-${alert.severity || 'info'}">
+                                    ${alert.severity || 'unknown'}
+                                </span>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading recent alerts:', error);
+                }
+            }
+
+            async loadPublishing() {
+                try {
+                    const [modeResp, statsResp, enrResp] = await Promise.all([
+                        fetch('/publishing/mode'),
+                        fetch('/publishing/stats'),
+                        fetch('/enrichment/mode')
+                    ]);
+
+                    const mode = await modeResp.json();
+                    const stats = await statsResp.json();
+                    const enrich = await enrResp.json();
+
+                    const el = document.getElementById('publishing-overview');
+                    el.innerHTML = `
+                        <div class="control-grid">
+                            <div class="control-item">
+                                <div class="control-label">Режим работы</div>
+                                <div class="control-value">${mode.mode} • Targets: ${mode.targets_count}</div>
+                            </div>
+                            <div class="control-item">
+                                <div class="control-label">Статистика публикации</div>
+                                <div class="control-value">Всего: ${stats.total_publishes || 0} • Успешно: ${stats.successful_publishes || 0}</div>
+                            </div>
+                            <div class="control-item">
+                                <div class="control-label">Режим обогащения</div>
+                                <div class="control-value">Текущий: ${enrich.mode}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    document.getElementById('enrichment-current').textContent = enrich.mode;
+
+                } catch (error) {
+                    console.error('Error loading publishing data:', error);
+                }
+            }
+
+            async loadTargets() {
+                try {
+                    const resp = await fetch('/publishing/targets');
+                    const data = await resp.json();
+
+                    const el = document.getElementById('targets-list');
+                    el.innerHTML = '';
+
+                    if (!data || data.length === 0) {
+                        el.innerHTML = '<div class="alert-item">Нет targets</div>';
+                        return;
+                    }
+
+                    data.forEach(t => {
+                        const item = document.createElement('div');
+                        item.className = 'alert-item';
+                        item.innerHTML = `
+                            <div class="alert-header">
+                                <div class="alert-name">${t.name} (${t.format})</div>
+                                <div class="alert-namespace">${t.url}</div>
+                            </div>
+                            <div class="alert-badges">
+                                <span class="badge badge-${t.enabled ? 'success' : 'warning'}">
+                                    ${t.enabled ? 'enabled' : 'disabled'}
+                                </span>
+                                <span class="badge badge-success">ok: ${t.successful_publishes || 0}</span>
+                                <span class="badge badge-danger">fail: ${t.failed_publishes || 0}</span>
+                            </div>
+                        `;
+                        el.appendChild(item);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading targets:', error);
+                }
+            }
+
+            async loadLlmMetrics() {
+                try {
+                    const resp = await fetch('/classification/stats');
+                    const s = await resp.json();
+
+                    const el = document.getElementById('llm-metrics');
+                    el.innerHTML = `
+                        <div class="control-grid">
+                            <div class="control-item">
+                                <div class="control-label">Всего запросов</div>
+                                <div class="control-value">${s.total_requests || 0}</div>
+                            </div>
+                            <div class="control-item">
+                                <div class="control-label">Cache Hits</div>
+                                <div class="control-value">${s.cache_hits || 0} (${Math.round((s.cache_hit_rate || 0) * 100)}%)</div>
+                            </div>
+                            <div class="control-item">
+                                <div class="control-label">LLM запросы</div>
+                                <div class="control-value">${s.llm_requests || 0} • Fallback: ${s.fallback_used || 0}</div>
+                            </div>
+                            <div class="control-item">
+                                <div class="control-label">Ошибки</div>
+                                <div class="control-value">${s.errors || 0}</div>
+                            </div>
+                        </div>
+                    `;
+
+                } catch (error) {
+                    console.error('Error loading LLM metrics:', error);
+                }
+            }
+
+            bindControls() {
+                const setMode = async (m) => {
+                    try {
+                        const r = await fetch('/enrichment/mode', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ mode: m })
+                        });
+                        const d = await r.json();
+                        document.getElementById('enrichment-current').textContent = d.mode;
+                    } catch (e) {
+                        console.error('Error setting mode:', e);
+                    }
+                };
+
+                document.getElementById('btn-transparent').onclick = () => setMode('transparent');
+                document.getElementById('btn-transparent-recommendations').onclick = () => setMode('transparent_with_recommendations');
+                document.getElementById('btn-enriched').onclick = () => setMode('enriched');
+            }
+
+            updateTimestamp() {
+                const now = new Date();
+                document.getElementById('last-updated').textContent =
+                    `🔄 ${now.toLocaleTimeString('ru-RU')}`;
+                document.getElementById('footer-timestamp').textContent =
+                    now.toLocaleTimeString('ru-RU');
+            }
+
+            startAutoRefresh() {
+                this.refreshInterval = setInterval(() => {
+                    this.loadData();
+                    this.updateTimestamp();
+                }, 30000); // 30 seconds
+            }
+
+            capitalize(str) {
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new UnifiedDashboard();
+        });
+    </script>
+</body>
+</html>

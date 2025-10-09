@@ -1,0 +1,158 @@
+# Docker Compose Management
+# This Makefile provides convenient commands for managing the development environment
+
+.PHONY: help dev dev-build dev-up dev-down dev-logs dev-clean dev-restart dev-status dev-shell dev-db-shell dev-redis-shell dev-tools dev-migrate-up dev-migrate-down dev-migrate-status dev-backup dev-restore
+
+# Default target
+help: ## Show this help message
+	@echo "Docker Compose Development Environment"
+	@echo "======================================"
+	@echo ""
+	@echo "Available commands:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+dev: dev-up ## Start development environment (alias for dev-up)
+
+dev-build: ## Build all Docker images
+	docker-compose build --no-cache
+
+dev-up: ## Start development environment
+	docker-compose up -d
+	@echo "🚀 Development environment started!"
+	@echo "📊 Services:"
+	@echo "  • App: http://localhost:8080"
+	@echo "  • PostgreSQL: localhost:5432"
+	@echo "  • Redis: localhost:6379"
+	@echo "  • pgAdmin: http://localhost:5050 (use --profile tools)"
+	@echo "  • Redis Commander: http://localhost:8081 (use --profile tools)"
+
+dev-down: ## Stop development environment
+	docker-compose down
+	@echo "🛑 Development environment stopped"
+
+dev-logs: ## Show logs from all services
+	docker-compose logs -f
+
+dev-logs-app: ## Show logs from app service only
+	docker-compose logs -f app
+
+dev-logs-db: ## Show logs from postgres service only
+	docker-compose logs -f postgres
+
+dev-logs-redis: ## Show logs from redis service only
+	docker-compose logs -f redis
+
+dev-clean: ## Stop and remove all containers, networks, and volumes
+	docker-compose down -v --remove-orphans
+	docker system prune -f
+	@echo "🧹 Development environment cleaned"
+
+dev-restart: ## Restart development environment
+	docker-compose restart
+
+dev-status: ## Show status of all services
+	docker-compose ps
+
+dev-shell: ## Open shell in app container
+	docker-compose exec app sh
+
+dev-db-shell: ## Open PostgreSQL shell
+	docker-compose exec postgres psql -U dev -d alerthistory
+
+dev-redis-shell: ## Open Redis CLI
+	docker-compose exec redis redis-cli -a dev
+
+dev-tools: ## Start development environment with management tools (pgAdmin, Redis Commander)
+	docker-compose --profile tools up -d
+	@echo "🛠️  Development environment with tools started!"
+	@echo "📊 Services:"
+	@echo "  • App: http://localhost:8080"
+	@echo "  • PostgreSQL: localhost:5432"
+	@echo "  • Redis: localhost:6379"
+	@echo "  • pgAdmin: http://localhost:5050"
+	@echo "  • Redis Commander: http://localhost:8081"
+
+# Database migration commands
+dev-migrate-up: ## Run database migrations
+	docker-compose exec app go run ./cmd/migrate/main.go up
+
+dev-migrate-down: ## Rollback database migrations
+	docker-compose exec app go run ./cmd/migrate/main.go down
+
+dev-migrate-status: ## Show migration status
+	docker-compose exec app go run ./cmd/migrate/main.go status
+
+dev-migrate-create: ## Create new migration file
+	@read -p "Enter migration name: " name; \
+	docker-compose exec app go run ./cmd/migrate/main.go create $$name
+
+# Backup and restore commands
+dev-backup: ## Create database backup
+	@mkdir -p ./backups
+	docker-compose exec postgres pg_dump -U dev -d alerthistory > ./backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "💾 Database backup created in ./backups/"
+
+dev-restore: ## Restore database from backup
+	@echo "Available backups:"
+	@ls -la ./backups/*.sql 2>/dev/null || echo "No backups found"
+	@read -p "Enter backup filename: " file; \
+	docker-compose exec -T postgres psql -U dev -d alerthistory < ./backups/$$file
+	@echo "🔄 Database restored from backup"
+
+# Health check commands
+dev-health: ## Check health of all services
+	@echo "🔍 Checking service health..."
+	@echo "App health:"
+	@curl -s http://localhost:8080/healthz || echo "❌ App not responding"
+	@echo ""
+	@echo "PostgreSQL health:"
+	@docker-compose exec postgres pg_isready -U dev -d alerthistory || echo "❌ PostgreSQL not ready"
+	@echo ""
+	@echo "Redis health:"
+	@docker-compose exec redis redis-cli -a dev ping || echo "❌ Redis not responding"
+
+# Development utilities
+dev-test: ## Run tests in container
+	docker-compose exec app go test ./...
+
+dev-test-verbose: ## Run tests with verbose output
+	docker-compose exec app go test -v ./...
+
+dev-lint: ## Run linter in container
+	docker-compose exec app golangci-lint run ./...
+
+dev-format: ## Format code in container
+	docker-compose exec app go fmt ./...
+
+dev-mod-tidy: ## Tidy go modules
+	docker-compose exec app go mod tidy
+
+dev-generate: ## Generate code (if needed)
+	docker-compose exec app go generate ./...
+
+# Quick development commands
+dev-quick: ## Quick start (build + up + logs)
+	$(MAKE) dev-build
+	$(MAKE) dev-up
+	$(MAKE) dev-logs-app
+
+dev-reset: ## Reset everything and start fresh
+	$(MAKE) dev-clean
+	$(MAKE) dev-build
+	$(MAKE) dev-up
+	@echo "🔄 Development environment reset and started"
+
+# Environment setup
+dev-setup: ## Initial setup for new developers
+	@echo "🚀 Setting up development environment..."
+	@if [ ! -f .env ]; then cp env.example .env; echo "📝 Created .env file from env.example"; fi
+	$(MAKE) dev-build
+	$(MAKE) dev-up
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 10
+	$(MAKE) dev-migrate-up
+	@echo "✅ Development environment setup complete!"
+	@echo "📊 Access your services:"
+	@echo "  • App: http://localhost:8080"
+	@echo "  • PostgreSQL: localhost:5432"
+	@echo "  • Redis: localhost:6379"

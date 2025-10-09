@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: Alert History - Enrichment Mode API
+  description: |
+    API for managing enrichment modes in Alert History Service.
+
+    The enrichment mode controls how alerts are processed:
+    - `transparent`: Proxy with filtering, no LLM
+    - `enriched`: Full LLM classification + filtering (default)
+    - `transparent_with_recommendations`: Bypass all processing
+
+    State is stored in Redis with fallback to ENV and defaults.
+  version: 1.0.0
+  contact:
+    name: Alert History Team
+    email: devops@example.com
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://alert-history.example.com
+    description: Production
+
+tags:
+  - name: enrichment
+    description: Enrichment mode management
+
+paths:
+  /enrichment/mode:
+    get:
+      tags:
+        - enrichment
+      summary: Get current enrichment mode
+      description: |
+        Returns the current enrichment mode and its source (redis, env, or default).
+
+        This endpoint is fast (<1ms) as it reads from in-memory cache.
+      operationId: getEnrichmentMode
+      responses:
+        '200':
+          description: Current enrichment mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichmentModeResponse'
+              examples:
+                redis_source:
+                  summary: Mode from Redis
+                  value:
+                    mode: enriched
+                    source: redis
+                env_source:
+                  summary: Mode from ENV fallback
+                  value:
+                    mode: transparent
+                    source: env
+                default_source:
+                  summary: Mode from default
+                  value:
+                    mode: enriched
+                    source: default
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Failed to retrieve enrichment mode
+
+    post:
+      tags:
+        - enrichment
+      summary: Set enrichment mode
+      description: |
+        Updates the enrichment mode. The new mode is saved to Redis (if available)
+        and cached in memory. All instances of the service will pick up the change
+        within 30 seconds (cache refresh interval).
+
+        **Security Warning:** This endpoint is currently unprotected.
+        Add authentication in production!
+      operationId: setEnrichmentMode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetEnrichmentModeRequest'
+            examples:
+              transparent:
+                summary: Switch to transparent mode
+                value:
+                  mode: transparent
+              enriched:
+                summary: Switch to enriched mode (production default)
+                value:
+                  mode: enriched
+              bypass:
+                summary: Emergency bypass mode
+                value:
+                  mode: transparent_with_recommendations
+      responses:
+        '200':
+          description: Mode updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichmentModeResponse'
+              example:
+                mode: transparent
+                source: redis
+        '400':
+          description: Invalid mode or malformed JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid_mode:
+                  summary: Invalid enrichment mode
+                  value:
+                    error: "invalid enrichment mode: invalid_mode (valid: transparent, enriched, transparent_with_recommendations)"
+                invalid_json:
+                  summary: Malformed JSON
+                  value:
+                    error: Invalid JSON
+        '500':
+          description: Failed to save mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal server error
+
+components:
+  schemas:
+    EnrichmentModeResponse:
+      type: object
+      required:
+        - mode
+        - source
+      properties:
+        mode:
+          type: string
+          enum:
+            - transparent
+            - enriched
+            - transparent_with_recommendations
+          description: Current enrichment mode
+          example: enriched
+        source:
+          type: string
+          enum:
+            - redis
+            - env
+            - default
+          description: Source of the mode value
+          example: redis
+
+    SetEnrichmentModeRequest:
+      type: object
+      required:
+        - mode
+      properties:
+        mode:
+          type: string
+          enum:
+            - transparent
+            - enriched
+            - transparent_with_recommendations
+          description: New enrichment mode to set
+          example: transparent
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Invalid enrichment mode
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        **TODO:** Implement API key authentication for POST requests.
+        Currently not enforced.
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        **TODO:** Implement JWT authentication for POST requests.
+        Currently not enforced.
+
+# Security is not enforced yet, but defined for future implementation
+# security:
+#   - ApiKeyAuth: []
+#   - BearerAuth: []
