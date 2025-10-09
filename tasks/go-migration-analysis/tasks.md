@@ -58,8 +58,8 @@
 - [x] **TN-33** Alert classification service с LLM integration ✅ **ЗАВЕРШЕНА** (2025-01-09, 90% готовности, PRODUCTION-READY)
 - [x] **TN-34** Enrichment mode system (transparent/enriched) ✅ **ЗАВЕРШЕНА** (2025-10-09, 160% выполнения, PRODUCTION-READY, 59 tests, 91.4% coverage)
 - [x] **TN-35** Alert filtering engine (severity, namespace, labels) ✅ **ЗАВЕРШЕНО НА 150%** (2025-10-09, Grade A+, Production-Ready! 🎉)
-- [ ] **TN-36** Alert deduplication и fingerprinting
-- [ ] **TN-37** Alert history repository с pagination
+- [x] **TN-36** Alert deduplication и fingerprinting ✅ **ЗАВЕРШЕНО НА 100%** (2025-10-09, Grade A-, Production-Ready, FNV64a Alertmanager-compatible)
+- [~] **TN-37** Alert history repository с pagination ⚠️ **25% ГОТОВНОСТИ** (2025-10-09, handler with mock, need DB integration + repository + tests)
 - [ ] **TN-38** Alert analytics service (top alerts, flapping)
 - [ ] **TN-39** Circuit breaker для LLM calls
 - [ ] **TN-40** Retry logic с exponential backoff
@@ -210,13 +210,13 @@ sed -i 's/go-version: '\''1.21'\''/go-version: '\''1.24.6'\''/' .github/workflow
 3. **✅ Health check оптимизирован** - использует встроенный флаг без внешних утилит
 4. **🚀 Можно переходить к Фазе 3** - Observability
 
-### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА
+### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА (обновлено 2025-10-09)
 - **Всего задач**: 122
-- **Завершено полностью**: 33 (27.0%) - Фазы 1, 2, 3 и TN-031, TN-032 полностью завершены
-- **Завершено частично**: 0 (0%)
-- **Осталось реализовать**: 89 (73.0%)
-- **Критические компоненты готовы**: ✅ Infrastructure, Data Layer, Observability, Domain Models, AlertStorage
-- **Готовность к production**: 🚀 Core storage layer готов для деплоя
+- **Завершено полностью**: 36 (29.5%) - Фазы 1, 2, 3 и TN-031, TN-032, TN-033, TN-034, TN-035, TN-036
+- **Завершено частично**: 1 (0.8%) - TN-037 (25% готовности)
+- **Осталось реализовать**: 85 (69.7%)
+- **Критические компоненты готовы**: ✅ Infrastructure, Data Layer, Observability, Domain Models, AlertStorage, Classification, Enrichment, Filtering, Fingerprinting
+- **Готовность к production**: 🚀 Core business logic готов для деплоя (TN-31 до TN-36)
 
 ### ✅ НЕДАВНО ЗАВЕРШЕНО
 
