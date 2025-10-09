@@ -48,7 +48,7 @@ func (m *mockFilterEngine) ShouldBlock(alert *core.Alert, classification *core.C
 }
 
 type mockPublisher struct {
-	publishToAllFunc            func(ctx context.Context, alert *core.Alert) error
+	publishToAllFunc              func(ctx context.Context, alert *core.Alert) error
 	publishWithClassificationFunc func(ctx context.Context, alert *core.Alert, classification *core.ClassificationResult) error
 }
 

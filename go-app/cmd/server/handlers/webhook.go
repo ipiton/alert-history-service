@@ -15,23 +15,23 @@ import (
 
 // WebhookRequest represents the incoming webhook payload.
 type WebhookRequest struct {
-	AlertName   string                 `json:"alertname"`
-	Status      string                 `json:"status"`
-	Labels      map[string]string      `json:"labels"`
-	Annotations map[string]string      `json:"annotations"`
-	StartsAt    string                 `json:"startsAt"`
-	EndsAt      string                 `json:"endsAt"`
-	GeneratorURL string                `json:"generatorURL"`
-	Fingerprint string                 `json:"fingerprint"`
-	Extra       map[string]interface{} `json:"-"` // Catch-all for additional fields
+	AlertName    string                 `json:"alertname"`
+	Status       string                 `json:"status"`
+	Labels       map[string]string      `json:"labels"`
+	Annotations  map[string]string      `json:"annotations"`
+	StartsAt     string                 `json:"startsAt"`
+	EndsAt       string                 `json:"endsAt"`
+	GeneratorURL string                 `json:"generatorURL"`
+	Fingerprint  string                 `json:"fingerprint"`
+	Extra        map[string]interface{} `json:"-"` // Catch-all for additional fields
 }
 
 // WebhookResponse represents the webhook response.
 type WebhookResponse struct {
-	Status    string `json:"status"`
-	Message   string `json:"message"`
-	AlertID   string `json:"alert_id,omitempty"`
-	Timestamp string `json:"timestamp"`
+	Status         string `json:"status"`
+	Message        string `json:"message"`
+	AlertID        string `json:"alert_id,omitempty"`
+	Timestamp      string `json:"timestamp"`
 	ProcessingTime string `json:"processing_time"`
 }
 

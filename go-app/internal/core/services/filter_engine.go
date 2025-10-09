@@ -67,9 +67,8 @@ func isTestAlert(alert *core.Alert) bool {
 
 // containsTest checks if string contains "test" or "Test"
 func containsTest(s string) bool {
-	return len(s) >= 4 && (
-		(s[0] == 't' || s[0] == 'T') &&
-			(s[1] == 'e' || s[1] == 'E') &&
-			(s[2] == 's' || s[2] == 'S') &&
-			(s[3] == 't' || s[3] == 'T'))
+	return len(s) >= 4 && ((s[0] == 't' || s[0] == 'T') &&
+		(s[1] == 'e' || s[1] == 'E') &&
+		(s[2] == 's' || s[2] == 'S') &&
+		(s[3] == 't' || s[3] == 'T'))
 }
