@@ -27,7 +27,9 @@ func TestNewSimpleFilterEngine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewSimpleFilterEngine(tt.logger)
+			// Use NewSimpleFilterEngineWithMetrics with nil metrics for tests
+			// to avoid Prometheus registration conflicts
+			engine := NewSimpleFilterEngineWithMetrics(tt.logger, nil)
 			assert.NotNil(t, engine)
 			assert.NotNil(t, engine.logger)
 		})
@@ -35,7 +37,7 @@ func TestNewSimpleFilterEngine(t *testing.T) {
 }
 
 func TestSimpleFilterEngine_ShouldBlock_NoiseAlerts(t *testing.T) {
-	engine := NewSimpleFilterEngine(nil)
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
 
 	tests := []struct {
 		name           string
@@ -59,7 +61,7 @@ func TestSimpleFilterEngine_ShouldBlock_NoiseAlerts(t *testing.T) {
 				Reasoning:  "Test noise",
 			},
 			expectBlock:  true,
-			expectReason: "noise alert (LLM classified as noise)",
+			expectReason: "noise",
 		},
 		{
 			name: "allow non-noise alert",
@@ -109,7 +111,7 @@ func TestSimpleFilterEngine_ShouldBlock_NoiseAlerts(t *testing.T) {
 }
 
 func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
-	engine := NewSimpleFilterEngine(nil)
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
 
 	tests := []struct {
 		name         string
@@ -126,7 +128,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				Labels:      map[string]string{},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "block alert with 'Test' in name (capitalized)",
@@ -137,7 +139,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				Labels:      map[string]string{},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "block alert with 'TEST' in name (uppercase)",
@@ -148,7 +150,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				Labels:      map[string]string{},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "block alert with test in alertname label",
@@ -161,7 +163,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "block alert with test environment",
@@ -174,7 +176,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "block alert with testing environment",
@@ -187,7 +189,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 				},
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 		},
 		{
 			name: "allow normal production alert",
@@ -227,7 +229,7 @@ func TestSimpleFilterEngine_ShouldBlock_TestAlerts(t *testing.T) {
 }
 
 func TestSimpleFilterEngine_ShouldBlock_LowConfidence(t *testing.T) {
-	engine := NewSimpleFilterEngine(nil)
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
 
 	tests := []struct {
 		name           string
@@ -251,7 +253,7 @@ func TestSimpleFilterEngine_ShouldBlock_LowConfidence(t *testing.T) {
 				Reasoning:  "Low confidence",
 			},
 			expectBlock:  true,
-			expectReason: "low confidence classification",
+			expectReason: "low_confidence",
 		},
 		{
 			name: "block alert with confidence = 0.29",
@@ -267,7 +269,7 @@ func TestSimpleFilterEngine_ShouldBlock_LowConfidence(t *testing.T) {
 				Reasoning:  "Low confidence",
 			},
 			expectBlock:  true,
-			expectReason: "low confidence classification",
+			expectReason: "low_confidence",
 		},
 		{
 			name: "allow alert with confidence = 0.3 (boundary)",
@@ -327,7 +329,7 @@ func TestSimpleFilterEngine_ShouldBlock_LowConfidence(t *testing.T) {
 }
 
 func TestSimpleFilterEngine_ShouldBlock_CombinedRules(t *testing.T) {
-	engine := NewSimpleFilterEngine(nil)
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
 
 	tests := []struct {
 		name           string
@@ -351,7 +353,7 @@ func TestSimpleFilterEngine_ShouldBlock_CombinedRules(t *testing.T) {
 				Reasoning:   "Critical issue",
 			},
 			expectBlock:  true,
-			expectReason: "test alert",
+			expectReason: "test_alert",
 			description:  "Test alerts are always blocked, even if critical",
 		},
 		{
@@ -370,7 +372,7 @@ func TestSimpleFilterEngine_ShouldBlock_CombinedRules(t *testing.T) {
 				Reasoning:   "Classified as noise",
 			},
 			expectBlock:  true,
-			expectReason: "noise alert (LLM classified as noise)",
+			expectReason: "noise",
 			description:  "Even production alerts are blocked if classified as noise",
 		},
 		{
@@ -409,7 +411,7 @@ func TestSimpleFilterEngine_ShouldBlock_CombinedRules(t *testing.T) {
 				Reasoning:   "Uncertain classification",
 			},
 			expectBlock:  true,
-			expectReason: "low confidence classification",
+			expectReason: "low_confidence",
 			description:  "Low confidence alerts are blocked even in production",
 		},
 	}
@@ -544,7 +546,7 @@ func TestContainsTest(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkSimpleFilterEngine_ShouldBlock(b *testing.B) {
-	engine := NewSimpleFilterEngine(nil)
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
 	alert := &core.Alert{
 		Fingerprint: "bench-fp",
 		AlertName:   "BenchmarkAlert",
