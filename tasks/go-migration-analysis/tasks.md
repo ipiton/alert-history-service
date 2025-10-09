@@ -52,7 +52,7 @@
 - [x] **TN-29** POC клиента LLM proxy ✅ **ЗАВЕРШЕНА** (internal/infrastructure/llm/client.go)
 - [x] **TN-30** Сбор метрик покрытия ✅ **ЗАВЕРШЕНА** (CI job `test` + Codecov integration)
 
-## 📝 ФАЗА 4: Core Business Logic (NEW)
+## 📝 ФАЗА 4: Core Business Logic (COMPLETE)
 - [x] **TN-31** Alert domain models (Alert, Classification, Publishing) ✅ **ЗАВЕРШЕНА** (2025-10-08)
 - [x] **TN-32** AlertStorage interface и PostgreSQL implementation ✅ **ЗАВЕРШЕНА** (2025-10-08, 95% - готов к production)
 - [x] **TN-33** Alert classification service с LLM integration ✅ **ЗАВЕРШЕНА** (2025-01-09, 90% готовности, PRODUCTION-READY)
@@ -68,6 +68,34 @@
 - [ ] **TN-43** Webhook validation и error handling
 - [ ] **TN-44** Async webhook processing с worker pool
 - [ ] **TN-45** Webhook metrics и monitoring
+
+---
+
+## 🚀 ФАЗА A: Alertmanager++ Critical Components (NEW - 2025-01-09)
+
+**Цель**: Реализовать критические компоненты для полной замены Alertmanager
+
+### Модуль 1: Alert Grouping System
+- [x] **TN-121** Grouping Configuration Parser ✅ **ЗАВЕРШЕНА** (2025-01-09, config.go, errors.go, parser.go, validator.go созданы)
+- [ ] **TN-122** Group Key Generator (hash-based grouping, FNV-1a)
+- [ ] **TN-123** Alert Group Manager (lifecycle management, metrics)
+- [ ] **TN-124** Group Wait/Interval Timers (Redis persistence)
+- [ ] **TN-125** Group Storage (Redis Backend, distributed state)
+
+### Модуль 2: Inhibition Rules Engine
+- [ ] **TN-126** Inhibition Rule Parser (YAML конфигурация)
+- [ ] **TN-127** Inhibition Matcher Engine (source/target matching, <1ms)
+- [ ] **TN-128** Active Alert Cache (Redis, fast lookup)
+- [ ] **TN-129** Inhibition State Manager (tracking relationships)
+- [ ] **TN-130** Inhibition API Endpoints (GET/POST /api/v2/inhibition/*)
+
+### Модуль 3: Silencing System
+- [ ] **TN-131** Silence Data Models (Silence/Matcher structures, PostgreSQL migration)
+- [ ] **TN-132** Silence Matcher Engine (regex support, operators =, !=, =~, !~)
+- [ ] **TN-133** Silence Storage (PostgreSQL, indexes, TTL management)
+- [ ] **TN-134** Silence Manager Service (lifecycle, background GC)
+- [ ] **TN-135** Silence API Endpoints (POST/GET/DELETE /api/v2/silences/*)
+- [ ] **TN-136** Silence UI Components (dashboard widget, bulk operations)
 
 ## 📝 ФАЗА 5: Publishing System (NEW)
 - [ ] **TN-46** Kubernetes client для secrets discovery
@@ -157,7 +185,146 @@
 - [ ] **TN-118** Operations runbook
 - [ ] **TN-119** Troubleshooting guide
 - [ ] **TN-120** Architecture documentation
-- [ ] **TN-121** Очистка Python кода и зависимостей 🧹 📋
+
+---
+
+## 🧹 SPECIAL: Python Code Cleanup (NEW - 2025-01-09)
+
+**Цель**: Очистка Python кода после успешной миграции на Go
+
+- [x] **Phase 1**: Analysis & Mapping (2 дня) ✅ COMPLETE (2025-01-09)
+  - [x] Audit всех 36 Python файлов (16 DELETE, 7 ARCHIVE, 5 MIGRATE, 5 KEEP, 3 EVALUATE)
+  - [x] Создать матрицу соответствия Python → Go (component-matrix.csv)
+  - [x] Идентифицировать миграционные gaps (4 CRITICAL, 3 MEDIUM gaps)
+  - [x] Анализ зависимостей и security scan (70% reduction: 61 → 18 deps)
+
+- [x] **Phase 2**: Documentation (2 дня) ✅ COMPLETE (2025-01-09)
+  - [x] Создать MIGRATION.md (500+ lines, comprehensive guide)
+  - [x] Создать DEPRECATION.md (400+ lines, clear timeline до April 1, 2025)
+  - [x] Обновить README.md (Go primary banner, deprecation notice)
+  - [x] API compatibility matrix (docs/API_COMPATIBILITY.md, 450+ lines)
+
+- [x] **Phase 3**: Code Reorganization (3 дня) ✅ COMPLETE (2025-01-09)
+  - [x] Создать `legacy/` структуру (reference/deprecated/active) - 4 директории
+  - [x] Переместить устаревший код (36 файлов: 17 deprecated, 11 reference, 8 active)
+  - [x] Добавить deprecation warnings (DEPRECATION_NOTICE.txt, MIGRATION_STATUS.md)
+  - [x] Создать документацию (~2,000 lines: 4 READMEs)
+
+- [ ] **Phase 4**: Dependency Cleanup (2 дня)
+  - [ ] requirements.txt → requirements-minimal.txt
+  - [ ] Удалить неиспользуемые deps (~30 → 5)
+  - [ ] Оптимизировать Docker image (~500MB → <200MB)
+  - [ ] Security scan (pip-audit, safety)
+
+- [ ] **Phase 5**: Test Migration (3 дня)
+  - [ ] Создать compatibility tests (Python vs Go)
+  - [ ] Performance comparison tests
+  - [ ] Мигрировать критичные тесты на Go
+  - [ ] Dual-stack E2E tests
+
+- [ ] **Phase 6**: CI/CD Updates (1 день)
+  - [ ] Обновить GitHub Actions (legacy badge)
+  - [ ] Создать compatibility.yml workflow
+  - [ ] Обновить pre-commit hooks
+
+- [ ] **Phase 7**: Deployment Preparation (2 дня)
+  - [ ] Dual-stack docker-compose.yml
+  - [ ] Kubernetes manifests (traffic splitting)
+  - [ ] Monitoring dashboards (Python vs Go)
+  - [ ] Rollback scripts
+
+- [ ] **Phase 8**: Production Transition (2 недели)
+  - [ ] Week 1: Canary (10% → 75% traffic to Go)
+  - [ ] Week 2: Full migration (90% → 100% Go)
+  - [ ] Python read-only mode
+  - [ ] Sunset announcement
+
+**Статус**: 📋 READY TO START
+**Timeline**: 2 недели + 2 недели monitoring
+**Can run parallel**: ✅ Yes (не блокирует Alertmanager++)
+**Documentation**: `tasks/python-cleanup/` (requirements, design, tasks)
+
+---
+
+## 🚀 ФАЗА B: Alertmanager++ Advanced Features (NEW - 2025-01-09)
+
+### Модуль 4: Advanced Routing
+- [ ] **TN-137** Route Config Parser (YAML, nested routes, Match/MatchRE)
+- [ ] **TN-138** Route Tree Builder (hierarchy, tree traversal, hot reload)
+- [ ] **TN-139** Route Matcher (regex support, performance optimization)
+- [ ] **TN-140** Route Evaluator (multiple receivers, route-specific config)
+- [ ] **TN-141** Multi-Receiver Support (parallel publishing, failure handling)
+
+### Модуль 5: Time-based Aggregation
+- [ ] **TN-142** Timer Manager Service (centralized, Redis-backed, persistence)
+- [ ] **TN-143** Group Wait Implementation (accumulation period, dynamic adjustment)
+- [ ] **TN-144** Group Interval Implementation (periodic updates, batching)
+- [ ] **TN-145** Repeat Interval Implementation (re-notification, exponential backoff)
+
+---
+
+## 🚀 ФАЗА C: Alertmanager++ Additional Components (NEW - 2025-01-09)
+
+### Модуль 6: Prometheus Integration
+- [ ] **TN-146** Prometheus Alert Parser (format conversion, fingerprint generation)
+- [ ] **TN-147** POST /api/v2/alerts Endpoint (Alertmanager-compatible, batch ingestion)
+- [ ] **TN-148** Prometheus-compatible Response (status codes, error messages)
+
+### Модуль 7: Configuration Management
+- [ ] **TN-149** GET /api/v2/config (current config export, sanitization)
+- [ ] **TN-150** POST /api/v2/config (dynamic update, validation, rollback)
+- [ ] **TN-151** Config Validator (syntax/semantic validation, cross-reference)
+- [ ] **TN-152** Hot Reload Mechanism (SIGHUP, zero-downtime updates)
+
+### Модуль 8: Template System
+- [ ] **TN-153** Template Engine Integration (Go text/template, custom functions)
+- [ ] **TN-154** Default Templates (Slack, PagerDuty, Email, Webhook)
+- [ ] **TN-155** Template API (CRUD for templates)
+- [ ] **TN-156** Template Validator (syntax validation, security checks)
+
+### Модуль 9: Clustering (High Availability)
+- [ ] **TN-157** Gossip Protocol Integration (hashicorp/memberlist, health checks)
+- [ ] **TN-158** Cluster State Manager (distributed sync, CRDT, replication)
+- [ ] **TN-159** Leader Election (Raft-based, failover, метрики)
+- [ ] **TN-160** State Replication (silences/groups replication, incremental updates)
+
+---
+
+## 🚀 ФАЗА D: Alertmanager++ AI/ML Features (NEW - 2025-01-09)
+
+### Модуль 10: ML Pattern Detection
+- [ ] **TN-161** Alert Pattern Analyzer (time-series analysis, correlation)
+- [ ] **TN-162** Anomaly Detection Service (statistical detection, baseline learning)
+- [ ] **TN-163** Flapping Detection Enhanced (ML-based prediction, auto-silencing)
+- [ ] **TN-164** Alert Correlation Engine (cross-alert correlation, incident grouping)
+
+### Модуль 11: Advanced Analytics
+- [ ] **TN-165** Alert Trend Analysis (forecast modeling, seasonality detection)
+- [ ] **TN-166** Team Performance Analytics (MTTR tracking, SLA monitoring)
+- [ ] **TN-167** Cost Analytics (notification cost tracking, ROI calculation)
+- [ ] **TN-168** Recommendation System Enhanced (ML-powered, A/B testing, feedback loop)
+
+### Модуль 12: Advanced UI/Dashboard
+- [ ] **TN-169** Real-time Alert Dashboard (WebSocket-based, interactive filtering)
+- [ ] **TN-170** Configuration UI (visual route editor drag-drop, rule builder)
+- [ ] **TN-171** Analytics Dashboard (Grafana-compatible, custom panels, heatmaps)
+- [ ] **TN-172** Mobile-Responsive UI (mobile-first design, offline support)
+
+---
+
+## 🚀 ФАЗА E: Integration & Production Readiness (NEW - 2025-01-09)
+
+### Модуль 13: Testing & Quality
+- [ ] **TN-173** Integration Test Suite (end-to-end tests, load testing k6/vegeta)
+- [ ] **TN-174** Compatibility Testing (Alertmanager config compat, migration testing)
+- [ ] **TN-175** Security Audit (OWASP Top 10, penetration testing, RBAC)
+
+### Модуль 14: Documentation & Operations
+- [ ] **TN-176** Migration Guide (Alertmanager → Alert History, config conversion tool)
+- [ ] **TN-177** Operations Runbook (troubleshooting, performance tuning, disaster recovery)
+- [ ] **TN-178** API Documentation (OpenAPI 3.0 complete, interactive explorer)
+- [ ] **TN-179** Architecture Documentation (system design, component diagrams, ADRs)
+- [ ] **TN-180** Production Deployment (blue-green setup, canary release, monitoring)
 
 ---
 
@@ -210,13 +377,22 @@ sed -i 's/go-version: '\''1.21'\''/go-version: '\''1.24.6'\''/' .github/workflow
 3. **✅ Health check оптимизирован** - использует встроенный флаг без внешних утилит
 4. **🚀 Можно переходить к Фазе 3** - Observability
 
-### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА (обновлено 2025-10-09)
-- **Всего задач**: 122
-- **Завершено полностью**: 37 (30.3%) - Фазы 1, 2, 3 и TN-031, TN-032, TN-033, TN-034, TN-035, TN-036, TN-037 ✅
-- **Завершено частично**: 0 (0%)
-- **Осталось реализовать**: 85 (69.7%)
-- **Критические компоненты готовы**: ✅ Infrastructure, Data Layer, Observability, Domain Models, AlertStorage, Classification, Enrichment, Filtering, Fingerprinting, **History Repository**
+### 📊 АКТУАЛЬНАЯ СТАТИСТИКА ПРОЕКТА (обновлено 2025-01-09)
+- **Всего задач**: 180 (было 122, добавлено 60 задач Alertmanager++)
+- **Завершено полностью**: 38 (21.1%) - Фазы 1, 2, 3, частично Фаза 4 (TN-031 до TN-037), TN-121 ✅
+- **В процессе**: 1 (0.6%) - TN-121 (документация готова, код в разработке)
+- **Осталось реализовать**: 141 (78.3%)
+- **Критические компоненты готовы**: ✅ Infrastructure, Data Layer, Observability, Domain Models, AlertStorage, Classification, Enrichment, Filtering, Fingerprinting, History Repository
+- **Новый фокус**: 🎯 **Alertmanager++ Implementation** - полная замена Alertmanager с AI/ML (TN-121 до TN-180)
 - **Готовность к production**: 🚀 Core business logic готов для деплоя (TN-31 до TN-37) - **150% на TN-35 и TN-37!** 🎉
+
+### 📈 ПРОГРЕСС ПО ФАЗАМ ALERTMANAGER++
+- **Фаза A (Critical)**: 1/16 задач (6.25%) - TN-121 ✅, TN-122 to TN-136 в процессе
+- **Фаза B (Advanced)**: 0/9 задач (0%) - TN-137 to TN-145 запланированы
+- **Фаза C (Additional)**: 0/15 задач (0%) - TN-146 to TN-160 запланированы
+- **Фаза D (AI/ML)**: 0/12 задач (0%) - TN-161 to TN-172 запланированы
+- **Фаза E (Production)**: 0/8 задач (0%) - TN-173 to TN-180 запланированы
+- **ИТОГО Alertmanager++**: 1/60 задач (1.67%) 🔄
 
 ### ✅ НЕДАВНО ЗАВЕРШЕНО
 

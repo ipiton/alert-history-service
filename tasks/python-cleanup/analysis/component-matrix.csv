@@ -1,0 +1,53 @@
+Python File,Category,LOC,Go Equivalent,Status,Priority,Action,Notes
+src/alert_history/config.py,Config,~100,internal/config/,✅ COMPLETE,🟢 LOW,DELETE,"Viper config loader полностью реплицирует функциональность"
+src/alert_history/logging_config.py,Infrastructure,~50,pkg/logger/,✅ COMPLETE,🟢 LOW,DELETE,"Slog structured logging работает"
+src/alert_history/database/sqlite_adapter.py,Database,~200,internal/database/sqlite.go,✅ COMPLETE,🟢 LOW,ARCHIVE,"Go адаптер работает, оставить как reference"
+src/alert_history/database/postgresql_adapter.py,Database,~300,internal/database/postgres.go,✅ COMPLETE,🟢 LOW,ARCHIVE,"pgx адаптер полностью функционален"
+src/alert_history/database/migration_manager.py,Database,~150,internal/infrastructure/migrations/,✅ COMPLETE,🟢 LOW,DELETE,"Goose migrations работают"
+src/alert_history/core/interfaces.py,Core,~200,internal/core/interfaces.go,✅ COMPLETE,🟢 LOW,ARCHIVE,"Alert models мигрированы, оставить как reference"
+src/alert_history/core/metrics.py,Observability,~100,pkg/metrics/,✅ COMPLETE,🟢 LOW,DELETE,"Prometheus metrics в Go"
+src/alert_history/core/base_classes.py,Core,~80,N/A (Go doesn't need),✅ COMPLETE,🟢 LOW,DELETE,"Python-specific base classes"
+src/alert_history/core/shutdown.py,Infrastructure,~60,cmd/server/main.go (graceful shutdown),✅ COMPLETE,🟢 LOW,DELETE,"Go graceful shutdown реализован"
+src/alert_history/core/app_state.py,Core,~120,N/A (stateless design),⚠️  EVALUATE,🟡 MED,DELETE,"Go stateless, но нужна проверка"
+src/alert_history/core/stateless_manager.py,Core,~90,N/A (Go stateless),✅ COMPLETE,🟢 LOW,DELETE,"Не нужен в Go"
+src/alert_history/utils/stateless_decorators.py,Utils,~50,N/A,✅ COMPLETE,🟢 LOW,DELETE,"Python decorators, не нужны в Go"
+src/alert_history/utils/common.py,Utils,~80,pkg/utils/,⚠️  EVALUATE,🟡 MED,CASE-BY-CASE,"Проверить какие утилиты используются"
+src/alert_history/utils/decorators.py,Utils,~70,N/A,✅ COMPLETE,🟢 LOW,DELETE,"Python decorators"
+src/alert_history/cli/database_migrate.py,CLI,~100,cmd/migrate/main.go,✅ COMPLETE,🟢 LOW,DELETE,"Go migration CLI работает"
+src/alert_history/__init__.py,Package,~10,N/A,✅ COMPLETE,🟢 LOW,DELETE,"Python package init"
+src/alert_history/api/health_endpoints.py,API,~40,cmd/server/handlers/health.go,✅ COMPLETE,🟢 LOW,DELETE,"/healthz и /readyz в Go"
+src/alert_history/api/metrics.py,API,~30,pkg/metrics/,✅ COMPLETE,🟢 LOW,DELETE,"/metrics endpoint в Go"
+src/alert_history/services/health_checker.py,Services,~80,cmd/server/handlers/health.go,✅ COMPLETE,🟢 LOW,DELETE,"Health checks в Go"
+src/alert_history/services/graceful_shutdown.py,Services,~100,cmd/server/main.go,✅ COMPLETE,🟢 LOW,DELETE,"Graceful shutdown в Go"
+src/alert_history/services/redis_cache.py,Services,~150,internal/infrastructure/cache/,✅ COMPLETE,🟢 LOW,DELETE,"go-redis v9 работает"
+src/alert_history/api/webhook_endpoints.py,API,~200,cmd/server/handlers/webhook.go,🔄 PARTIAL,🟡 MED,ARCHIVE,"Базовый webhook работает в Go, сложная логика - в Python"
+src/alert_history/services/webhook_processor.py,Services,~300,TBD,🔄 PARTIAL,🔴 HIGH,MIGRATE,"Комплексная обработка webhooks, нужно в Go"
+src/alert_history/services/alert_classifier.py,Services,~400,internal/infrastructure/llm/,🔄 PARTIAL,🟡 MED,ARCHIVE,"LLM client в Go есть, но Python более зрелый"
+src/alert_history/services/filter_engine.py,Services,~350,internal/core/filtering.go,🔄 PARTIAL,🟡 MED,ARCHIVE,"Фильтрация в Go 95% готова, оставить Python как reference"
+src/alert_history/services/alert_formatter.py,Services,~200,TBD,❌ MISSING,🟡 MED,MIGRATE,"Форматирование алертов для разных targets"
+src/alert_history/services/target_discovery.py,Services,~250,TBD,❌ MISSING,🔴 HIGH,MIGRATE,"K8s secrets discovery - критично"
+src/alert_history/services/alert_publisher.py,Services,~300,TBD,❌ MISSING,🔴 HIGH,MIGRATE,"Multi-target publishing - критично"
+src/alert_history/services/llm_client.py,Services,~180,internal/infrastructure/llm/,🔄 PARTIAL,🟡 MED,ARCHIVE,"Go LLM client работает, Python как reference"
+src/alert_history/api/proxy_endpoints.py,API,~400,TBD,❌ MISSING,🔴 HIGH,MIGRATE,"Intelligent proxy - core feature"
+src/alert_history/api/classification_endpoints.py,API,~150,TBD,❌ MISSING,🟡 MED,EVALUATE,"Можно deprecated? Нужна проверка использования"
+src/alert_history/api/dashboard_endpoints.py,API,~300,TBD,❌ MISSING,🟡 MED,KEEP (temp),"HTML dashboard, миграция планируется (TN-76 to TN-85)"
+src/alert_history/api/enrichment_endpoints.py,API,~200,TBD,🔄 PARTIAL,🟡 MED,KEEP (temp),"Enrichment mode API, частично в Go"
+src/alert_history/api/legacy_adapter.py,API,~250,N/A,✅ ACTIVE,🟡 MED,KEEP (temp),"Legacy compatibility layer, нужен до полной миграции"
+src/alert_history/api/publishing_endpoints.py,API,~350,TBD,❌ MISSING,🔴 HIGH,KEEP (temp),"Publishing API, активно используется, миграция TN-46 to TN-60"
+src/alert_history/main.py,Entry,~150,cmd/server/main.go,✅ COMPLETE,🟡 MED,KEEP (temp),"Entry point, нужен пока Python endpoints активны"
+
+SUMMARY,,,,,,,
+Total Files,36,,,,,,
+✅ COMPLETE,16,,,,,,44.4%
+🔄 PARTIAL,7,,,,,,19.4%
+❌ MISSING,6,,,,,,16.7%
+⚠️  EVALUATE,2,,,,,,5.6%
+✅ ACTIVE,1,,,,,,2.8%
+,,,,,,,
+Actions,,,,,,,
+DELETE,16,,,,,,44.4% - можно удалить сразу
+ARCHIVE,7,,,,,,19.4% - оставить как reference
+MIGRATE,5,,,,,,13.9% - срочно мигрировать на Go
+KEEP (temp),5,,,,,,13.9% - временно оставить активными
+EVALUATE,2,,,,,,5.6% - требуется проверка
+CASE-BY-CASE,1,,,,,,2.8% - частично

@@ -1,0 +1,26 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                         DEPRECATION NOTICE                                ║
+║                                                                           ║
+║  These files are DEPRECATED and scheduled for PERMANENT DELETION         ║
+║                                                                           ║
+║  Deletion Date: April 1, 2025 (82 days remaining)                       ║
+║                                                                           ║
+║  ⚠️  DO NOT USE THIS CODE                                                ║
+║  ⚠️  DO NOT FIX BUGS HERE                                                ║
+║  ⚠️  DO NOT ADD FEATURES HERE                                            ║
+║                                                                           ║
+║  All functionality has been replaced by Go implementations.               ║
+║                                                                           ║
+║  For Go equivalents, see:                                                 ║
+║  - tasks/python-cleanup/analysis/component-matrix.csv                    ║
+║  - legacy/deprecated/README.md                                            ║
+║                                                                           ║
+║  Questions? See MIGRATION.md or DEPRECATION.md                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+Files in this directory: 17
+Status: Deprecated
+Deletion: 2025-04-01
+Reason: Fully replaced by Go implementation
+
+DO NOT USE IN PRODUCTION
