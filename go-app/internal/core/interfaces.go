@@ -111,6 +111,71 @@ type AlertFilters struct {
 	Offset    int               `json:"offset" validate:"gte=0"`
 }
 
+// Validate validates AlertFilters parameters
+func (f *AlertFilters) Validate() error {
+	// Validate Limit
+	if f.Limit < 0 {
+		return ErrInvalidFilterLimit
+	}
+	if f.Limit > 1000 {
+		return ErrFilterLimitTooLarge
+	}
+
+	// Validate Offset
+	if f.Offset < 0 {
+		return ErrInvalidFilterOffset
+	}
+
+	// Validate Status
+	if f.Status != nil {
+		if *f.Status != StatusFiring && *f.Status != StatusResolved {
+			return ErrInvalidFilterStatus
+		}
+	}
+
+	// Validate Severity
+	if f.Severity != nil {
+		validSeverities := map[string]bool{
+			"critical": true,
+			"warning":  true,
+			"info":     true,
+			"noise":    true,
+		}
+		if !validSeverities[*f.Severity] {
+			return ErrInvalidFilterSeverity
+		}
+	}
+
+	// Validate TimeRange
+	if f.TimeRange != nil {
+		if f.TimeRange.From != nil && f.TimeRange.To != nil {
+			if f.TimeRange.From.After(*f.TimeRange.To) {
+				return ErrInvalidTimeRange
+			}
+		}
+	}
+
+	// Validate Labels (max 20 labels)
+	if len(f.Labels) > 20 {
+		return ErrTooManyLabels
+	}
+
+	// Validate label keys and values (max 255 chars each)
+	for key, value := range f.Labels {
+		if len(key) == 0 {
+			return ErrEmptyLabelKey
+		}
+		if len(key) > 255 {
+			return ErrLabelKeyTooLong
+		}
+		if len(value) > 255 {
+			return ErrLabelValueTooLong
+		}
+	}
+
+	return nil
+}
+
 // AlertList represents paginated list of alerts
 type AlertList struct {
 	Alerts []*Alert `json:"alerts"`
