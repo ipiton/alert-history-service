@@ -64,7 +64,7 @@ func (f *SimpleFilterEngine) ShouldBlock(alert *core.Alert, classification *core
 
 // shouldBlockInternal contains the actual filtering logic
 func (f *SimpleFilterEngine) shouldBlockInternal(alert *core.Alert, classification *core.ClassificationResult) (bool, string) {
-	// Rule 1: Block test alerts
+	// Rule 1: Block test alerts (highest priority)
 	if isTestAlert(alert) {
 		return true, "test_alert"
 	}
@@ -79,8 +79,59 @@ func (f *SimpleFilterEngine) shouldBlockInternal(alert *core.Alert, classificati
 		return true, "low_confidence"
 	}
 
+	// Rule 4: Block alerts from disabled namespaces
+	if isDisabledNamespace(alert) {
+		return true, "disabled_namespace"
+	}
+
+	// Rule 5: Block alerts with empty alert name
+	if alert.AlertName == "" {
+		return true, "empty_alert_name"
+	}
+
+	// Rule 6: Block resolved alerts older than 24 hours (cleanup)
+	if isOldResolvedAlert(alert) {
+		return true, "old_resolved"
+	}
+
+	// Rule 7: Block duplicate fingerprints within short time window
+	// (This would require state tracking, marked as TODO)
+	// TODO: Implement deduplication logic with time window
+
 	// Default: allow
 	return false, ""
+}
+
+// isDisabledNamespace checks if alert is from a disabled namespace
+func isDisabledNamespace(alert *core.Alert) bool {
+	// List of disabled namespaces (could be loaded from config)
+	disabledNamespaces := map[string]bool{
+		"kube-system": false, // Allow kube-system
+		"dev-sandbox": true,  // Block dev-sandbox
+		"tmp":         true,  // Block tmp namespace
+	}
+
+	if ns := alert.Namespace(); ns != nil {
+		return disabledNamespaces[*ns]
+	}
+	return false
+}
+
+// isOldResolvedAlert checks if alert is resolved and older than 24 hours
+func isOldResolvedAlert(alert *core.Alert) bool {
+	if alert.Status != core.StatusResolved {
+		return false
+	}
+
+	// If ends_at is set, check if it's older than 24 hours
+	if alert.EndsAt != nil {
+		age := time.Since(*alert.EndsAt)
+		return age > 24*time.Hour
+	}
+
+	// If ends_at is not set but status is resolved, check starts_at
+	age := time.Since(alert.StartsAt)
+	return age > 48*time.Hour // More lenient for missing ends_at
 }
 
 // isTestAlert checks if alert is a test alert

@@ -515,6 +515,154 @@ func TestIsTestAlert(t *testing.T) {
 	}
 }
 
+func TestSimpleFilterEngine_ShouldBlock_AdditionalRules(t *testing.T) {
+	engine := NewSimpleFilterEngineWithMetrics(nil, nil)
+
+	tests := []struct {
+		name           string
+		alert          *core.Alert
+		classification *core.ClassificationResult
+		expectBlock    bool
+		expectReason   string
+		description    string
+	}{
+		{
+			name: "block disabled namespace dev-sandbox",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-1",
+				AlertName:   "ProductionAlert",
+				Status:      core.StatusFiring,
+				Labels: map[string]string{
+					"namespace": "dev-sandbox",
+				},
+				StartsAt: time.Now(),
+			},
+			classification: nil,
+			expectBlock:    true,
+			expectReason:   "disabled_namespace",
+			description:    "dev-sandbox namespace should be blocked",
+		},
+		{
+			name: "block disabled namespace tmp",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-2",
+				AlertName:   "TempAlert",
+				Status:      core.StatusFiring,
+				Labels: map[string]string{
+					"namespace": "tmp",
+				},
+				StartsAt: time.Now(),
+			},
+			classification: nil,
+			expectBlock:    true,
+			expectReason:   "disabled_namespace",
+			description:    "tmp namespace should be blocked",
+		},
+		{
+			name: "allow kube-system namespace",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-3",
+				AlertName:   "SystemAlert",
+				Status:      core.StatusFiring,
+				Labels: map[string]string{
+					"namespace": "kube-system",
+				},
+				StartsAt: time.Now(),
+			},
+			classification: nil,
+			expectBlock:    false,
+			expectReason:   "",
+			description:    "kube-system namespace should be allowed",
+		},
+		{
+			name: "allow production namespace",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-4",
+				AlertName:   "ProdAlert",
+				Status:      core.StatusFiring,
+				Labels: map[string]string{
+					"namespace": "production",
+				},
+				StartsAt: time.Now(),
+			},
+			classification: nil,
+			expectBlock:    false,
+			expectReason:   "",
+			description:    "production namespace should be allowed",
+		},
+		{
+			name: "block empty alert name",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-5",
+				AlertName:   "",
+				Status:      core.StatusFiring,
+				Labels: map[string]string{
+					"namespace": "production",
+				},
+				StartsAt: time.Now(),
+			},
+			classification: nil,
+			expectBlock:    true,
+			expectReason:   "empty_alert_name",
+			description:    "empty alert name should be blocked",
+		},
+		{
+			name: "block old resolved alert (25 hours)",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-6",
+				AlertName:   "OldAlert",
+				Status:      core.StatusResolved,
+				Labels:      map[string]string{},
+				StartsAt:    time.Now().Add(-26 * time.Hour),
+				EndsAt:      ptrTime(time.Now().Add(-25 * time.Hour)),
+			},
+			classification: nil,
+			expectBlock:    true,
+			expectReason:   "old_resolved",
+			description:    "resolved alert older than 24h should be blocked",
+		},
+		{
+			name: "allow recent resolved alert (23 hours)",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-7",
+				AlertName:   "RecentAlert",
+				Status:      core.StatusResolved,
+				Labels:      map[string]string{},
+				StartsAt:    time.Now().Add(-24 * time.Hour),
+				EndsAt:      ptrTime(time.Now().Add(-23 * time.Hour)),
+			},
+			classification: nil,
+			expectBlock:    false,
+			expectReason:   "",
+			description:    "resolved alert younger than 24h should be allowed",
+		},
+		{
+			name: "allow firing alert regardless of age",
+			alert: &core.Alert{
+				Fingerprint: "test-fp-8",
+				AlertName:   "FiringAlert",
+				Status:      core.StatusFiring,
+				Labels:      map[string]string{},
+				StartsAt:    time.Now().Add(-48 * time.Hour),
+			},
+			classification: nil,
+			expectBlock:    false,
+			expectReason:   "",
+			description:    "firing alert should not be blocked by age",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blocked, reason := engine.ShouldBlock(tt.alert, tt.classification)
+			assert.Equal(t, tt.expectBlock, blocked, tt.description)
+			if tt.expectBlock {
+				assert.Equal(t, tt.expectReason, reason, tt.description)
+			}
+		})
+	}
+}
+
 func TestContainsTest(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -542,6 +690,11 @@ func TestContainsTest(t *testing.T) {
 			assert.Equal(t, tt.expect, result)
 		})
 	}
+}
+
+// Helper functions
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }
 
 // Benchmark tests
