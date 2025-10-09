@@ -221,8 +221,7 @@ assert.Len(t, hash, 16) // 64-bit hex string
 
 ---
 
-**Priority**: 🔴 CRITICAL  
-**Estimated effort**: 2-3 дня  
-**Dependencies**: TN-121 ✅  
+**Priority**: 🔴 CRITICAL
+**Estimated effort**: 2-3 дня
+**Dependencies**: TN-121 ✅
 **Blocking**: TN-123 (Alert Group Manager)
-

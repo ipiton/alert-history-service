@@ -110,7 +110,7 @@ type GroupKey string
 type GroupKeyGenerator struct {
 	// hashLongKeys determines whether to hash keys longer than maxKeyLength
 	hashLongKeys bool
-	
+
 	// maxKeyLength is the threshold for hashing (default: 256 bytes)
 	maxKeyLength int
 }
@@ -496,8 +496,7 @@ For systems migrating from Alertmanager:
 
 ---
 
-**Архитектор**: DevOps Team  
-**Дата создания**: 2025-01-09  
-**Версия**: 1.0  
+**Архитектор**: DevOps Team
+**Дата создания**: 2025-01-09
+**Версия**: 1.0
 **Статус**: Ready for Implementation
-

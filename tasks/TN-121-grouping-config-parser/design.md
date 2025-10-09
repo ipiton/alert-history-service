@@ -81,35 +81,35 @@ type GroupingConfig struct {
 type Route struct {
 	// Receiver - имя получателя нотификаций
 	Receiver string `yaml:"receiver" validate:"required"`
-	
+
 	// GroupBy - список label names для группировки
 	// Special value: ['...'] означает группировку по всем labels
 	GroupBy []string `yaml:"group_by" validate:"required,min=1"`
-	
+
 	// GroupWait - задержка перед первой отправкой группы
 	// Позволяет накопить алерты в группе
 	GroupWait *Duration `yaml:"group_wait,omitempty" validate:"omitempty,gte=0,lte=3600s"`
-	
+
 	// GroupInterval - интервал между обновлениями группы
 	// Как часто отправлять обновления для активной группы
 	GroupInterval *Duration `yaml:"group_interval,omitempty" validate:"omitempty,gte=1s,lte=86400s"`
-	
+
 	// RepeatInterval - интервал повторной нотификации
 	// Как часто повторять нотификацию для долгоживущих алертов
 	RepeatInterval *Duration `yaml:"repeat_interval,omitempty" validate:"omitempty,gte=60s,lte=604800s"`
-	
+
 	// Match - точное совпадение labels для routing
 	Match map[string]string `yaml:"match,omitempty"`
-	
+
 	// MatchRE - regex совпадение labels для routing
 	MatchRE map[string]string `yaml:"match_re,omitempty"`
-	
+
 	// Continue - продолжать поиск по route tree после match
 	Continue bool `yaml:"continue,omitempty"`
-	
+
 	// Routes - вложенные routes (иерархия)
 	Routes []*Route `yaml:"routes,omitempty"`
-	
+
 	// Metadata для debugging и hot reload
 	parsedAt time.Time
 	source   string // Путь к конфиг файлу
@@ -126,7 +126,7 @@ func (d *Duration) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&s); err != nil {
 		return err
 	}
-	
+
 	dur, err := time.ParseDuration(s)
 	if err != nil {
 		return &ParseError{
@@ -135,7 +135,7 @@ func (d *Duration) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			Err:   err,
 		}
 	}
-	
+
 	d.Duration = dur
 	return nil
 }
@@ -209,7 +209,7 @@ func (ve ValidationErrors) Error() string {
 	if len(ve) == 0 {
 		return "no validation errors"
 	}
-	
+
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("validation failed with %d error(s):\n", len(ve)))
 	for i, err := range ve {
@@ -230,10 +230,10 @@ package grouping
 type Parser interface {
 	// Parse парсит YAML конфигурацию из bytes
 	Parse(data []byte) (*GroupingConfig, error)
-	
+
 	// ParseFile парсит YAML конфигурацию из файла
 	ParseFile(path string) (*GroupingConfig, error)
-	
+
 	// ParseString парсит YAML конфигурацию из строки (для тестов)
 	ParseString(yaml string) (*GroupingConfig, error)
 }
@@ -246,11 +246,11 @@ type DefaultParser struct {
 // NewParser создаёт новый parser с validation
 func NewParser() *DefaultParser {
 	v := validator.New()
-	
+
 	// Регистрируем custom validators
 	v.RegisterValidation("labelname", validateLabelName)
 	v.RegisterValidation("duration_range", validateDurationRange)
-	
+
 	return &DefaultParser{
 		validator: v,
 	}
@@ -259,30 +259,30 @@ func NewParser() *DefaultParser {
 // Parse реализует Parser.Parse
 func (p *DefaultParser) Parse(data []byte) (*GroupingConfig, error) {
 	var config GroupingConfig
-	
+
 	// Парсим YAML
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, &ParseError{
 			Err: err,
 		}
 	}
-	
+
 	// Применяем defaults
 	applyDefaults(&config)
-	
+
 	// Валидация структуры
 	if err := p.validator.Struct(&config); err != nil {
 		return nil, convertValidationErrors(err)
 	}
-	
+
 	// Semantic validation
 	if err := p.validateSemantics(&config); err != nil {
 		return nil, err
 	}
-	
+
 	// Метаданные
 	config.Route.parsedAt = time.Now()
-	
+
 	return &config, nil
 }
 
@@ -292,12 +292,12 @@ func (p *DefaultParser) ParseFile(path string) (*GroupingConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	config, err := p.Parse(data)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	config.Route.source = path
 	return config, nil
 }
@@ -314,16 +314,16 @@ func (p *DefaultParser) ParseString(yamlStr string) (*GroupingConfig, error) {
 // validateSemantics выполняет семантическую валидацию конфигурации
 func (p *DefaultParser) validateSemantics(config *GroupingConfig) error {
 	var errors ValidationErrors
-	
+
 	// Валидация route tree
 	if err := p.validateRoute(config.Route, &errors); err != nil {
 		return err
 	}
-	
+
 	if len(errors) > 0 {
 		return errors
 	}
-	
+
 	return nil
 }
 
@@ -342,7 +342,7 @@ func (p *DefaultParser) validateRoute(route *Route, errors *ValidationErrors) er
 			}
 		}
 	}
-	
+
 	// Валидация timer ranges
 	if route.GroupWait != nil {
 		if route.GroupWait.Duration < 0 || route.GroupWait.Duration > time.Hour {
@@ -354,7 +354,7 @@ func (p *DefaultParser) validateRoute(route *Route, errors *ValidationErrors) er
 			})
 		}
 	}
-	
+
 	if route.GroupInterval != nil {
 		if route.GroupInterval.Duration < time.Second || route.GroupInterval.Duration > 24*time.Hour {
 			*errors = append(*errors, ValidationError{
@@ -365,7 +365,7 @@ func (p *DefaultParser) validateRoute(route *Route, errors *ValidationErrors) er
 			})
 		}
 	}
-	
+
 	if route.RepeatInterval != nil {
 		if route.RepeatInterval.Duration < time.Minute || route.RepeatInterval.Duration > 7*24*time.Hour {
 			*errors = append(*errors, ValidationError{
@@ -376,14 +376,14 @@ func (p *DefaultParser) validateRoute(route *Route, errors *ValidationErrors) er
 			})
 		}
 	}
-	
+
 	// Рекурсивно валидируем nested routes
 	for i, nestedRoute := range route.Routes {
 		if err := p.validateRoute(nestedRoute, errors); err != nil {
 			return fmt.Errorf("validation failed for nested route %d: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -414,7 +414,7 @@ func applyDefaults(config *GroupingConfig) {
 // applyRouteDefaults рекурсивно применяет defaults к route и nested routes
 func applyRouteDefaults(route *Route) {
 	route.Defaults()
-	
+
 	for _, nestedRoute := range route.Routes {
 		applyRouteDefaults(nestedRoute)
 	}
@@ -426,7 +426,7 @@ func convertValidationErrors(err error) error {
 	if !ok {
 		return err
 	}
-	
+
 	var errors ValidationErrors
 	for _, fieldErr := range validationErrs {
 		errors = append(errors, ValidationError{
@@ -436,7 +436,7 @@ func convertValidationErrors(err error) error {
 			Message: getValidationMessage(fieldErr),
 		})
 	}
-	
+
 	return errors
 }
 
@@ -469,7 +469,7 @@ package main
 import (
 	"fmt"
 	"log"
-	
+
 	"alert-history/internal/infrastructure/grouping"
 )
 
@@ -482,13 +482,13 @@ route:
   group_interval: 5m
   repeat_interval: 4h
 `
-	
+
 	parser := grouping.NewParser()
 	config, err := parser.ParseString(yamlConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	fmt.Printf("Parsed config:\n")
 	fmt.Printf("  Receiver: %s\n", config.Route.Receiver)
 	fmt.Printf("  Group By: %v\n", config.Route.GroupBy)
@@ -527,7 +527,7 @@ fmt.Printf("Root route: %s\n", config.Route.Receiver)
 fmt.Printf("Nested routes: %d\n", len(config.Route.Routes))
 
 for i, route := range config.Route.Routes {
-	fmt.Printf("  Route %d: receiver=%s, match=%v\n", 
+	fmt.Printf("  Route %d: receiver=%s, match=%v\n",
 		i+1, route.Receiver, route.Match)
 }
 ```
@@ -578,7 +578,7 @@ if err != nil {
 func BenchmarkParser_Parse(b *testing.B) {
 	yamlConfig := loadTestConfig("testdata/large_config.yaml")
 	parser := grouping.NewParser()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.ParseString(yamlConfig)
@@ -610,8 +610,7 @@ func BenchmarkParser_Parse(b *testing.B) {
 
 ---
 
-**Архитектор**: DevOps Team  
-**Дата создания**: 2025-01-09  
-**Версия**: 1.0  
+**Архитектор**: DevOps Team
+**Дата создания**: 2025-01-09
+**Версия**: 1.0
 **Статус**: Ready for Implementation
-

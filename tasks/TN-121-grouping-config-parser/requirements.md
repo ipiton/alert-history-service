@@ -176,8 +176,7 @@ assert.Contains(t, err.Error(), "group_wait must be")
 
 ---
 
-**Priority**: 🔴 CRITICAL  
-**Estimated effort**: 3-4 дня  
-**Dependencies**: None  
+**Priority**: 🔴 CRITICAL
+**Estimated effort**: 3-4 дня
+**Dependencies**: None
 **Blocking**: TN-122, TN-123, TN-124, TN-125
-

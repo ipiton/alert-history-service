@@ -259,8 +259,7 @@ cd go-app && golangci-lint run ./internal/infrastructure/grouping/...
 
 ---
 
-**Last Updated**: 2025-01-09  
-**Current Phase**: ФАЗА A, Модуль 1  
-**Active Task**: TN-121 (DONE), Starting TN-122  
+**Last Updated**: 2025-01-09
+**Current Phase**: ФАЗА A, Модуль 1
+**Active Task**: TN-121 (DONE), Starting TN-122
 **Next Milestone**: Week 10 (Alertmanager Core)
-

@@ -2,8 +2,8 @@
 
 ## Статус: 📋 TODO (Ready to Start)
 
-**Started**: TBD  
-**Target Completion**: 2-3 дня after start  
+**Started**: TBD
+**Target Completion**: 2-3 дня after start
 **Actual Completion**: TBD
 
 **Dependencies**: TN-121 ✅ DONE
@@ -70,7 +70,7 @@
   - [ ] Benchmark `GenerateKey()` - simple case (2 labels)
   - [ ] Benchmark `GenerateKey()` - complex case (10 labels)
   - [ ] Benchmark `GenerateKey()` - special grouping
-  - [ ] Benchmark `GenerateHash()` 
+  - [ ] Benchmark `GenerateHash()`
   - [ ] Benchmark `GroupKey.Parse()`
   - [ ] Memory profiling benchmarks
   - [ ] Concurrent access benchmarks
@@ -275,7 +275,6 @@ TestCompatibility_Alertmanager
 
 ---
 
-**Last Updated**: 2025-01-09  
-**Status**: 📋 TODO (Ready to Start after TN-121 code completion)  
+**Last Updated**: 2025-01-09
+**Status**: 📋 TODO (Ready to Start after TN-121 code completion)
 **Next Step**: Wait for TN-121 code to be tested and merged, then start Phase 1
-
