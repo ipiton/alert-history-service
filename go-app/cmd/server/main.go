@@ -14,16 +14,16 @@ import (
 	"syscall"
 	"time"
 
-	appconfig "github.com/vitaliisemenov/alert-history/internal/config"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 	"github.com/vitaliisemenov/alert-history/cmd/server/middleware"
+	appconfig "github.com/vitaliisemenov/alert-history/internal/config"
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
