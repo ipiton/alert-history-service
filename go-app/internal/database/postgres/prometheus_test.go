@@ -13,8 +13,8 @@ type mockPostgresPool struct {
 	stats *PoolStats
 }
 
-func (m *mockPostgresPool) Stats() *PoolStats {
-	return m.stats
+func (m *mockPostgresPool) Stats() PoolStats {
+	return *m.stats
 }
 
 func (m *mockPostgresPool) Pool() interface{} {

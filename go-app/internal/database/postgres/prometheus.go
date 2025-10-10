@@ -12,7 +12,7 @@ import (
 // PoolStatsProvider is an interface for providing pool statistics.
 // This allows for easier testing and decoupling from concrete PostgresPool implementation.
 type PoolStatsProvider interface {
-	Stats() *PoolStats
+	Stats() PoolStats
 }
 
 // PrometheusExporter exports database pool metrics to Prometheus.
