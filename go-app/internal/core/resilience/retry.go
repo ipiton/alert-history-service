@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"math/rand"
 	"time"
+
+	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
 // RetryPolicy defines configuration for retry behavior with exponential backoff.
@@ -51,6 +53,15 @@ type RetryPolicy struct {
 	// Logger for retry events (optional)
 	// If nil, uses slog.Default()
 	Logger *slog.Logger
+
+	// Metrics for recording retry operations (optional)
+	// If nil, metrics are not recorded
+	Metrics *metrics.RetryMetrics
+
+	// OperationName is the name of the operation for metrics labels (optional)
+	// Examples: "llm_call", "http_request", "db_query"
+	// If empty and Metrics is set, defaults to "unknown"
+	OperationName string
 }
 
 // RetryableErrorChecker determines if an error should trigger a retry attempt.
@@ -112,12 +123,25 @@ func WithRetry(ctx context.Context, policy *RetryPolicy, operation func() error)
 		logger = slog.Default()
 	}
 
+	// Setup metrics tracking
+	opName := policy.OperationName
+	if opName == "" && policy.Metrics != nil {
+		opName = "unknown"
+	}
+	startTime := time.Now()
+
 	var lastErr error
 	delay := policy.BaseDelay
+	attemptCount := 0
 
 	for attempt := 0; attempt <= policy.MaxRetries; attempt++ {
+		attemptCount++
+		attemptStart := time.Now()
+
 		// Execute the operation
 		err := operation()
+		attemptDuration := time.Since(attemptStart).Seconds()
+
 		if err == nil {
 			// Success!
 			if attempt > 0 {
@@ -126,6 +150,17 @@ func WithRetry(ctx context.Context, policy *RetryPolicy, operation func() error)
 					"total_attempts", attempt+1,
 				)
 			}
+
+			// Record success metrics
+			if policy.Metrics != nil {
+				errorType := "none"
+				if lastErr != nil {
+					errorType = classifyError(lastErr)
+				}
+				policy.Metrics.RecordAttempt(opName, "success", errorType, attemptDuration)
+				policy.Metrics.RecordFinalAttempt(opName, "success", attemptCount)
+			}
+
 			return nil
 		}
 
@@ -137,7 +172,23 @@ func WithRetry(ctx context.Context, policy *RetryPolicy, operation func() error)
 				"error", err,
 				"attempt", attempt+1,
 			)
+
+			// Record non-retryable failure
+			if policy.Metrics != nil {
+				errorType := classifyError(err)
+				policy.Metrics.RecordAttempt(opName, "failure", errorType, attemptDuration)
+				totalDuration := time.Since(startTime).Seconds()
+				policy.Metrics.RecordFinalAttempt(opName, "failure", attemptCount)
+				policy.Metrics.RecordAttempt(opName, "failure", errorType, totalDuration)
+			}
+
 			return lastErr
+		}
+
+		// Record failed attempt
+		if policy.Metrics != nil {
+			errorType := classifyError(err)
+			policy.Metrics.RecordAttempt(opName, "failure", errorType, attemptDuration)
 		}
 
 		// Check if we have more retries left
@@ -147,6 +198,12 @@ func WithRetry(ctx context.Context, policy *RetryPolicy, operation func() error)
 				"total_attempts", attempt+1,
 				"error", lastErr,
 			)
+
+			// Record final failure metrics
+			if policy.Metrics != nil {
+				policy.Metrics.RecordFinalAttempt(opName, "failure", attemptCount)
+			}
+
 			break
 		}
 
@@ -158,11 +215,24 @@ func WithRetry(ctx context.Context, policy *RetryPolicy, operation func() error)
 			"error", err,
 		)
 
+		// Record backoff metrics
+		if policy.Metrics != nil {
+			policy.Metrics.RecordBackoff(opName, delay.Seconds())
+		}
+
 		// Wait before next retry (respecting context cancellation)
 		if !waitWithContext(ctx, delay) {
 			logger.Debug("Context cancelled during retry delay",
 				"attempt", attempt+1,
 			)
+
+			// Record cancellation
+			if policy.Metrics != nil {
+				errorType := classifyError(ctx.Err())
+				policy.Metrics.RecordAttempt(opName, "cancelled", errorType, time.Since(startTime).Seconds())
+				policy.Metrics.RecordFinalAttempt(opName, "cancelled", attemptCount)
+			}
+
 			return ctx.Err()
 		}
 
