@@ -17,10 +17,12 @@ import (
 // TestDeduplicationIntegration_RealPostgres tests deduplication with real PostgreSQL database.
 //
 // This test requires a running PostgreSQL instance. Set environment variable:
-//   TEST_DATABASE_DSN=postgres://user:password@localhost:5432/testdb?sslmode=disable
+//
+//	TEST_DATABASE_DSN=postgres://user:password@localhost:5432/testdb?sslmode=disable
 //
 // To run:
-//   TEST_DATABASE_DSN="..." go test -v -tags=integration ./internal/core/services/
+//
+//	TEST_DATABASE_DSN="..." go test -v -tags=integration ./internal/core/services/
 func TestDeduplicationIntegration_RealPostgres(t *testing.T) {
 	// Skip if not running integration tests
 	dsn := os.Getenv("TEST_DATABASE_DSN")

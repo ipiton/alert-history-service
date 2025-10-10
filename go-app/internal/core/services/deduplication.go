@@ -122,9 +122,9 @@ type DeduplicationService interface {
 
 // deduplicationService implements DeduplicationService interface
 type deduplicationService struct {
-	storage        core.AlertStorage
-	fingerprint    FingerprintGenerator
-	logger         *slog.Logger
+	storage         core.AlertStorage
+	fingerprint     FingerprintGenerator
+	logger          *slog.Logger
 	businessMetrics *metrics.BusinessMetrics // TN-036 Phase 3: Direct BusinessMetrics integration
 
 	// Metrics tracking (in-memory for fast access)

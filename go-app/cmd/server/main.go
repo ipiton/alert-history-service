@@ -222,25 +222,25 @@ func main() {
 			if err != nil {
 				slog.Error("Failed to create PostgreSQL storage", "error", err)
 			} else {
-			// Use the existing pool connection
-			alertStorage = pgStorage
+				// Use the existing pool connection
+				alertStorage = pgStorage
 
-			// TN-038: Initialize Alert History Repository with analytics
-			historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
-			slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
+				// TN-038: Initialize Alert History Repository with analytics
+				historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
+				slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
 
-			// TN-181: Initialize DB Pool Metrics Exporter (expose internal atomic metrics to Prometheus)
-			dbMetrics := metricsRegistry.Infra().DB
-			dbExporter := postgres.NewPrometheusExporter(pool, dbMetrics)
-			dbExporter.Start(context.Background(), 10*time.Second) // Export every 10 seconds
-			slog.Info("✅ DB Pool Metrics Exporter started",
-				"interval", "10s",
-				"metrics", []string{"connections_active", "connections_idle", "query_duration", "errors"})
+				// TN-181: Initialize DB Pool Metrics Exporter (expose internal atomic metrics to Prometheus)
+				dbMetrics := metricsRegistry.Infra().DB
+				dbExporter := postgres.NewPrometheusExporter(pool, dbMetrics)
+				dbExporter.Start(context.Background(), 10*time.Second) // Export every 10 seconds
+				slog.Info("✅ DB Pool Metrics Exporter started",
+					"interval", "10s",
+					"metrics", []string{"connections_active", "connections_idle", "query_duration", "errors"})
 
-			// Cleanup DB exporter on shutdown (add to graceful shutdown)
-			defer dbExporter.Stop()
+				// Cleanup DB exporter on shutdown (add to graceful shutdown)
+				defer dbExporter.Stop()
+			}
 		}
-	}
 	}
 
 	// Initialize Redis cache for enrichment mode

@@ -29,9 +29,9 @@ type BusinessMetrics struct {
 	AlertsFilteredTotal  *prometheus.CounterVec // Total alerts filtered (allowed/blocked)
 
 	// Deduplication subsystem - alert deduplication metrics (TN-036)
-	DeduplicationCreatedTotal  *prometheus.CounterVec   // New alerts created (not duplicates)
-	DeduplicationUpdatedTotal  *prometheus.CounterVec   // Existing alerts updated
-	DeduplicationIgnoredTotal  *prometheus.CounterVec   // Duplicate alerts ignored
+	DeduplicationCreatedTotal    *prometheus.CounterVec   // New alerts created (not duplicates)
+	DeduplicationUpdatedTotal    *prometheus.CounterVec   // Existing alerts updated
+	DeduplicationIgnoredTotal    *prometheus.CounterVec   // Duplicate alerts ignored
 	DeduplicationDurationSeconds *prometheus.HistogramVec // Deduplication operation duration
 
 	// LLM subsystem - AI classification metrics
@@ -40,9 +40,9 @@ type BusinessMetrics struct {
 	LLMConfidenceScore      prometheus.Histogram   // Distribution of LLM confidence scores
 
 	// Publishing subsystem - alert delivery metrics
-	PublishingSuccessTotal    *prometheus.CounterVec    // Successful alert publishes
-	PublishingFailedTotal     *prometheus.CounterVec    // Failed alert publishes
-	PublishingDurationSeconds *prometheus.HistogramVec  // Publishing operation duration
+	PublishingSuccessTotal    *prometheus.CounterVec   // Successful alert publishes
+	PublishingFailedTotal     *prometheus.CounterVec   // Failed alert publishes
+	PublishingDurationSeconds *prometheus.HistogramVec // Publishing operation duration
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
