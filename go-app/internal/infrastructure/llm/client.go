@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/core"
+	"github.com/vitaliisemenov/alert-history/internal/core/resilience"
+	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
 // ClassificationRequest represents the request payload to LLM API.
@@ -137,67 +139,45 @@ func (c *HTTPLLMClient) ClassifyAlert(ctx context.Context, alert *core.Alert) (*
 	return result, lastErr
 }
 
-// classifyAlertWithRetry implements retry logic (extracted from ClassifyAlert for CB integration).
+// classifyAlertWithRetry implements retry logic using centralized resilience package.
+// REFACTORED (TN-040): Now uses internal/core/resilience.WithRetryFunc for consistency.
 func (c *HTTPLLMClient) classifyAlertWithRetry(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
-	var lastErr error
-	retryDelay := c.config.RetryDelay
-
-	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
-		if attempt > 0 {
-			c.logger.Debug("Retrying LLM classification",
-				"attempt", attempt,
-				"delay", retryDelay,
-				"alert", alert.AlertName,
-			)
-
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(retryDelay):
-				// Continue with retry
-			}
-
-			// Exponential backoff
-			retryDelay = time.Duration(float64(retryDelay) * c.config.RetryBackoff)
-		}
-
-		classification, err := c.classifyAlertOnce(ctx, alert)
-		if err == nil {
-			c.logger.Info("Alert classified successfully",
-				"alert", alert.AlertName,
-				"severity", classification.Severity,
-				"confidence", classification.Confidence,
-				"attempt", attempt+1,
-			)
-			return classification, nil
-		}
-
-		lastErr = err
-		c.logger.Warn("LLM classification attempt failed",
-			"attempt", attempt+1,
-			"error", err,
-			"error_type", ClassifyError(err),
-			"alert", alert.AlertName,
-		)
-
-		// Don't retry on certain errors
-		if !IsRetryableError(err) {
-			c.logger.Debug("Error is non-retryable, stopping retry loop",
-				"error", err,
-				"error_type", ClassifyError(err),
-			)
-			break
-		}
+	// Create retry policy from config (maintains backward compatibility)
+	policy := &resilience.RetryPolicy{
+		MaxRetries:   c.config.MaxRetries,
+		BaseDelay:    c.config.RetryDelay,
+		MaxDelay:     c.config.RetryDelay * 10, // Max 10x base delay
+		Multiplier:   c.config.RetryBackoff,
+		Jitter:       true,
+		ErrorChecker: &llmErrorChecker{},
+		Logger:       c.logger,
+		Metrics:      metrics.DefaultRegistry().Technical().Retry,
+		OperationName: "llm_classify_alert",
 	}
 
-	c.logger.Error("LLM classification failed after all retries",
+	// Use centralized retry mechanism with metrics
+	result, err := resilience.WithRetryFunc(ctx, policy, func() (*core.ClassificationResult, error) {
+		return c.classifyAlertOnce(ctx, alert)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	c.logger.Info("Alert classified successfully",
 		"alert", alert.AlertName,
-		"attempts", c.config.MaxRetries+1,
-		"error", lastErr,
-		"error_type", ClassifyError(lastErr),
+		"severity", result.Severity,
+		"confidence", result.Confidence,
 	)
 
-	return nil, fmt.Errorf("LLM classification failed after %d attempts: %w", c.config.MaxRetries+1, lastErr)
+	return result, nil
+}
+
+// llmErrorChecker implements retry logic for LLM client errors.
+type llmErrorChecker struct{}
+
+func (e *llmErrorChecker) IsRetryable(err error) bool {
+	return IsRetryableError(err)
 }
 
 // classifyAlertOnce performs a single classification request.
