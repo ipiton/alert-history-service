@@ -9,6 +9,12 @@ import (
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
+// PoolStatsProvider is an interface for providing pool statistics.
+// This allows for easier testing and decoupling from concrete PostgresPool implementation.
+type PoolStatsProvider interface {
+	Stats() *PoolStats
+}
+
 // PrometheusExporter exports database pool metrics to Prometheus.
 //
 // Periodically reads internal atomic metrics from PoolMetrics and pushes them
@@ -24,7 +30,7 @@ import (
 //	exporter := NewPrometheusExporter(pool, dbMetrics)
 //	exporter.Start(context.Background(), 10*time.Second)
 type PrometheusExporter struct {
-	pool       *PostgresPool
+	pool       PoolStatsProvider
 	dbMetrics  *metrics.DatabaseMetrics
 	logger     *slog.Logger
 	cancelFunc context.CancelFunc
@@ -33,12 +39,12 @@ type PrometheusExporter struct {
 // NewPrometheusExporter creates a new Prometheus exporter for database pool metrics.
 //
 // Parameters:
-//   - pool: The database connection pool to export metrics from
+//   - pool: The database connection pool to export metrics from (satisfies PoolStatsProvider)
 //   - dbMetrics: The Prometheus DatabaseMetrics to export to
 //
 // Returns:
 //   - *PrometheusExporter: The exporter instance
-func NewPrometheusExporter(pool *PostgresPool, dbMetrics *metrics.DatabaseMetrics) *PrometheusExporter {
+func NewPrometheusExporter(pool PoolStatsProvider, dbMetrics *metrics.DatabaseMetrics) *PrometheusExporter {
 	return &PrometheusExporter{
 		pool:      pool,
 		dbMetrics: dbMetrics,
@@ -99,8 +105,13 @@ func (e *PrometheusExporter) Stop() {
 // This method is called periodically by Start() and can also be called manually
 // for immediate export.
 func (e *PrometheusExporter) exportMetrics() {
-	// Get snapshot of current pool metrics
-	stats := e.pool.metrics.Snapshot()
+	if e.pool == nil || e.dbMetrics == nil {
+		e.logger.Warn("Prometheus exporter not fully initialized, skipping metrics export")
+		return
+	}
+
+	// Get snapshot of current pool metrics via Stats() interface
+	stats := e.pool.Stats()
 
 	// Export connection metrics (Gauges)
 	e.dbMetrics.ConnectionsActive.Set(float64(stats.ActiveConnections))

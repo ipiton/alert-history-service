@@ -50,10 +50,14 @@ type MetricsRegistry struct {
 	namespace string
 
 	// Category managers (lazy-initialized)
-	business   *BusinessMetrics
-	technical  *TechnicalMetrics
-	infra      *InfraMetrics
-	once       sync.Once
+	business  *BusinessMetrics
+	technical *TechnicalMetrics
+	infra     *InfraMetrics
+
+	// Separate sync.Once for each category for true lazy initialization
+	businessOnce  sync.Once
+	technicalOnce sync.Once
+	infraOnce     sync.Once
 }
 
 var (
@@ -107,7 +111,7 @@ func NewMetricsRegistry(namespace string) *MetricsRegistry {
 //	registry.Business().AlertsProcessedTotal.Inc()
 //	registry.Business().LLMConfidenceScore.Observe(0.95)
 func (r *MetricsRegistry) Business() *BusinessMetrics {
-	r.once.Do(func() {
+	r.businessOnce.Do(func() {
 		r.business = NewBusinessMetrics(r.namespace)
 	})
 	return r.business
@@ -127,7 +131,7 @@ func (r *MetricsRegistry) Business() *BusinessMetrics {
 //	registry.Technical().HTTP.RecordRequest("GET", "/api/alerts", 200, 0.123)
 //	registry.Technical().LLMCB.State.Set(0) // closed
 func (r *MetricsRegistry) Technical() *TechnicalMetrics {
-	r.once.Do(func() {
+	r.technicalOnce.Do(func() {
 		r.technical = NewTechnicalMetrics(r.namespace)
 	})
 	return r.technical
@@ -146,7 +150,7 @@ func (r *MetricsRegistry) Technical() *TechnicalMetrics {
 //	registry.Infra().DB.ConnectionsActive.Set(42)
 //	registry.Infra().Repository.QueryDuration.WithLabelValues("GetTopAlerts", "success").Observe(0.05)
 func (r *MetricsRegistry) Infra() *InfraMetrics {
-	r.once.Do(func() {
+	r.infraOnce.Do(func() {
 		r.infra = NewInfraMetrics(r.namespace)
 	})
 	return r.infra
