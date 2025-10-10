@@ -36,34 +36,45 @@ func NewPostgresHistoryRepository(pool *pgxpool.Pool, storage core.AlertStorage,
 		logger = slog.Default()
 	}
 
+	// FIXED: Added Namespace and Subsystem for proper metric naming
+	// Old: alert_history_query_duration_seconds (no subsystem)
+	// New: alert_history_infra_repository_query_duration_seconds
 	metrics := &HistoryMetrics{
 		QueryDuration: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "alert_history_query_duration_seconds",
-				Help:    "Duration of alert history queries",
-				Buckets: []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+				Namespace: "alert_history",
+				Subsystem: "infra_repository",
+				Name:      "query_duration_seconds",
+				Help:      "Duration of alert history queries",
+				Buckets:   []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
 			},
 			[]string{"operation", "status"},
 		),
 		QueryErrors: promauto.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "alert_history_query_errors_total",
-				Help: "Total number of alert history query errors",
+				Namespace: "alert_history",
+				Subsystem: "infra_repository",
+				Name:      "query_errors_total",
+				Help:      "Total number of alert history query errors",
 			},
 			[]string{"operation", "error_type"},
 		),
 		QueryResults: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "alert_history_query_results_total",
-				Help:    "Number of results returned by history queries",
-				Buckets: []float64{0, 1, 5, 10, 25, 50, 100, 250, 500, 1000},
+				Namespace: "alert_history",
+				Subsystem: "infra_repository",
+				Name:      "query_results_total",
+				Help:      "Number of results returned by history queries",
+				Buckets:   []float64{0, 1, 5, 10, 25, 50, 100, 250, 500, 1000},
 			},
 			[]string{"operation"},
 		),
 		CacheHits: promauto.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "alert_history_cache_hits_total",
-				Help: "Total number of cache hits for history queries",
+				Namespace: "alert_history",
+				Subsystem: "infra_cache",
+				Name:      "hits_total",
+				Help:      "Total number of cache hits for history queries",
 			},
 			[]string{"cache_type"},
 		),
