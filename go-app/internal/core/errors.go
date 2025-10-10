@@ -33,4 +33,8 @@ var (
 	// Sorting errors
 	ErrInvalidSortField = errors.New("invalid sort field")
 	ErrInvalidSortOrder = errors.New("invalid sort order: must be 'asc' or 'desc'")
+
+	// Alert storage errors
+	ErrAlertNotFound = errors.New("alert not found")
+	ErrDuplicateAlert = errors.New("alert already exists")
 )
