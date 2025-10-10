@@ -19,10 +19,10 @@ var (
 	ErrInvalidTimeRange = errors.New("invalid time range: 'from' must be before 'to'")
 
 	// Label errors
-	ErrTooManyLabels      = errors.New("too many label filters: maximum 20 labels allowed")
-	ErrEmptyLabelKey      = errors.New("label key cannot be empty")
-	ErrLabelKeyTooLong    = errors.New("label key too long: maximum 255 characters")
-	ErrLabelValueTooLong  = errors.New("label value too long: maximum 255 characters")
+	ErrTooManyLabels     = errors.New("too many label filters: maximum 20 labels allowed")
+	ErrEmptyLabelKey     = errors.New("label key cannot be empty")
+	ErrLabelKeyTooLong   = errors.New("label key too long: maximum 255 characters")
+	ErrLabelValueTooLong = errors.New("label value too long: maximum 255 characters")
 
 	// Pagination errors
 	ErrInvalidPagination = errors.New("pagination parameters are required")
@@ -35,6 +35,6 @@ var (
 	ErrInvalidSortOrder = errors.New("invalid sort order: must be 'asc' or 'desc'")
 
 	// Alert storage errors
-	ErrAlertNotFound = errors.New("alert not found")
+	ErrAlertNotFound  = errors.New("alert not found")
 	ErrDuplicateAlert = errors.New("alert already exists")
 )

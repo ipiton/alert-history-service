@@ -319,12 +319,41 @@ func main() {
 	filterEngine := services.NewSimpleFilterEngine(appLogger)
 	publisher := services.NewSimplePublisher(appLogger)
 
+	// TN-036 Phase 3: Initialize Deduplication Service
+	var deduplicationService services.DeduplicationService
+	if alertStorage != nil {
+		slog.Info("Initializing Deduplication Service (TN-036)")
+		fingerprintGen := services.NewFingerprintGenerator(&services.FingerprintConfig{
+			Algorithm: services.AlgorithmFNV1a,
+		})
+		dedupConfig := &services.DeduplicationConfig{
+			Storage:         alertStorage,
+			Fingerprint:     fingerprintGen,
+			Logger:          appLogger,
+			BusinessMetrics: metricsRegistry.Business(), // TN-036: BusinessMetrics integration
+		}
+		var err error
+		deduplicationService, err = services.NewDeduplicationService(dedupConfig)
+		if err != nil {
+			slog.Error("Failed to create deduplication service", "error", err)
+			// Continue without deduplication (graceful degradation)
+			deduplicationService = nil
+		} else {
+			slog.Info("✅ Deduplication Service initialized",
+				"algorithm", "FNV-1a (Alertmanager-compatible)",
+				"metrics", "enabled (4 Prometheus metrics)")
+		}
+	} else {
+		slog.Warn("⚠️ Deduplication Service NOT initialized (database not available)")
+	}
+
 	// Initialize AlertProcessor
 	alertProcessorConfig := services.AlertProcessorConfig{
 		EnrichmentManager: enrichmentManager,
 		LLMClient:         nil, // TODO: Initialize LLM client from config
 		FilterEngine:      filterEngine,
 		Publisher:         publisher,
+		Deduplication:     deduplicationService, // TN-036 Phase 3
 		Logger:            appLogger,
 		Metrics:           metricsManager,
 	}

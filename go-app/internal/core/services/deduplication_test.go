@@ -14,9 +14,9 @@ import (
 
 // mockAlertStorage implements core.AlertStorage for testing
 type mockAlertStorage struct {
-	alerts map[string]*core.Alert // fingerprint -> alert
+	alerts                     map[string]*core.Alert // fingerprint -> alert
 	saveErr, getErr, updateErr error
-	mu sync.RWMutex // Thread-safe access
+	mu                         sync.RWMutex // Thread-safe access
 }
 
 func newMockAlertStorage() *mockAlertStorage {

@@ -20,9 +20,9 @@ func TestNewFingerprintGenerator_DefaultConfig(t *testing.T) {
 // TestNewFingerprintGenerator_CustomConfig tests custom configuration
 func TestNewFingerprintGenerator_CustomConfig(t *testing.T) {
 	tests := []struct {
-		name      string
-		config    *FingerprintConfig
-		wantAlgo  FingerprintAlgorithm
+		name     string
+		config   *FingerprintConfig
+		wantAlgo FingerprintAlgorithm
 	}{
 		{
 			name:     "FNV-1a explicit",
@@ -138,10 +138,10 @@ func TestGenerateFromLabels_FNV1a_EdgeCases(t *testing.T) {
 	generator := NewFingerprintGenerator(&FingerprintConfig{Algorithm: AlgorithmFNV1a})
 
 	tests := []struct {
-		name           string
-		labels         map[string]string
-		expectEmpty    bool
-		expectLen      int
+		name        string
+		labels      map[string]string
+		expectEmpty bool
+		expectLen   int
 	}{
 		{
 			name:        "nil labels",

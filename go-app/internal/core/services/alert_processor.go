@@ -33,6 +33,7 @@ type AlertProcessor struct {
 	llmClient         LLMClient
 	filterEngine      FilterEngine
 	publisher         Publisher
+	deduplication     DeduplicationService // TN-036 Phase 3: Deduplication service
 	logger            *slog.Logger
 	metrics           *metrics.MetricsManager
 }
@@ -43,6 +44,7 @@ type AlertProcessorConfig struct {
 	LLMClient         LLMClient // optional, required only for enriched mode
 	FilterEngine      FilterEngine
 	Publisher         Publisher
+	Deduplication     DeduplicationService // TN-036 Phase 3: optional, recommended for production
 	Logger            *slog.Logger
 	Metrics           *metrics.MetricsManager
 }
@@ -68,6 +70,7 @@ func NewAlertProcessor(config AlertProcessorConfig) (*AlertProcessor, error) {
 		llmClient:         config.LLMClient,
 		filterEngine:      config.FilterEngine,
 		publisher:         config.Publisher,
+		deduplication:     config.Deduplication,
 		logger:            config.Logger,
 		metrics:           config.Metrics,
 	}, nil
@@ -76,6 +79,32 @@ func NewAlertProcessor(config AlertProcessorConfig) (*AlertProcessor, error) {
 // ProcessAlert processes an alert based on current enrichment mode
 func (p *AlertProcessor) ProcessAlert(ctx context.Context, alert *core.Alert) error {
 	startTime := time.Now()
+
+	// TN-036 Phase 3: Step 0 - Deduplication (before enrichment/filtering)
+	if p.deduplication != nil {
+		dedupResult, err := p.deduplication.ProcessAlert(ctx, alert)
+		if err != nil {
+			p.logger.Error("Deduplication failed", "error", err, "alert", alert.AlertName)
+			// Continue with processing even if deduplication fails (graceful degradation)
+		} else {
+			p.logger.Info("Deduplication result",
+				"action", dedupResult.Action,
+				"alert", alert.AlertName,
+				"fingerprint", alert.Fingerprint,
+				"processing_time", dedupResult.ProcessingTime)
+
+			// If alert was ignored (exact duplicate), skip further processing
+			if dedupResult.Action == ProcessActionIgnored {
+				p.logger.Info("Alert ignored as duplicate, skipping processing",
+					"alert", alert.AlertName,
+					"fingerprint", alert.Fingerprint)
+				return nil // Not an error, just a duplicate
+			}
+
+			// Use deduplicated alert for further processing (may be updated)
+			alert = dedupResult.Alert
+		}
+	}
 
 	// Get current enrichment mode
 	mode, err := p.enrichmentManager.GetMode(ctx)

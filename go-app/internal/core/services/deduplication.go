@@ -125,15 +125,15 @@ type deduplicationService struct {
 	storage        core.AlertStorage
 	fingerprint    FingerprintGenerator
 	logger         *slog.Logger
-	metricsManager *metrics.MetricsManager
+	businessMetrics *metrics.BusinessMetrics // TN-036 Phase 3: Direct BusinessMetrics integration
 
 	// Metrics tracking (in-memory for fast access)
 	stats struct {
-		totalProcessed  int64
-		created         int64
-		updated         int64
-		ignored         int64
-		totalTime       time.Duration
+		totalProcessed int64
+		created        int64
+		updated        int64
+		ignored        int64
+		totalTime      time.Duration
 	}
 }
 
@@ -148,8 +148,8 @@ type DeduplicationConfig struct {
 	// Logger (optional, defaults to slog.Default())
 	Logger *slog.Logger
 
-	// MetricsManager for Prometheus metrics (optional)
-	MetricsManager *metrics.MetricsManager
+	// BusinessMetrics for Prometheus metrics (optional, TN-036 Phase 3)
+	BusinessMetrics *metrics.BusinessMetrics
 }
 
 // NewDeduplicationService creates a new deduplication service.
@@ -189,10 +189,10 @@ func NewDeduplicationService(config *DeduplicationConfig) (DeduplicationService,
 	}
 
 	service := &deduplicationService{
-		storage:        config.Storage,
-		fingerprint:    config.Fingerprint,
-		logger:         config.Logger,
-		metricsManager: config.MetricsManager,
+		storage:         config.Storage,
+		fingerprint:     config.Fingerprint,
+		logger:          config.Logger,
+		businessMetrics: config.BusinessMetrics,
 	}
 
 	// Initialize stats
@@ -274,9 +274,9 @@ func (s *deduplicationService) ProcessAlert(ctx context.Context, alert *core.Ale
 		s.stats.ignored++
 	}
 
-	// Record Prometheus metrics (if manager configured)
-	if s.metricsManager != nil {
-		s.recordMetrics(result.Action, processingTime)
+	// Record Prometheus metrics (TN-036 Phase 3)
+	if s.businessMetrics != nil {
+		s.recordMetrics(result.Action, processingTime, alert.Status, result.Alert.Status)
 	}
 
 	s.logger.Info("Alert processed",
@@ -406,25 +406,39 @@ func (s *deduplicationService) updateExistingAlert(ctx context.Context, new, exi
 }
 
 // recordMetrics records Prometheus metrics for alert processing
-func (s *deduplicationService) recordMetrics(action ProcessAction, duration time.Duration) {
-	// TODO: Integrate with MetricsRegistry for Prometheus metrics
-	// For now, metrics will be added in Phase 3 integration
+// recordMetrics records Prometheus metrics for deduplication operations.
+// TN-036 Phase 3: Full BusinessMetrics integration
+func (s *deduplicationService) recordMetrics(action ProcessAction, duration time.Duration, statusFrom, statusTo core.AlertStatus) {
+	if s.businessMetrics == nil {
+		return // Metrics not configured
+	}
 
-	// Record counter metrics (placeholder)
-	// switch action {
-	// case ProcessActionCreated:
-	//     metricsRegistry.Inc("alert_history_deduplication_alerts_created_total", map[string]string{"action": "created"})
-	// case ProcessActionUpdated:
-	//     metricsRegistry.Inc("alert_history_deduplication_alerts_updated_total", map[string]string{"action": "updated"})
-	// case ProcessActionIgnored:
-	//     metricsRegistry.Inc("alert_history_deduplication_alerts_ignored_total", map[string]string{"action": "ignored"})
-	// }
+	// Record processing duration histogram
+	actionLabel := action.String()
+	s.businessMetrics.DeduplicationDurationSeconds.WithLabelValues(actionLabel).Observe(duration.Seconds())
 
-	// Record processing latency histogram (placeholder)
-	// metricsRegistry.Observe("alert_history_deduplication_latency_seconds", duration.Seconds(), map[string]string{"action": action.String()})
+	// Record action-specific counter metrics
+	switch action {
+	case ProcessActionCreated:
+		// New alert created (not a duplicate)
+		s.businessMetrics.DeduplicationCreatedTotal.WithLabelValues("webhook").Inc()
 
-	_ = action // Suppress unused variable warning
-	_ = duration
+	case ProcessActionUpdated:
+		// Existing alert updated (status or endsAt changed)
+		statusFromLabel := string(statusFrom)
+		statusToLabel := string(statusTo)
+		s.businessMetrics.DeduplicationUpdatedTotal.WithLabelValues(statusFromLabel, statusToLabel).Inc()
+
+	case ProcessActionIgnored:
+		// Duplicate alert ignored (exact match)
+		s.businessMetrics.DeduplicationIgnoredTotal.WithLabelValues("duplicate").Inc()
+	}
+
+	s.logger.Debug("Metrics recorded",
+		"action", action,
+		"duration_ms", duration.Milliseconds(),
+		"status_from", statusFrom,
+		"status_to", statusTo)
 }
 
 // GetDuplicateStats implements DeduplicationService.GetDuplicateStats

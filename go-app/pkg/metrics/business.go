@@ -28,6 +28,12 @@ type BusinessMetrics struct {
 	AlertsEnrichedTotal  *prometheus.CounterVec // Total alerts enriched with LLM data
 	AlertsFilteredTotal  *prometheus.CounterVec // Total alerts filtered (allowed/blocked)
 
+	// Deduplication subsystem - alert deduplication metrics (TN-036)
+	DeduplicationCreatedTotal  *prometheus.CounterVec   // New alerts created (not duplicates)
+	DeduplicationUpdatedTotal  *prometheus.CounterVec   // Existing alerts updated
+	DeduplicationIgnoredTotal  *prometheus.CounterVec   // Duplicate alerts ignored
+	DeduplicationDurationSeconds *prometheus.HistogramVec // Deduplication operation duration
+
 	// LLM subsystem - AI classification metrics
 	LLMClassificationsTotal *prometheus.CounterVec // Total LLM classifications performed
 	LLMRecommendationsTotal prometheus.Counter     // Total LLM recommendations generated
@@ -79,6 +85,48 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 				Help:      "Total number of alerts filtered (allowed or blocked)",
 			},
 			[]string{"result", "reason"}, // result: allowed|blocked, reason: test_alert|noise|low_confidence
+		),
+
+		// Deduplication subsystem metrics (TN-036)
+		DeduplicationCreatedTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_deduplication",
+				Name:      "created_total",
+				Help:      "Total number of new alerts created (not duplicates)",
+			},
+			[]string{"source"}, // source: webhook, api
+		),
+
+		DeduplicationUpdatedTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_deduplication",
+				Name:      "updated_total",
+				Help:      "Total number of existing alerts updated (status changes)",
+			},
+			[]string{"status_from", "status_to"}, // status transitions: firing->resolved, resolved->firing
+		),
+
+		DeduplicationIgnoredTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_deduplication",
+				Name:      "ignored_total",
+				Help:      "Total number of duplicate alerts ignored (already exists with same data)",
+			},
+			[]string{"reason"}, // reason: duplicate, unchanged
+		),
+
+		DeduplicationDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_deduplication",
+				Name:      "duration_seconds",
+				Help:      "Duration of deduplication operations (fingerprint generation + lookup)",
+				Buckets:   []float64{0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01}, // 1µs to 10ms
+			},
+			[]string{"action"}, // action: created, updated, ignored
 		),
 
 		// LLM subsystem metrics
