@@ -26,16 +26,16 @@ type AlertHandler interface {
 //   - Metrics for queue size and active workers
 //   - Context cancellation support
 type AsyncWebhookProcessor struct {
-	handler     AlertHandler
-	metrics     *metrics.WebhookMetrics
-	logger      *slog.Logger
-	workers     int
-	queueSize   int
-	jobQueue    chan *WebhookJob
-	stopChan    chan struct{}
-	wg          sync.WaitGroup
-	mu          sync.RWMutex
-	running     bool
+	handler   AlertHandler
+	metrics   *metrics.WebhookMetrics
+	logger    *slog.Logger
+	workers   int
+	queueSize int
+	jobQueue  chan *WebhookJob
+	stopChan  chan struct{}
+	wg        sync.WaitGroup
+	mu        sync.RWMutex
+	running   bool
 }
 
 // WebhookJob represents a single webhook processing job.
@@ -134,9 +134,9 @@ func (p *AsyncWebhookProcessor) Start(ctx context.Context) error {
 // Stop gracefully stops the worker pool.
 //
 // This method:
-//   1. Closes the job queue (no new jobs accepted)
-//   2. Waits for all workers to finish current jobs
-//   3. Times out after 30 seconds
+//  1. Closes the job queue (no new jobs accepted)
+//  2. Waits for all workers to finish current jobs
+//  3. Times out after 30 seconds
 //
 // Returns:
 //   - error: Stop error (e.g., timeout)

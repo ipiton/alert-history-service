@@ -56,7 +56,7 @@ func TestNewAsyncWebhookProcessor_DefaultValues(t *testing.T) {
 
 	processor, err := NewAsyncWebhookProcessor(config)
 	require.NoError(t, err)
-	assert.Equal(t, 10, processor.workers)    // Default
+	assert.Equal(t, 10, processor.workers)     // Default
 	assert.Equal(t, 1000, processor.queueSize) // Default
 }
 
