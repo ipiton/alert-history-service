@@ -1,0 +1,27 @@
+File,Namespace,Subsystem,Metric Name,Type,Labels,Help,Status,Issue
+pkg/metrics/prometheus.go,alert_history,http,requests_total,CounterVec,"method,path,status_code",Total number of HTTP requests processed,✅ GOOD,High cardinality on path
+pkg/metrics/prometheus.go,alert_history,http,request_duration_seconds,HistogramVec,"method,path,status_code",Duration of HTTP requests in seconds,✅ GOOD,High cardinality on path
+pkg/metrics/prometheus.go,alert_history,http,request_size_bytes,HistogramVec,"method,path",Size of HTTP requests in bytes,✅ GOOD,High cardinality on path
+pkg/metrics/prometheus.go,alert_history,http,response_size_bytes,HistogramVec,"method,path,status_code",Size of HTTP responses in bytes,✅ GOOD,High cardinality on path
+pkg/metrics/prometheus.go,alert_history,http,active_requests,Gauge,,Number of currently active HTTP requests,✅ GOOD,None
+pkg/metrics/filter.go,alert_history,filter,alerts_filtered_total,CounterVec,result,Total number of alerts processed by filter engine,✅ EXCELLENT,None
+pkg/metrics/filter.go,alert_history,filter,duration_seconds,HistogramVec,result,Duration of filter processing in seconds,✅ EXCELLENT,None
+pkg/metrics/filter.go,alert_history,filter,blocked_alerts_total,CounterVec,reason,Total number of alerts blocked by filter rules,✅ EXCELLENT,None
+pkg/metrics/filter.go,alert_history,filter,validations_total,CounterVec,status,Total number of filter validations,✅ EXCELLENT,None
+pkg/metrics/enrichment.go,alert_history,enrichment,mode_switches_total,CounterVec,"from_mode,to_mode",Total number of enrichment mode switches,✅ EXCELLENT,None
+pkg/metrics/enrichment.go,alert_history,enrichment,mode_status,Gauge,,Current enrichment mode (0=transparent 1=enriched 2=transparent_with_recommendations),✅ EXCELLENT,None
+pkg/metrics/enrichment.go,alert_history,enrichment,mode_requests_total,CounterVec,"method,mode",Total number of enrichment mode API requests,✅ EXCELLENT,None
+pkg/metrics/enrichment.go,alert_history,enrichment,redis_errors_total,Counter,,Total number of Redis errors in enrichment mode manager,✅ EXCELLENT,None
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,state,Gauge,,Current state of LLM circuit breaker (0=closed 1=open 2=half_open),⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,failures_total,Counter,,Total number of failed LLM calls (includes slow calls),⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,successes_total,Counter,,Total number of successful LLM calls,⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,state_changes_total,CounterVec,"from,to",Total number of circuit breaker state changes,⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,requests_blocked_total,Counter,,Total number of requests blocked by circuit breaker (fail-fast),⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,half_open_requests_total,Counter,,Total number of test requests in half-open state,⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,slow_calls_total,Counter,,Total number of slow LLM calls (exceeding threshold),⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/llm/circuit_breaker_metrics.go,alert_history,llm_circuit_breaker,call_duration_seconds,HistogramVec,result,Duration of LLM calls in seconds (enables p50/p95/p99 analysis),⚠️ WORKS,Subsystem too long (21 chars)
+internal/infrastructure/repository/postgres_history.go,,❌ NO SUBSYSTEM,alert_history_query_duration_seconds,HistogramVec,"operation,status",Duration of alert history queries,❌ CRITICAL,Missing Namespace/Subsystem pattern
+internal/infrastructure/repository/postgres_history.go,,❌ NO SUBSYSTEM,alert_history_query_errors_total,CounterVec,"operation,error_type",Total number of alert history query errors,❌ CRITICAL,Missing Namespace/Subsystem pattern
+internal/infrastructure/repository/postgres_history.go,,❌ NO SUBSYSTEM,alert_history_query_results_total,HistogramVec,operation,Number of results returned by history queries,❌ CRITICAL,Missing Namespace/Subsystem pattern
+internal/infrastructure/repository/postgres_history.go,,❌ NO SUBSYSTEM,alert_history_cache_hits_total,CounterVec,cache_type,Total number of cache hits for history queries,❌ CRITICAL,Missing Namespace/Subsystem pattern
+internal/database/postgres/metrics.go,❌ NOT EXPORTED,❌ NOT EXPORTED,PoolMetrics (14 atomic fields),atomic.*,,Database connection pool statistics,❌ CRITICAL GAP,Not registered in Prometheus
