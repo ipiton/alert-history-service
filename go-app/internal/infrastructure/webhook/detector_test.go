@@ -377,8 +377,8 @@ func TestHasAlertmanagerAlertStructure(t *testing.T) {
 			name: "valid alertmanager alert",
 			alerts: []interface{}{
 				map[string]interface{}{
-					"status": "firing",
-					"labels": map[string]interface{}{"alertname": "test"},
+					"status":      "firing",
+					"labels":      map[string]interface{}{"alertname": "test"},
 					"annotations": map[string]interface{}{"summary": "test"},
 				},
 			},

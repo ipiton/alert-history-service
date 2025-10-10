@@ -36,10 +36,10 @@ func NewWebhookDetector() WebhookDetector {
 // Detect analyzes the webhook payload and determines its type.
 //
 // Detection logic:
-//   1. Try to parse as JSON
-//   2. Check for Alertmanager-specific fields (version, groupKey, receiver)
-//   3. If Alertmanager fields present → WebhookTypeAlertmanager
-//   4. Otherwise → WebhookTypeGeneric
+//  1. Try to parse as JSON
+//  2. Check for Alertmanager-specific fields (version, groupKey, receiver)
+//  3. If Alertmanager fields present → WebhookTypeAlertmanager
+//  4. Otherwise → WebhookTypeGeneric
 //
 // Parameters:
 //   - payload: Raw webhook payload bytes
