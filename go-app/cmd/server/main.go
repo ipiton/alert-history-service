@@ -27,6 +27,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
+	pkgmiddleware "github.com/vitaliisemenov/alert-history/pkg/middleware"
 )
 
 const (
@@ -142,6 +143,14 @@ func main() {
 		"debug", cfg.IsDebug(),
 	)
 
+	// TN-181: Initialize unified Metrics Registry (150% quality)
+	// Initialize early so it's available for DB Pool exporter and other components
+	slog.Info("Initializing unified Metrics Registry (TN-181)")
+	metricsRegistry := metrics.DefaultRegistry()
+	slog.Info("✅ Metrics Registry initialized",
+		"categories", []string{"business", "technical", "infra"},
+		"metrics_count", "~30 metrics")
+
 	// Build Postgres config from app config
 	dbCfg := postgres.DefaultConfig()
 	dbCfg.Host = cfg.Database.Host
@@ -213,14 +222,25 @@ func main() {
 			if err != nil {
 				slog.Error("Failed to create PostgreSQL storage", "error", err)
 			} else {
-				// Use the existing pool connection
-				alertStorage = pgStorage
+			// Use the existing pool connection
+			alertStorage = pgStorage
 
-				// TN-038: Initialize Alert History Repository with analytics
-				historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
-				slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
-			}
+			// TN-038: Initialize Alert History Repository with analytics
+			historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
+			slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
+
+			// TN-181: Initialize DB Pool Metrics Exporter (expose internal atomic metrics to Prometheus)
+			dbMetrics := metricsRegistry.Infra().DB
+			dbExporter := postgres.NewPrometheusExporter(pool, dbMetrics)
+			dbExporter.Start(context.Background(), 10*time.Second) // Export every 10 seconds
+			slog.Info("✅ DB Pool Metrics Exporter started",
+				"interval", "10s",
+				"metrics", []string{"connections_active", "connections_idle", "query_duration", "errors"})
+
+			// Cleanup DB exporter on shutdown (add to graceful shutdown)
+			defer dbExporter.Stop()
 		}
+	}
 	}
 
 	// Initialize Redis cache for enrichment mode
@@ -265,7 +285,7 @@ func main() {
 		slog.Info("Redis not configured, enrichment mode will use ENV/default fallback")
 	}
 
-	// Initialize Prometheus metrics if enabled
+	// Initialize Prometheus metrics if enabled (legacy MetricsManager for backward compatibility)
 	var metricsManager *metrics.MetricsManager
 	if cfg.Metrics.Enabled {
 		slog.Info("Initializing Prometheus metrics", "path", cfg.Metrics.Path)
@@ -387,6 +407,12 @@ func main() {
 
 	// Add middleware chain
 	var handler http.Handler = mux
+
+	// TN-181: Add Path Normalization middleware (reduce cardinality in HTTP metrics)
+	// Must come before metrics middleware to normalize paths before recording
+	pathNormalizer := pkgmiddleware.NewPathNormalizer()
+	handler = pathNormalizer.Middleware()(handler)
+	slog.Info("✅ Path Normalization middleware added (reduces cardinality for HTTP metrics)")
 
 	// Add enrichment mode middleware (adds mode to context and response headers)
 	enrichmentMiddleware := middleware.NewEnrichmentModeMiddleware(enrichmentManager, appLogger)

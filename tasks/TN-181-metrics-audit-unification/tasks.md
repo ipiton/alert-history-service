@@ -1,4 +1,4 @@
-# TN-137: Tasks - Аудит и унификация метрик Prometheus
+# TN-181: Tasks - Аудит и унификация метрик Prometheus
 
 **Дата создания:** 2025-10-09
 **Статус:** NOT_STARTED
@@ -27,7 +27,7 @@ Phase 6: Documentation   [ ] 0% (0/3)
 
 - [ ] **T1.1.2:** Извлечь все имена метрик и их параметры
   - Namespace, Subsystem, Name, Help, Labels
-  - Создать CSV: `tasks/TN-137-metrics-audit-unification/metrics_inventory.csv`
+  - Создать CSV: `tasks/TN-181-metrics-audit-unification/metrics_inventory.csv`
 
 - [ ] **T1.1.3:** Классифицировать метрики по категориям
   - Business, Technical, Infrastructure
@@ -71,7 +71,7 @@ Phase 6: Documentation   [ ] 0% (0/3)
   - Рекомендации по optimization
 
 - [ ] **T1.3.4:** Создать аудит отчет
-  - Файл: `tasks/TN-137-metrics-audit-unification/AUDIT_REPORT.md`
+  - Файл: `tasks/TN-181-metrics-audit-unification/AUDIT_REPORT.md`
   - Summary проблем и recommendations
 
 ---
@@ -90,13 +90,13 @@ Phase 6: Documentation   [ ] 0% (0/3)
   - Examples для каждой категории
 
 - [ ] **T2.1.3:** Создать taxonomy document
-  - Файл: `tasks/TN-137-metrics-audit-unification/TAXONOMY.md`
+  - Файл: `tasks/TN-181-metrics-audit-unification/TAXONOMY.md`
   - Полное описание всех категорий и subsystems
 
 ### 2.2 Migration mapping (60 мин)
 
 - [ ] **T2.2.1:** Создать mapping table старые → новые имена
-  - CSV: `tasks/TN-137-metrics-audit-unification/metrics_migration_mapping.csv`
+  - CSV: `tasks/TN-181-metrics-audit-unification/metrics_migration_mapping.csv`
   - Columns: old_name, new_name, breaking_change, migration_strategy
 
 - [ ] **T2.2.2:** Идентифицировать breaking changes
@@ -121,7 +121,7 @@ Phase 6: Documentation   [ ] 0% (0/3)
   - Добавление метрики с labels
 
 - [ ] **T2.3.3:** Code review checklist для метрик
-  - Файл: `tasks/TN-137-metrics-audit-unification/METRICS_CODE_REVIEW_CHECKLIST.md`
+  - Файл: `tasks/TN-181-metrics-audit-unification/METRICS_CODE_REVIEW_CHECKLIST.md`
 
 - [ ] **T2.3.4:** SRE review и approval
   - Presentation дизайна SRE команде
@@ -289,7 +289,7 @@ Phase 6: Documentation   [ ] 0% (0/3)
 ### 4.3 Documentation (30 мин)
 
 - [ ] **T4.3.1:** Создать migration guide для SRE
-  - Файл: `tasks/TN-137-metrics-audit-unification/MIGRATION_GUIDE.md`
+  - Файл: `tasks/TN-181-metrics-audit-unification/MIGRATION_GUIDE.md`
   - Step-by-step instructions
 
 - [ ] **T4.3.2:** Changelog для production release
