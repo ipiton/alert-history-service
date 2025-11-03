@@ -35,9 +35,12 @@ type BusinessMetrics struct {
 	DeduplicationDurationSeconds *prometheus.HistogramVec // Deduplication operation duration
 
 	// LLM subsystem - AI classification metrics
-	LLMClassificationsTotal *prometheus.CounterVec // Total LLM classifications performed
-	LLMRecommendationsTotal prometheus.Counter     // Total LLM recommendations generated
-	LLMConfidenceScore      prometheus.Histogram   // Distribution of LLM confidence scores
+	LLMClassificationsTotal *prometheus.CounterVec   // Total LLM classifications performed
+	LLMRecommendationsTotal prometheus.Counter      // Total LLM recommendations generated
+	LLMConfidenceScore      prometheus.Histogram    // Distribution of LLM confidence scores
+	ClassificationL1CacheHitsTotal prometheus.Counter   // L1 (memory) cache hits for classifications
+	ClassificationL2CacheHitsTotal prometheus.Counter   // L2 (Redis) cache hits for classifications
+	ClassificationDurationSeconds   *prometheus.HistogramVec // Classification operation duration
 
 	// Publishing subsystem - alert delivery metrics
 	PublishingSuccessTotal    *prometheus.CounterVec   // Successful alert publishes
@@ -160,6 +163,37 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 		),
 
+		// Classification caching metrics (TN-033)
+		ClassificationL1CacheHitsTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_classification",
+				Name:      "l1_cache_hits_total",
+				Help:      "Total number of L1 (memory) cache hits for classifications",
+			},
+		),
+
+		ClassificationL2CacheHitsTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_classification",
+				Name:      "l2_cache_hits_total",
+				Help:      "Total number of L2 (Redis) cache hits for classifications",
+			},
+		),
+
+		ClassificationDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_classification",
+				Name:      "duration_seconds",
+				Help:      "Duration of classification operations in seconds",
+				// Buckets optimized for classification: 1ms to 10s
+				Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0},
+			},
+			[]string{"source"}, // source: llm|fallback|cache
+		),
+
 		// Publishing subsystem metrics
 		PublishingSuccessTotal: promauto.NewCounterVec(
 			prometheus.CounterOpts{
@@ -245,6 +279,25 @@ func (m *BusinessMetrics) RecordLLMRecommendation() {
 //   - score: The confidence score (0.0 to 1.0)
 func (m *BusinessMetrics) RecordLLMConfidenceScore(score float64) {
 	m.LLMConfidenceScore.Observe(score)
+}
+
+// RecordClassificationL1CacheHit records an L1 (memory) cache hit for classification.
+func (m *BusinessMetrics) RecordClassificationL1CacheHit() {
+	m.ClassificationL1CacheHitsTotal.Inc()
+}
+
+// RecordClassificationL2CacheHit records an L2 (Redis) cache hit for classification.
+func (m *BusinessMetrics) RecordClassificationL2CacheHit() {
+	m.ClassificationL2CacheHitsTotal.Inc()
+}
+
+// RecordClassificationDuration records the duration of a classification operation.
+//
+// Parameters:
+//   - source: The classification source ("llm", "fallback", "cache")
+//   - duration: The operation duration in seconds
+func (m *BusinessMetrics) RecordClassificationDuration(source string, duration float64) {
+	m.ClassificationDurationSeconds.WithLabelValues(source).Observe(duration)
 }
 
 // RecordPublishingSuccess records a successful alert publish.

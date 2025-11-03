@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -17,14 +18,14 @@ import (
 
 // mockCache implements cache.Cache for testing
 type mockCache struct {
-	data  map[string]any
+	data  map[string][]byte // Store JSON bytes to match Redis behavior
 	err   error
 	calls int
 }
 
 func newMockCache() *mockCache {
 	return &mockCache{
-		data: make(map[string]any),
+		data: make(map[string][]byte),
 	}
 }
 
@@ -39,11 +40,9 @@ func (m *mockCache) Get(ctx context.Context, key string, dest interface{}) error
 		return cache.ErrNotFound
 	}
 
-	// Copy data to dest
-	if dataMap, ok := val.(map[string]any); ok {
-		if destMap, ok := dest.(*map[string]any); ok {
-			*destMap = dataMap
-		}
+	// Deserialize JSON like Redis cache does
+	if err := json.Unmarshal(val, dest); err != nil {
+		return cache.NewCacheError("failed to unmarshal cache value", "UNMARSHAL_ERROR").WithCause(err)
 	}
 
 	return nil
@@ -54,7 +53,14 @@ func (m *mockCache) Set(ctx context.Context, key string, value interface{}, ttl 
 	if m.err != nil {
 		return m.err
 	}
-	m.data[key] = value
+
+	// Serialize to JSON like Redis cache does
+	data, err := json.Marshal(value)
+	if err != nil {
+		return cache.NewCacheError("failed to marshal cache value", "MARSHAL_ERROR").WithCause(err)
+	}
+
+	m.data[key] = data
 	return nil
 }
 
@@ -86,7 +92,7 @@ func (m *mockCache) Ping(ctx context.Context) error {
 }
 
 func (m *mockCache) Flush(ctx context.Context) error {
-	m.data = make(map[string]any)
+	m.data = make(map[string][]byte)
 	return nil
 }
 
@@ -240,10 +246,12 @@ func TestEnrichmentModeManager_GetMode(t *testing.T) {
 		{
 			name: "loads mode from Redis on initialization",
 			setup: func(mc *mockCache) {
-				mc.data[redisKeyMode] = map[string]any{
+				data := map[string]any{
 					"mode":      "transparent",
 					"timestamp": time.Now().Unix(),
 				}
+				jsonData, _ := json.Marshal(data)
+				mc.data[redisKeyMode] = jsonData
 			},
 			expectedMode:  EnrichmentModeTransparent, // Loaded from Redis during NewEnrichmentModeManager
 			expectedError: false,
@@ -285,10 +293,12 @@ func TestEnrichmentModeManager_GetModeWithSource(t *testing.T) {
 		{
 			name: "returns mode from Redis",
 			setup: func(mc *mockCache) {
-				mc.data[redisKeyMode] = map[string]any{
+				data := map[string]any{
 					"mode":      "transparent",
 					"timestamp": time.Now().Unix(),
 				}
+				jsonData, _ := json.Marshal(data)
+				mc.data[redisKeyMode] = jsonData
 			},
 			expectedMode:   EnrichmentModeTransparent,
 			expectedSource: "redis",
@@ -500,10 +510,12 @@ func TestEnrichmentModeManager_RefreshCache(t *testing.T) {
 		{
 			name: "refreshes from Redis",
 			setup: func(mc *mockCache) {
-				mc.data[redisKeyMode] = map[string]any{
+				data := map[string]any{
 					"mode":      "transparent",
 					"timestamp": time.Now().Unix(),
 				}
+				jsonData, _ := json.Marshal(data)
+				mc.data[redisKeyMode] = jsonData
 			},
 			expectedMode:   EnrichmentModeTransparent,
 			expectedSource: "redis",
@@ -528,9 +540,11 @@ func TestEnrichmentModeManager_RefreshCache(t *testing.T) {
 		{
 			name: "handles invalid Redis data gracefully",
 			setup: func(mc *mockCache) {
-				mc.data[redisKeyMode] = map[string]any{
+				data := map[string]any{
 					"mode": "invalid_mode",
 				}
+				jsonData, _ := json.Marshal(data)
+				mc.data[redisKeyMode] = jsonData
 			},
 			expectedMode:   EnrichmentModeEnriched,
 			expectedSource: "default",
