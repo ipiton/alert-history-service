@@ -41,6 +41,10 @@ type DefaultGroupManager struct {
 	// config is the grouping configuration (from TN-121)
 	config *GroupingConfig
 
+	// timerManager manages group timers (group_wait, group_interval) (TN-124)
+	// Optional: can be nil for backwards compatibility
+	timerManager GroupTimerManager
+
 	// logger for structured logging
 	logger *slog.Logger
 
@@ -84,15 +88,23 @@ func NewDefaultGroupManager(cfg DefaultGroupManagerConfig) (*DefaultGroupManager
 		cfg.Logger = slog.Default()
 	}
 
-	return &DefaultGroupManager{
+	mgr := &DefaultGroupManager{
 		groups:           make(map[GroupKey]*AlertGroup),
 		fingerprintIndex: make(map[string]GroupKey),
 		keyGenerator:     cfg.KeyGenerator,
 		config:           cfg.Config,
+		timerManager:     cfg.TimerManager, // Optional (TN-124)
 		logger:           cfg.Logger,
 		metrics:          cfg.Metrics,
 		stats:            &groupStats{},
-	}, nil
+	}
+
+	// Register timer callbacks if timer manager is configured (TN-124)
+	if err := mgr.registerTimerCallbacks(); err != nil {
+		return nil, fmt.Errorf("register timer callbacks: %w", err)
+	}
+
+	return mgr, nil
 }
 
 // === Lifecycle Management Implementation ===
@@ -137,6 +149,14 @@ func (m *DefaultGroupManager) AddAlertToGroup(
 		// Metric: new group created
 		if m.metrics != nil {
 			m.metrics.IncActiveGroups()
+		}
+
+		// Start group_wait timer for new group (TN-124)
+		if err := m.startGroupWaitTimer(ctx, groupKey); err != nil {
+			// Log error but don't fail the operation (timer is optional)
+			m.logger.Warn("failed to start group_wait timer for new group",
+				"group_key", groupKey,
+				"error", err)
 		}
 	}
 
@@ -223,6 +243,9 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 		if m.metrics != nil {
 			m.metrics.DecActiveGroups()
 		}
+
+		// Cancel all timers for this group (TN-124)
+		m.cancelGroupTimers(ctx, groupKey)
 	} else {
 		// Update group state
 		m.updateGroupStateUnsafe(group)
@@ -623,4 +646,172 @@ func (m *DefaultGroupManager) recordCleanupMetrics(deletedCount int, duration ti
 	m.metrics.RecordGroupOperation("cleanup", "success")
 	m.metrics.RecordGroupOperationDuration("cleanup", duration)
 	m.metrics.RecordGroupsCleanedUp(deletedCount)
+}
+
+// === Timer Integration (TN-124) ===
+
+// startGroupWaitTimer starts a group_wait timer for a newly created group.
+// This timer delays the first notification until group_wait duration elapses.
+//
+// Called when a new group is created in AddAlertToGroup.
+func (m *DefaultGroupManager) startGroupWaitTimer(ctx context.Context, groupKey GroupKey) error {
+	if m.timerManager == nil {
+		return nil // Timer functionality disabled (backwards compatible)
+	}
+
+	// Get group_wait duration from config (default: 30s)
+	duration := 30 * time.Second
+	if m.config != nil && m.config.Route != nil && m.config.Route.GroupWait != nil {
+		duration = m.config.Route.GroupWait.Duration
+	}
+
+	// Start group_wait timer
+	_, err := m.timerManager.StartTimer(ctx, groupKey, GroupWaitTimer, duration)
+	if err != nil {
+		m.logger.Error("failed to start group_wait timer",
+			"group_key", groupKey,
+			"duration", duration,
+			"error", err)
+		return fmt.Errorf("start group_wait timer: %w", err)
+	}
+
+	m.logger.Debug("started group_wait timer",
+		"group_key", groupKey,
+		"duration", duration)
+
+	return nil
+}
+
+// startGroupIntervalTimer starts a group_interval timer for an existing group.
+// This timer ensures minimum time between notifications for the same group.
+//
+// Called after a notification is sent for a group.
+func (m *DefaultGroupManager) startGroupIntervalTimer(ctx context.Context, groupKey GroupKey) error {
+	if m.timerManager == nil {
+		return nil // Timer functionality disabled
+	}
+
+	// Get group_interval duration from config (default: 5m)
+	duration := 5 * time.Minute
+	if m.config != nil && m.config.Route != nil && m.config.Route.GroupInterval != nil {
+		duration = m.config.Route.GroupInterval.Duration
+	}
+
+	// Start group_interval timer
+	_, err := m.timerManager.StartTimer(ctx, groupKey, GroupIntervalTimer, duration)
+	if err != nil {
+		m.logger.Error("failed to start group_interval timer",
+			"group_key", groupKey,
+			"duration", duration,
+			"error", err)
+		return fmt.Errorf("start group_interval timer: %w", err)
+	}
+
+	m.logger.Debug("started group_interval timer",
+		"group_key", groupKey,
+		"duration", duration)
+
+	return nil
+}
+
+// cancelGroupTimers cancels all timers for a group.
+// Called when a group is deleted (empty after alert removal).
+func (m *DefaultGroupManager) cancelGroupTimers(ctx context.Context, groupKey GroupKey) {
+	if m.timerManager == nil {
+		return // Timer functionality disabled
+	}
+
+	// Cancel group_wait timer (if exists)
+	if _, err := m.timerManager.CancelTimer(ctx, groupKey); err != nil {
+		m.logger.Warn("failed to cancel group timer",
+			"group_key", groupKey,
+			"error", err)
+	} else {
+		m.logger.Debug("cancelled group timers",
+			"group_key", groupKey)
+	}
+}
+
+// onGroupWaitExpired is the callback for group_wait timer expiration.
+// This sends the first notification for a group after the initial delay.
+func (m *DefaultGroupManager) onGroupWaitExpired(ctx context.Context, groupKey GroupKey, timerType TimerType, group *AlertGroup) error {
+	m.logger.Info("group_wait timer expired, ready to send first notification",
+		"group_key", groupKey,
+		"alert_count", len(group.Alerts))
+
+	// TODO: Trigger notification here (will be implemented in TN-125)
+	// For now, just start the group_interval timer
+
+	// Start group_interval timer for subsequent notifications
+	if err := m.startGroupIntervalTimer(ctx, groupKey); err != nil {
+		m.logger.Error("failed to start group_interval timer after group_wait",
+			"group_key", groupKey,
+			"error", err)
+		return err
+	}
+
+	return nil
+}
+
+// onGroupIntervalExpired is the callback for group_interval timer expiration.
+// This allows sending subsequent notifications for a group.
+func (m *DefaultGroupManager) onGroupIntervalExpired(ctx context.Context, groupKey GroupKey, timerType TimerType, group *AlertGroup) error {
+	m.logger.Info("group_interval timer expired, ready to send update notification",
+		"group_key", groupKey,
+		"alert_count", len(group.Alerts))
+
+	// TODO: Trigger notification here (will be implemented in TN-125)
+	// For now, just restart the group_interval timer if group still has alerts
+
+	// Check if group still exists and has alerts
+	m.mu.RLock()
+	currentGroup, exists := m.groups[groupKey]
+	m.mu.RUnlock()
+
+	if !exists || len(currentGroup.Alerts) == 0 {
+		m.logger.Debug("group no longer exists or is empty, not restarting timer",
+			"group_key", groupKey)
+		return nil
+	}
+
+	// Restart group_interval timer for next notification
+	if err := m.startGroupIntervalTimer(ctx, groupKey); err != nil {
+		m.logger.Error("failed to restart group_interval timer",
+			"group_key", groupKey,
+			"error", err)
+		return err
+	}
+
+	return nil
+}
+
+// registerTimerCallbacks registers timer expiration callbacks with the timer manager.
+// This should be called during manager initialization.
+func (m *DefaultGroupManager) registerTimerCallbacks() error {
+	if m.timerManager == nil {
+		return nil // Timer functionality disabled
+	}
+
+	// Register callback for all timer types
+	m.timerManager.OnTimerExpired(func(ctx context.Context, groupKey GroupKey, timerType TimerType, group *AlertGroup) error {
+		switch timerType {
+		case GroupWaitTimer:
+			return m.onGroupWaitExpired(ctx, groupKey, timerType, group)
+		case GroupIntervalTimer:
+			return m.onGroupIntervalExpired(ctx, groupKey, timerType, group)
+		case RepeatIntervalTimer:
+			// RepeatInterval not yet implemented (future enhancement)
+			m.logger.Debug("repeat_interval timer expired (not implemented)",
+				"group_key", groupKey)
+			return nil
+		default:
+			m.logger.Warn("unknown timer type expired",
+				"group_key", groupKey,
+				"timer_type", timerType)
+			return fmt.Errorf("unknown timer type: %s", timerType)
+		}
+	})
+
+	m.logger.Info("registered timer expiration callbacks")
+	return nil
 }

@@ -506,6 +506,10 @@ type DefaultGroupManagerConfig struct {
 	// Config is the grouping configuration (required, from TN-121)
 	Config *GroupingConfig
 
+	// TimerManager manages group timers (optional, from TN-124)
+	// If nil, timer functionality is disabled (backwards compatible)
+	TimerManager GroupTimerManager
+
 	// Logger for structured logging (optional, defaults to slog.Default())
 	Logger *slog.Logger
 
