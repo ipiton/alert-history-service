@@ -1,11 +1,13 @@
 package grouping
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestDuration_UnmarshalYAML(t *testing.T) {
@@ -324,11 +326,11 @@ func TestRoute_Clone(t *testing.T) {
 	assert.Equal(t, original.GroupBy, clone.GroupBy)
 	assert.Equal(t, original.Continue, clone.Continue)
 
-	// Verify pointers are different
-	assert.NotSame(t, original.GroupWait, clone.GroupWait)
-	assert.NotSame(t, original.Match, clone.Match)
-	assert.NotSame(t, original.Routes, clone.Routes)
-	assert.NotSame(t, original.Routes[0], clone.Routes[0])
+	// Verify pointers are different (not same memory address)
+	assert.NotEqual(t, fmt.Sprintf("%p", original.GroupWait), fmt.Sprintf("%p", clone.GroupWait))
+	assert.NotEqual(t, fmt.Sprintf("%p", original.Match), fmt.Sprintf("%p", clone.Match))
+	assert.NotEqual(t, fmt.Sprintf("%p", original.Routes), fmt.Sprintf("%p", clone.Routes))
+	assert.NotEqual(t, fmt.Sprintf("%p", original.Routes[0]), fmt.Sprintf("%p", clone.Routes[0]))
 
 	// Verify values are equal
 	assert.Equal(t, original.GroupWait.Duration, clone.GroupWait.Duration)
@@ -365,4 +367,3 @@ func TestRoute_String(t *testing.T) {
 	assert.Contains(t, str, "4h")
 	assert.Contains(t, str, "nested_routes=2")
 }
-

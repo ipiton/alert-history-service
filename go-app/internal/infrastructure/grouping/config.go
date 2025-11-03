@@ -41,7 +41,7 @@ type Route struct {
 	// GroupBy is a list of label names to group alerts by.
 	// Special value ['...'] means group by all labels (effectively disables grouping).
 	// Empty list [] creates a single global group.
-	GroupBy []string `yaml:"group_by" validate:"required,min=1"`
+	GroupBy []string `yaml:"group_by"`
 
 	// GroupWait is the time to wait before sending the first notification for a new group.
 	// This allows similar alerts to accumulate into the same group.
@@ -274,4 +274,3 @@ func (r *Route) String() string {
 		len(r.Routes),
 	)
 }
-
