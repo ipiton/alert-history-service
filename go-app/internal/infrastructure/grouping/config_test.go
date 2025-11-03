@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestDuration_UnmarshalYAML(t *testing.T) {
@@ -365,4 +366,3 @@ func TestRoute_String(t *testing.T) {
 	assert.Contains(t, str, "4h")
 	assert.Contains(t, str, "nested_routes=2")
 }
-
