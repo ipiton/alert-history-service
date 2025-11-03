@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -46,6 +48,12 @@ type BusinessMetrics struct {
 	PublishingSuccessTotal    *prometheus.CounterVec   // Successful alert publishes
 	PublishingFailedTotal     *prometheus.CounterVec   // Failed alert publishes
 	PublishingDurationSeconds *prometheus.HistogramVec // Publishing operation duration
+
+	// Grouping subsystem - alert group management metrics (TN-123)
+	AlertGroupsActiveTotal       prometheus.Gauge           // Number of currently active alert groups
+	AlertGroupSize               prometheus.Histogram       // Distribution of alert group sizes
+	AlertGroupOperationsTotal    *prometheus.CounterVec    // Total number of group operations (add/remove/cleanup)
+	AlertGroupOperationDurationSeconds *prometheus.HistogramVec // Duration of group operations
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -226,6 +234,49 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 			[]string{"destination"}, // destination: webhook|slack|pagerduty|etc
 		),
+
+		// Grouping subsystem metrics (TN-123)
+		AlertGroupsActiveTotal: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "alert_groups_active_total",
+				Help:      "Number of currently active alert groups",
+			},
+		),
+
+		AlertGroupSize: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "alert_group_size",
+				Help:      "Distribution of alert group sizes",
+				// Buckets optimized for group sizes: 1 to 1000+
+				Buckets: []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000},
+			},
+		),
+
+		AlertGroupOperationsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "alert_group_operations_total",
+				Help:      "Total number of group operations",
+			},
+			[]string{"operation", "result"}, // operation: add|remove|cleanup, result: success|error
+		),
+
+		AlertGroupOperationDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "alert_group_operation_duration_seconds",
+				Help:      "Duration of group operations",
+				// Buckets optimized for group operations: 100µs to 100ms
+				Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+			},
+			[]string{"operation"}, // operation: add|remove|cleanup|get|list
+		),
 	}
 }
 
@@ -319,4 +370,56 @@ func (m *BusinessMetrics) RecordPublishingSuccess(destination string, duration f
 func (m *BusinessMetrics) RecordPublishingFailure(destination, errorType string, duration float64) {
 	m.PublishingFailedTotal.WithLabelValues(destination, errorType).Inc()
 	m.PublishingDurationSeconds.WithLabelValues(destination).Observe(duration)
+}
+
+// === Grouping Subsystem Methods (TN-123) ===
+
+// IncActiveGroups increments the active groups gauge by 1.
+// Called when a new group is created.
+func (m *BusinessMetrics) IncActiveGroups() {
+	m.AlertGroupsActiveTotal.Inc()
+}
+
+// DecActiveGroups decrements the active groups gauge by 1.
+// Called when a group is deleted.
+func (m *BusinessMetrics) DecActiveGroups() {
+	m.AlertGroupsActiveTotal.Dec()
+}
+
+// RecordGroupSize records the size of an alert group.
+//
+// Parameters:
+//   - size: Number of alerts in the group
+func (m *BusinessMetrics) RecordGroupSize(size int) {
+	m.AlertGroupSize.Observe(float64(size))
+}
+
+// RecordGroupOperation records a group management operation.
+//
+// Parameters:
+//   - operation: The operation type ("add", "remove", "cleanup")
+//   - result: The result ("success" or "error")
+func (m *BusinessMetrics) RecordGroupOperation(operation, result string) {
+	m.AlertGroupOperationsTotal.WithLabelValues(operation, result).Inc()
+}
+
+// RecordGroupOperationDuration records the duration of a group operation.
+//
+// Parameters:
+//   - operation: The operation type ("add", "remove", "cleanup", "get", "list")
+//   - duration: The operation duration
+func (m *BusinessMetrics) RecordGroupOperationDuration(operation string, duration time.Duration) {
+	m.AlertGroupOperationDurationSeconds.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordGroupsCleanedUp records the number of groups cleaned up in a cleanup operation.
+//
+// Parameters:
+//   - count: Number of groups deleted
+func (m *BusinessMetrics) RecordGroupsCleanedUp(count int) {
+	// Record as multiple increments for the counter
+	// Note: Consider adding a separate metric for cleanup batch size if needed
+	for i := 0; i < count; i++ {
+		m.AlertGroupOperationsTotal.WithLabelValues("cleanup", "success").Inc()
+	}
 }

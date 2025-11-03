@@ -1,197 +1,149 @@
 package grouping
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-// ParseError represents an error that occurred during YAML parsing.
-// It includes context about where the error occurred (field, value, line, column).
+// === Parser Errors (TN-121) ===
+
+// ParseError represents a YAML parsing error.
 type ParseError struct {
-	// Field is the name of the field that caused the error
-	Field string
-
-	// Value is the problematic value that failed to parse
-	Value string
-
-	// Line is the line number in the YAML file (1-based)
-	Line int
-
-	// Column is the column number in the YAML file (1-based)
-	Column int
-
-	// Err is the underlying error
-	Err error
+	Field  string // Field that caused the error
+	Value  string // Value that was invalid
+	Line   int    // Line number in YAML file (if available)
+	Column int    // Column number in YAML file (if available)
+	Err    error  // Underlying error
 }
 
-// Error implements the error interface for ParseError.
-// It provides a detailed, user-friendly error message including line/column info if available.
+// Error implements the error interface.
 func (e *ParseError) Error() string {
-	var b strings.Builder
-
-	b.WriteString("parse error")
-
-	if e.Line > 0 && e.Column > 0 {
-		b.WriteString(fmt.Sprintf(" at line %d, column %d", e.Line, e.Column))
-	} else if e.Line > 0 {
-		b.WriteString(fmt.Sprintf(" at line %d", e.Line))
-	}
-
-	if e.Field != "" {
-		b.WriteString(fmt.Sprintf(": field '%s'", e.Field))
-	}
-
 	if e.Value != "" {
-		b.WriteString(fmt.Sprintf(" with value '%s'", e.Value))
+		return fmt.Sprintf("parse error in field '%s' (value: '%s'): %v", e.Field, e.Value, e.Err)
 	}
-
-	if e.Err != nil {
-		b.WriteString(fmt.Sprintf(": %v", e.Err))
-	}
-
-	return b.String()
+	return fmt.Sprintf("parse error in field '%s': %v", e.Field, e.Err)
 }
 
-// Unwrap returns the underlying error for error chain support.
+// Unwrap returns the underlying error.
 func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
-// NewParseError creates a new ParseError with the given details.
-func NewParseError(field, value string, err error) *ParseError {
-	return &ParseError{
-		Field: field,
-		Value: value,
-		Err:   err,
-	}
-}
-
-// ValidationError represents a validation error for a specific field.
-// It includes the validation rule that failed and a human-readable message.
+// ValidationError represents a single validation failure.
 type ValidationError struct {
-	// Field is the name of the field that failed validation
-	Field string
-
-	// Value is the invalid value
-	Value string
-
-	// Rule is the validation rule that failed (e.g., "required", "min", "labelname")
-	Rule string
-
-	// Message is a human-readable description of the validation failure
-	Message string
+	Field   string // Field that failed validation
+	Message string // Validation error message
+	Value   string // Invalid value (optional)
+	Rule    string // Validation rule that failed (optional, e.g., "labelname", "range")
 }
 
-// Error implements the error interface for ValidationError.
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("validation error: field '%s' failed validation '%s': %s (value: '%s')",
-		e.Field, e.Rule, e.Message, e.Value)
-}
-
-// NewValidationError creates a new ValidationError with the given details.
-func NewValidationError(field, value, rule, message string) ValidationError {
-	return ValidationError{
-		Field:   field,
-		Value:   value,
-		Rule:    rule,
-		Message: message,
+// Error implements the error interface.
+// Note: Using value receiver instead of pointer receiver for errors.Is/As compatibility
+func (e ValidationError) Error() string {
+	if e.Value != "" {
+		return fmt.Sprintf("validation error in field '%s': %s (value: '%s')", e.Field, e.Message, e.Value)
 	}
+	return fmt.Sprintf("validation error in field '%s': %s", e.Field, e.Message)
 }
 
-// ValidationErrors represents a collection of validation errors.
-// It allows accumulating multiple errors during validation.
+// ValidationErrors is a collection of validation errors.
 type ValidationErrors []ValidationError
 
-// Error implements the error interface for ValidationErrors.
-// It formats all validation errors into a multi-line message.
-func (ve ValidationErrors) Error() string {
-	if len(ve) == 0 {
+// Error implements the error interface.
+func (e ValidationErrors) Error() string {
+	if len(e) == 0 {
 		return "no validation errors"
 	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("validation failed with %d error(s):\n", len(ve)))
-
-	for i, err := range ve {
-		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err.Message))
-		if err.Field != "" {
-			b.WriteString(fmt.Sprintf("      Field: %s\n", err.Field))
-		}
-		if err.Value != "" {
-			b.WriteString(fmt.Sprintf("      Value: %s\n", err.Value))
-		}
-		if err.Rule != "" {
-			b.WriteString(fmt.Sprintf("      Rule: %s\n", err.Rule))
-		}
+	if len(e) == 1 {
+		return e[0].Error()
 	}
-
-	return b.String()
+	return fmt.Sprintf("multiple validation errors (%d): %s", len(e), e[0].Error())
 }
 
-// Add appends a new validation error to the collection.
-func (ve *ValidationErrors) Add(field, value, rule, message string) {
-	*ve = append(*ve, NewValidationError(field, value, rule, message))
-}
-
-// AddError appends an existing ValidationError to the collection.
-func (ve *ValidationErrors) AddError(err ValidationError) {
-	*ve = append(*ve, err)
+// Add adds a validation error to the collection.
+// Parameters:
+//   - field: the field name that failed validation
+//   - value: the invalid value
+//   - tag: the validation tag (e.g., "labelname", "range", "max_depth")
+//   - message: human-readable error message
+func (e *ValidationErrors) Add(field, value, tag, message string) {
+	*e = append(*e, ValidationError{
+		Field:   field,
+		Message: message,
+		Value:   value,
+	})
 }
 
 // HasErrors returns true if there are any validation errors.
-func (ve ValidationErrors) HasErrors() bool {
-	return len(ve) > 0
+func (e ValidationErrors) HasErrors() bool {
+	return len(e) > 0
 }
 
-// Count returns the number of validation errors.
-func (ve ValidationErrors) Count() int {
-	return len(ve)
-}
-
-// ToError converts ValidationErrors to an error interface.
-// Returns nil if there are no errors.
-func (ve ValidationErrors) ToError() error {
-	if !ve.HasErrors() {
+// ToError returns nil if there are no errors, or the ValidationErrors itself as an error.
+func (e ValidationErrors) ToError() error {
+	if len(e) == 0 {
 		return nil
 	}
-	return ve
+	return e
 }
 
-// ConfigError represents a general configuration error.
-// Used for high-level configuration issues.
+// AddError adds an error to the validation errors collection.
+// Parameters:
+//   - errOrField: can be either a ValidationError or a field name (string)
+//
+// Usage:
+//   errors.AddError(validationError)                // Add ValidationError directly
+//   errors.AddError(field, err)                      // Add error for field
+func (e *ValidationErrors) AddError(args ...interface{}) {
+	if len(args) == 0 {
+		return
+	}
+
+	// Case 1: Single ValidationError argument
+	if len(args) == 1 {
+		if ve, ok := args[0].(ValidationError); ok {
+			*e = append(*e, ve)
+			return
+		}
+	}
+
+	// Case 2: (field string, err error)
+	if len(args) == 2 {
+		if field, ok := args[0].(string); ok {
+			if err, ok := args[1].(error); ok && err != nil {
+				if ve, ok := err.(ValidationError); ok {
+					*e = append(*e, ve)
+					return
+				}
+				*e = append(*e, ValidationError{
+					Field:   field,
+					Message: err.Error(),
+				})
+				return
+			}
+		}
+	}
+}
+
+// ConfigError represents a configuration error (file not found, invalid structure, etc.).
 type ConfigError struct {
-	// Message is the error message
-	Message string
-
-	// Source is the config file path or source identifier
-	Source string
-
-	// Err is the underlying error
-	Err error
+	Message string // Error message
+	Source  string // Source file path (if applicable)
+	Err     error  // Underlying error (if applicable)
 }
 
-// Error implements the error interface for ConfigError.
+// Error implements the error interface.
 func (e *ConfigError) Error() string {
-	var b strings.Builder
-
-	b.WriteString("configuration error")
-
+	if e.Source != "" && e.Err != nil {
+		return fmt.Sprintf("config error in '%s': %s: %v", e.Source, e.Message, e.Err)
+	}
 	if e.Source != "" {
-		b.WriteString(fmt.Sprintf(" in '%s'", e.Source))
+		return fmt.Sprintf("config error in '%s': %s", e.Source, e.Message)
 	}
-
-	if e.Message != "" {
-		b.WriteString(fmt.Sprintf(": %s", e.Message))
-	}
-
 	if e.Err != nil {
-		b.WriteString(fmt.Sprintf(": %v", e.Err))
+		return fmt.Sprintf("config error: %s: %v", e.Message, e.Err)
 	}
-
-	return b.String()
+	return fmt.Sprintf("config error: %s", e.Message)
 }
 
-// Unwrap returns the underlying error for error chain support.
+// Unwrap returns the underlying error.
 func (e *ConfigError) Unwrap() error {
 	return e.Err
 }
@@ -205,3 +157,90 @@ func NewConfigError(message, source string, err error) *ConfigError {
 	}
 }
 
+// NewParseError creates a new ParseError.
+func NewParseError(field, value string, err error) *ParseError {
+	return &ParseError{
+		Field: field,
+		Value: value,
+		Err:   err,
+	}
+}
+
+// NewValidationError creates a new ValidationError.
+// Can be called with 3 or 4 arguments:
+//   NewValidationError(field, message, value)
+//   NewValidationError(field, message, value, rule)
+func NewValidationError(field, message, value string, rule ...string) ValidationError {
+	ve := ValidationError{
+		Field:   field,
+		Message: message,
+		Value:   value,
+	}
+	if len(rule) > 0 {
+		ve.Rule = rule[0]
+	}
+	return ve
+}
+
+// Count returns the number of validation errors.
+func (e ValidationErrors) Count() int {
+	return len(e)
+}
+
+// === Group Manager Errors (TN-123) ===
+
+// InvalidAlertError indicates that an alert failed validation.
+//
+// Returned by AddAlertToGroup when:
+//   - alert is nil
+//   - alert.Fingerprint is empty
+//   - alert data is malformed
+type InvalidAlertError struct {
+	// Reason describes why the alert is invalid
+	Reason string
+}
+
+// Error implements the error interface.
+func (e *InvalidAlertError) Error() string {
+	return fmt.Sprintf("invalid alert: %s", e.Reason)
+}
+
+// GroupNotFoundError indicates that a requested group does not exist.
+//
+// Returned by:
+//   - GetGroup when group key doesn't exist
+//   - RemoveAlertFromGroup when group doesn't exist
+//   - UpdateGroupState when group doesn't exist
+//   - GetGroupByFingerprint when alert not in any group
+type GroupNotFoundError struct {
+	// Key is the group key that was not found
+	Key GroupKey
+}
+
+// Error implements the error interface.
+func (e *GroupNotFoundError) Error() string {
+	return fmt.Sprintf("group not found: %s", e.Key)
+}
+
+// StorageError wraps errors from the underlying storage layer.
+//
+// Used for future Redis storage (TN-125). Currently wraps in-memory errors.
+//
+// Implements error wrapping (Unwrap) for errors.Is and errors.As support.
+type StorageError struct {
+	// Operation is the storage operation that failed (e.g., "store", "load", "delete")
+	Operation string
+
+	// Err is the underlying error
+	Err error
+}
+
+// Error implements the error interface.
+func (e *StorageError) Error() string {
+	return fmt.Sprintf("storage error during %s: %v", e.Operation, e.Err)
+}
+
+// Unwrap returns the underlying error for errors.Is and errors.As.
+func (e *StorageError) Unwrap() error {
+	return e.Err
+}
