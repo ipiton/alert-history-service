@@ -24,7 +24,8 @@ import (
 //   - Thread-safe concurrent access
 //
 // Architecture:
-//   Request → [L1 Cache Check] → [L2 Cache Check] → [LLM Call] → [Fallback] → Response
+//
+//	Request → [L1 Cache Check] → [L2 Cache Check] → [LLM Call] → [Fallback] → Response
 //
 // Performance:
 //   - Cache hit (L1): <5ms (target)
@@ -87,10 +88,10 @@ type classificationStats struct {
 	cacheMisses   int64
 
 	// LLM counters
-	llmCalls      int64
-	llmSuccesses  int64
-	llmFailures   int64
-	fallbackUsed  int64
+	llmCalls     int64
+	llmSuccesses int64
+	llmFailures  int64
+	fallbackUsed int64
 
 	// Performance metrics
 	totalDuration   time.Duration
@@ -177,7 +178,9 @@ func (s *classificationService) ClassifyAlert(ctx context.Context, alert *core.A
 	defer func() {
 		duration := time.Since(startTime)
 		s.updateStats(duration)
-		// TODO: Add classification duration metric when BusinessMetrics supports it
+		if s.businessMetrics != nil {
+			s.businessMetrics.RecordClassificationDuration("total", duration.Seconds())
+		}
 	}()
 
 	// Increment request counter
@@ -200,6 +203,9 @@ func (s *classificationService) ClassifyAlert(ctx context.Context, alert *core.A
 		s.logger.Debug("Cache hit",
 			"fingerprint", alert.Fingerprint,
 			"severity", cached.Severity)
+		if s.businessMetrics != nil {
+			s.businessMetrics.RecordClassificationDuration("cache", time.Since(startTime).Seconds())
+		}
 		return cached, nil
 	}
 
@@ -216,6 +222,7 @@ func (s *classificationService) ClassifyAlert(ctx context.Context, alert *core.A
 					string(result.Severity),
 					"llm",
 				).Inc()
+				s.businessMetrics.RecordClassificationDuration("llm", time.Since(startTime).Seconds())
 			}
 
 			return result, nil
@@ -243,6 +250,7 @@ func (s *classificationService) ClassifyAlert(ctx context.Context, alert *core.A
 				string(result.Severity),
 				"fallback",
 			).Inc()
+			s.businessMetrics.RecordClassificationDuration("fallback", time.Since(startTime).Seconds())
 		}
 
 		s.logger.Info("Using fallback classification",
@@ -481,7 +489,9 @@ func (s *classificationService) getFromCache(ctx context.Context, fingerprint st
 			if entry, ok := cached.(*cacheEntry); ok && !entry.IsExpired() {
 				s.incrementCacheHit()
 				s.logger.Debug("L1 cache hit", "fingerprint", fingerprint)
-				// TODO: Add L1 cache hit metric when BusinessMetrics supports it
+				if s.businessMetrics != nil {
+					s.businessMetrics.RecordClassificationL1CacheHit()
+				}
 				return entry.Result, true
 			}
 			// Expired - remove from cache
@@ -502,7 +512,9 @@ func (s *classificationService) getFromCache(ctx context.Context, fingerprint st
 		}
 		s.incrementCacheHit()
 		s.logger.Debug("L2 cache hit", "fingerprint", fingerprint)
-		// TODO: Add L2 cache hit metric when BusinessMetrics supports it
+		if s.businessMetrics != nil {
+			s.businessMetrics.RecordClassificationL2CacheHit()
+		}
 		return &result, true
 	}
 

@@ -188,7 +188,15 @@ func TestClassificationService_ClassifyAlert_ValidationErrors(t *testing.T) {
 }
 
 func TestClassificationService_GetCachedClassification(t *testing.T) {
-	mockLLM := &mockLLMClient{}
+	mockLLM := &mockLLMClient{
+		classifyFunc: func(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
+			return &core.ClassificationResult{
+				Severity:   core.SeverityWarning,
+				Confidence: 0.85,
+				Reasoning:  "Test classification",
+			}, nil
+		},
+	}
 	mockCache := newMockCache()
 
 	config := ClassificationServiceConfig{
@@ -200,15 +208,18 @@ func TestClassificationService_GetCachedClassification(t *testing.T) {
 	svc, err := NewClassificationService(config)
 	require.NoError(t, err)
 
-	// Populate cache
+	// Populate cache using the same fingerprint
 	alert := createTestAlert()
+	fingerprint := alert.Fingerprint // Use the actual fingerprint from test alert
 	_, err = svc.ClassifyAlert(context.Background(), alert)
 	require.NoError(t, err)
 
-	// Get from cache
-	cached, err := svc.GetCachedClassification(context.Background(), "test-get-cached")
+	// Get from cache using the same fingerprint
+	cached, err := svc.GetCachedClassification(context.Background(), fingerprint)
 	require.NoError(t, err)
 	assert.NotNil(t, cached)
+	assert.Equal(t, core.SeverityWarning, cached.Severity)
+	assert.Equal(t, 0.85, cached.Confidence)
 }
 
 func TestClassificationService_GetCachedClassification_NotFound(t *testing.T) {
