@@ -66,6 +66,7 @@ type RedisConfig struct {
 
 // LLMConfig holds LLM-related configuration
 type LLMConfig struct {
+	Enabled     bool          `mapstructure:"enabled"`
 	Provider    string        `mapstructure:"provider"`
 	APIKey      string        `mapstructure:"api_key"`
 	BaseURL     string        `mapstructure:"base_url"`
@@ -222,6 +223,7 @@ func setDefaults() {
 	viper.SetDefault("redis.max_retry_backoff", "500ms")
 
 	// LLM defaults
+	viper.SetDefault("llm.enabled", false)
 	viper.SetDefault("llm.provider", "openai")
 	viper.SetDefault("llm.api_key", "")
 	viper.SetDefault("llm.base_url", "https://api.openai.com/v1")

@@ -24,6 +24,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
@@ -347,10 +348,53 @@ func main() {
 		slog.Warn("⚠️ Deduplication Service NOT initialized (database not available)")
 	}
 
+	// TN-033: Initialize Classification Service with two-tier caching
+	var classificationService services.ClassificationService
+	if cfg.LLM.Enabled {
+		slog.Info("Initializing LLM Classification Service (TN-033)")
+
+		// Initialize LLM client
+		llmConfig := llm.Config{
+			BaseURL:    cfg.LLM.BaseURL,
+			APIKey:     cfg.LLM.APIKey,
+			Model:      cfg.LLM.Model,
+			Timeout:    cfg.LLM.Timeout,
+			MaxRetries: cfg.LLM.MaxRetries,
+		}
+		llmClient := llm.NewHTTPLLMClient(llmConfig, appLogger)
+
+		// Create classification service config
+		classificationConfig := services.ClassificationServiceConfig{
+			LLMClient:       llmClient,
+			Cache:           redisCache,
+			Storage:         alertStorage,
+			Config:          services.DefaultClassificationConfig(),
+			BusinessMetrics: metricsRegistry.Business(),
+		}
+
+		var err error
+		classificationService, err = services.NewClassificationService(classificationConfig)
+		if err != nil {
+			slog.Error("Failed to create classification service", "error", err)
+			// Continue without classification (graceful degradation)
+			classificationService = nil
+		} else {
+			slog.Info("✅ Classification Service initialized",
+				"features", []string{
+					"Two-tier caching (L1 memory + L2 Redis)",
+					"Intelligent fallback",
+					"Batch processing",
+					"6 Prometheus metrics",
+				})
+		}
+	} else {
+		slog.Info("LLM not enabled, classification service will not be available")
+	}
+
 	// Initialize AlertProcessor
 	alertProcessorConfig := services.AlertProcessorConfig{
 		EnrichmentManager: enrichmentManager,
-		LLMClient:         nil, // TODO: Initialize LLM client from config
+		LLMClient:         classificationService, // TN-033: ClassificationService with caching + fallback
 		FilterEngine:      filterEngine,
 		Publisher:         publisher,
 		Deduplication:     deduplicationService, // TN-036 Phase 3
