@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
 // setupTestTimerManager creates a test timer manager
@@ -21,6 +22,17 @@ func setupTestTimerManager(t *testing.T) (*DefaultTimerManager, *InMemoryTimerSt
 		groups:           make(map[GroupKey]*AlertGroup),
 		fingerprintIndex: make(map[string]GroupKey),
 		logger:           slog.Default(),
+	}
+
+	// Pre-populate with empty Alerts map and metadata to avoid nil pointer panics
+	groupManager.groups["test-group"] = &AlertGroup{
+		Key:    "test-group",
+		Alerts: make(map[string]*core.Alert),
+		Metadata: &GroupMetadata{
+			State:     GroupStateFiring,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
 	config := TimerManagerConfig{
@@ -312,10 +324,15 @@ func TestDefaultTimerManager_OnTimerExpired(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Add test group to manager
+	// Add test group to manager (already set in setup, but reset here)
 	groupManager.groups["test-group"] = &AlertGroup{
 		Key:    "test-group",
-		Alerts: make(map[string]*Alert),
+		Alerts: make(map[string]*core.Alert),
+		Metadata: &GroupMetadata{
+			State:     GroupStateFiring,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
 	// Register callback
@@ -348,7 +365,12 @@ func TestDefaultTimerManager_OnTimerExpired_MultipleCallbacks(t *testing.T) {
 	// Add test group
 	groupManager.groups["test-group"] = &AlertGroup{
 		Key:    "test-group",
-		Alerts: make(map[string]*Alert),
+		Alerts: make(map[string]*core.Alert),
+		Metadata: &GroupMetadata{
+			State:     GroupStateFiring,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
 	// Register multiple callbacks
@@ -406,8 +428,24 @@ func TestDefaultTimerManager_RestoreTimers(t *testing.T) {
 		groups: make(map[GroupKey]*AlertGroup),
 		logger: slog.Default(),
 	}
-	groupManager.groups["active-group"] = &AlertGroup{Key: "active-group", Alerts: make(map[string]*Alert)}
-	groupManager.groups["expired-group"] = &AlertGroup{Key: "expired-group", Alerts: make(map[string]*Alert)}
+	groupManager.groups["active-group"] = &AlertGroup{
+		Key:    "active-group",
+		Alerts: make(map[string]*core.Alert),
+		Metadata: &GroupMetadata{
+			State:     GroupStateFiring,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}
+	groupManager.groups["expired-group"] = &AlertGroup{
+		Key:    "expired-group",
+		Alerts: make(map[string]*core.Alert),
+		Metadata: &GroupMetadata{
+			State:     GroupStateFiring,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}
 
 	config := TimerManagerConfig{
 		Storage:      storage,
