@@ -54,6 +54,15 @@ type BusinessMetrics struct {
 	AlertGroupSize               prometheus.Histogram       // Distribution of alert group sizes
 	AlertGroupOperationsTotal    *prometheus.CounterVec    // Total number of group operations (add/remove/cleanup)
 	AlertGroupOperationDurationSeconds *prometheus.HistogramVec // Duration of group operations
+
+	// Timers subsystem - group timer metrics (TN-124)
+	TimersActiveTotal         *prometheus.GaugeVec      // Number of currently active timers by type
+	TimersExpiredTotal        *prometheus.CounterVec    // Total number of expired timers by type
+	TimerDurationSeconds      *prometheus.HistogramVec  // Distribution of timer durations by type
+	TimerResetsTotal          *prometheus.CounterVec    // Total number of timer resets by type
+	TimersRestoredTotal       prometheus.Counter        // Total number of timers restored after restart
+	TimersMissedTotal         prometheus.Counter        // Total number of timers missed due to downtime
+	TimerOperationDurationSeconds *prometheus.HistogramVec // Duration of timer operations
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -277,6 +286,79 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 			[]string{"operation"}, // operation: add|remove|cleanup|get|list
 		),
+
+		// Timers subsystem metrics (TN-124)
+		TimersActiveTotal: promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timers_active_total",
+				Help:      "Number of currently active timers by type",
+			},
+			[]string{"type"}, // type: group_wait|group_interval|repeat_interval
+		),
+
+		TimersExpiredTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timers_expired_total",
+				Help:      "Total number of expired timers by type",
+			},
+			[]string{"type"}, // type: group_wait|group_interval|repeat_interval
+		),
+
+		TimerDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timer_duration_seconds",
+				Help:      "Distribution of timer durations by type",
+				// Buckets optimized for timers: 1s to 4h
+				Buckets: []float64{1, 5, 10, 30, 60, 300, 600, 1800, 3600, 14400},
+			},
+			[]string{"type"}, // type: group_wait|group_interval|repeat_interval
+		),
+
+		TimerResetsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timer_resets_total",
+				Help:      "Total number of timer resets by type",
+			},
+			[]string{"type"}, // type: group_wait|group_interval|repeat_interval
+		),
+
+		TimersRestoredTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timers_restored_total",
+				Help:      "Total number of timers restored after restart (HA recovery)",
+			},
+		),
+
+		TimersMissedTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timers_missed_total",
+				Help:      "Total number of timers missed due to service downtime",
+			},
+		),
+
+		TimerOperationDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "timer_operation_duration_seconds",
+				Help:      "Duration of timer operations",
+				// Buckets optimized for timer operations: 100µs to 100ms
+				Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+			},
+			[]string{"operation"}, // operation: start|cancel|reset|restore
+		),
 	}
 }
 
@@ -410,6 +492,90 @@ func (m *BusinessMetrics) RecordGroupOperation(operation, result string) {
 //   - duration: The operation duration
 func (m *BusinessMetrics) RecordGroupOperationDuration(operation string, duration time.Duration) {
 	m.AlertGroupOperationDurationSeconds.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// === Timer Subsystem Methods (TN-124) ===
+
+// RecordTimerStarted records a timer being started.
+//
+// Parameters:
+//   - timerType: The type of timer (e.g., "group_wait", "group_interval", "repeat_interval")
+func (m *BusinessMetrics) RecordTimerStarted(timerType string) {
+	// Active count managed via IncActiveTimers/DecActiveTimers
+}
+
+// RecordTimerExpired records a timer expiration.
+//
+// Parameters:
+//   - timerType: The type of timer that expired
+func (m *BusinessMetrics) RecordTimerExpired(timerType string) {
+	m.TimersExpiredTotal.WithLabelValues(timerType).Inc()
+}
+
+// RecordTimerCancelled records a timer being cancelled.
+//
+// Parameters:
+//   - timerType: The type of timer that was cancelled
+func (m *BusinessMetrics) RecordTimerCancelled(timerType string) {
+	// Recorded via DecActiveTimers
+}
+
+// RecordTimerReset records a timer being reset.
+//
+// Parameters:
+//   - timerType: The type of timer that was reset
+func (m *BusinessMetrics) RecordTimerReset(timerType string) {
+	m.TimerResetsTotal.WithLabelValues(timerType).Inc()
+}
+
+// RecordTimerDuration records the duration of a timer.
+//
+// Parameters:
+//   - timerType: The type of timer
+//   - duration: The timer duration
+func (m *BusinessMetrics) RecordTimerDuration(timerType string, duration time.Duration) {
+	m.TimerDurationSeconds.WithLabelValues(timerType).Observe(duration.Seconds())
+}
+
+// IncActiveTimers increments the count of active timers.
+//
+// Parameters:
+//   - timerType: The type of timer
+func (m *BusinessMetrics) IncActiveTimers(timerType string) {
+	m.TimersActiveTotal.WithLabelValues(timerType).Inc()
+}
+
+// DecActiveTimers decrements the count of active timers.
+//
+// Parameters:
+//   - timerType: The type of timer
+func (m *BusinessMetrics) DecActiveTimers(timerType string) {
+	m.TimersActiveTotal.WithLabelValues(timerType).Dec()
+}
+
+// RecordTimersRestored records the number of timers restored after restart.
+//
+// Parameters:
+//   - count: Number of timers restored
+func (m *BusinessMetrics) RecordTimersRestored(count int) {
+	m.TimersRestoredTotal.Add(float64(count))
+}
+
+// RecordTimersMissed records the number of timers missed due to downtime.
+//
+// Parameters:
+//   - count: Number of timers missed
+func (m *BusinessMetrics) RecordTimersMissed(count int) {
+	m.TimersMissedTotal.Add(float64(count))
+}
+
+// RecordTimerOperationDuration records the duration of a timer operation.
+//
+// Parameters:
+//   - operation: The operation name (e.g., "start", "cancel", "reset", "restore")
+//   - duration: The duration of the operation
+func (m *BusinessMetrics) RecordTimerOperationDuration(operation string, duration time.Duration) {
+	m.TimerOperationDurationSeconds.WithLabelValues(operation).Observe(duration.Seconds())
 }
 
 // RecordGroupsCleanedUp records the number of groups cleaned up in a cleanup operation.
