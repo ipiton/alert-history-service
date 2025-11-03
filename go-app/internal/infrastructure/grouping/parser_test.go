@@ -501,7 +501,9 @@ func TestParser_MaxDepthValidation(t *testing.T) {
 
 	err := parser.validateSemantics(config)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "max_depth")
+	// Check that error message contains depth validation keywords
+	assert.Contains(t, err.Error(), "nesting depth")
+	assert.Contains(t, err.Error(), "exceeds maximum")
 }
 
 // TestConvertValidatorErrors tests error conversion

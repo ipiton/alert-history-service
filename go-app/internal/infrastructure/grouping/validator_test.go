@@ -395,7 +395,9 @@ func TestValidateRoute_MaxDepth(t *testing.T) {
 
 	err := ValidateRoute(route)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "max_depth")
+	// Check that error message contains depth validation keywords
+	assert.Contains(t, err.Error(), "nesting depth")
+	assert.Contains(t, err.Error(), "exceeds maximum")
 }
 
 // TestValidateConfig tests config validation
