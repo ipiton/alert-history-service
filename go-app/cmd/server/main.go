@@ -289,6 +289,7 @@ func main() {
 
 	// Initialize Prometheus metrics if enabled (legacy MetricsManager for backward compatibility)
 	var metricsManager *metrics.MetricsManager
+	var businessMetrics *metrics.BusinessMetrics // TN-124: For grouping system
 	if cfg.Metrics.Enabled {
 		slog.Info("Initializing Prometheus metrics", "path", cfg.Metrics.Path)
 		metricsConfig := metrics.Config{
@@ -297,6 +298,10 @@ func main() {
 			Subsystem: "http",
 		}
 		metricsManager = metrics.NewMetricsManager(metricsConfig)
+
+		// TN-124: Create BusinessMetrics for alert grouping system
+		businessMetrics = metrics.NewBusinessMetrics("alert_history")
+		slog.Info("✅ Business metrics initialized for grouping system")
 	}
 
 	// Initialize Enrichment Mode Manager
@@ -344,36 +349,61 @@ func main() {
 					grouping.WithMaxKeyLength(256),
 				)
 
-				// TN-124: Create Timer Storage (in-memory only for now)
-				// Note: Redis timer storage requires *cache.RedisCache, not cache.Cache interface
-				// This is a limitation that should be fixed in TN-124 follow-up
-				_ = grouping.NewInMemoryTimerStorage(appLogger) // timerStorage initialized but not used yet
-				slog.Info("Timer storage created (in-memory)")
+				// TN-124: Create Timer Storage (Redis or in-memory fallback)
+				var timerStorage grouping.TimerStorage
+				if redisCache != nil {
+					timerStorage, err = grouping.NewRedisTimerStorage(redisCache, appLogger)
+					if err != nil {
+						slog.Warn("Failed to create Redis timer storage, using in-memory fallback", "error", err)
+						timerStorage = grouping.NewInMemoryTimerStorage(appLogger)
+					} else {
+						slog.Info("✅ Redis Timer Storage initialized")
+					}
+				} else {
+					timerStorage = grouping.NewInMemoryTimerStorage(appLogger)
+					slog.Info("Using in-memory timer storage (Redis not available)")
+				}
 
 				// TN-123: Create Alert Group Manager
-				// Note: metricsManager is *MetricsManager, but we need *BusinessMetrics
-				// For now, skip metrics until we add GetBusinessMetrics() method
 				groupManager, err = grouping.NewDefaultGroupManager(grouping.DefaultGroupManagerConfig{
 					KeyGenerator: keyGenerator,
 					Config:       groupingConfig,
 					Logger:       appLogger,
-					Metrics:      nil, // TODO: Add BusinessMetrics accessor
+					Metrics:      businessMetrics, // Now we have BusinessMetrics!
 				})
 				if err != nil {
 					slog.Error("Failed to create group manager", "error", err)
 				} else {
 					slog.Info("✅ Alert Group Manager initialized")
-					slog.Info("    Group Manager ready", "groups", 0) // groupManager used
 
 					// TN-124: Create Timer Manager
-					// Note: DefaultTimerManager expects *DefaultGroupManager, but we have interface
-					// Store as interface, timer creation will work without full integration for now
-					slog.Info("⚠️  Timer Manager initialization skipped (requires full TN-123 integration)")
-					slog.Info("    Timer functionality available via AlertGroupManager interface")
-					slog.Info("    Full timer support pending main.go refactoring")
-
-					// Prevent unused variable warning
-					_ = groupManager
+					// Get concrete type for TimerManager (requires *DefaultGroupManager)
+					concreteGroupManager, ok := groupManager.(*grouping.DefaultGroupManager)
+					if !ok {
+						slog.Warn("⚠️  Timer Manager initialization skipped (groupManager is not *DefaultGroupManager)")
+					} else {
+						timerManager, err = grouping.NewDefaultTimerManager(grouping.TimerManagerConfig{
+							Storage:               timerStorage,
+							GroupManager:          concreteGroupManager,
+							DefaultGroupWait:      30 * time.Second,
+							DefaultGroupInterval:  5 * time.Minute,
+							DefaultRepeatInterval: 4 * time.Hour,
+							Logger:                appLogger,
+						})
+						if err != nil {
+							slog.Error("Failed to create timer manager", "error", err)
+						} else {
+							// Restore timers after restart (HA)
+							restored, missed, err := timerManager.RestoreTimers(ctx)
+							if err != nil {
+								slog.Warn("Failed to restore timers", "error", err)
+							} else {
+								slog.Info("✅ Alert Grouping System fully initialized",
+									"timers_restored", restored,
+									"timers_missed", missed)
+							}
+						}
+					}
 				}
 			}
 		} else {

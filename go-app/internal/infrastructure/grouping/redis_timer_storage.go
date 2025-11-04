@@ -62,25 +62,41 @@ type RedisTimerStorage struct {
 	logger *slog.Logger
 }
 
-// NewRedisTimerStorage creates a new RedisTimerStorage from a RedisCache.
+// NewRedisTimerStorage creates a new RedisTimerStorage from a cache.Cache interface.
 //
 // Parameters:
-//   - redisCache: Cache wrapper from TN-016
+//   - redisCache: Cache interface (must be *cache.RedisCache)
 //   - logger: Structured logger (optional, uses slog.Default if nil)
+//
+// Returns:
+//   - *RedisTimerStorage: Initialized storage
+//   - error: Error if cache is nil or not *RedisCache
 //
 // Example:
 //
-//	redisCache := cache.NewRedisCache(config, logger)
-//	storage := grouping.NewRedisTimerStorage(redisCache, logger)
-func NewRedisTimerStorage(redisCache *cache.RedisCache, logger *slog.Logger) *RedisTimerStorage {
+//	storage, err := grouping.NewRedisTimerStorage(redisCache, logger)
+//	if err != nil {
+//	    return err
+//	}
+func NewRedisTimerStorage(redisCache cache.Cache, logger *slog.Logger) (*RedisTimerStorage, error) {
+	if redisCache == nil {
+		return nil, fmt.Errorf("redis cache cannot be nil")
+	}
+
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &RedisTimerStorage{
-		client: redisCache.GetClient(),
-		logger: logger,
+	// Type assert to get underlying Redis client
+	concreteCache, ok := redisCache.(*cache.RedisCache)
+	if !ok {
+		return nil, fmt.Errorf("redis timer storage requires *cache.RedisCache, got %T", redisCache)
 	}
+
+	return &RedisTimerStorage{
+		client: concreteCache.GetClient(),
+		logger: logger,
+	}, nil
 }
 
 // SaveTimer persists a timer to Redis with automatic TTL.

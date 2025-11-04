@@ -31,7 +31,8 @@ func setupTestRedisStorage(t *testing.T) (*RedisTimerStorage, *miniredis.Minired
 	require.NoError(t, err)
 
 	// Create storage
-	storage := NewRedisTimerStorage(redisCache, slog.Default())
+	storage, err := NewRedisTimerStorage(redisCache, slog.Default())
+	require.NoError(t, err)
 
 	cleanup := func() {
 		redisCache.Close()
