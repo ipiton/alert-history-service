@@ -24,6 +24,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/grouping"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
@@ -288,6 +289,7 @@ func main() {
 
 	// Initialize Prometheus metrics if enabled (legacy MetricsManager for backward compatibility)
 	var metricsManager *metrics.MetricsManager
+	var businessMetrics *metrics.BusinessMetrics // TN-124: For grouping system
 	if cfg.Metrics.Enabled {
 		slog.Info("Initializing Prometheus metrics", "path", cfg.Metrics.Path)
 		metricsConfig := metrics.Config{
@@ -296,6 +298,10 @@ func main() {
 			Subsystem: "http",
 		}
 		metricsManager = metrics.NewMetricsManager(metricsConfig)
+
+		// TN-124: Create BusinessMetrics for alert grouping system
+		businessMetrics = metrics.NewBusinessMetrics("alert_history")
+		slog.Info("✅ Business metrics initialized for grouping system")
 	}
 
 	// Initialize Enrichment Mode Manager
@@ -315,6 +321,95 @@ func main() {
 
 	// Create enrichment handlers
 	enrichmentHandlers := handlers.NewEnrichmentHandlers(enrichmentManager, appLogger)
+
+	// TN-121/122/123/124: Initialize Alert Grouping System
+	var groupManager grouping.AlertGroupManager
+	var timerManager grouping.GroupTimerManager
+
+	// Check if we have a grouping config file
+	if groupingConfigPath := os.Getenv("GROUPING_CONFIG_PATH"); groupingConfigPath != "" || true {
+		// Use default path if not set
+		if groupingConfigPath == "" {
+			groupingConfigPath = "./config/grouping.yaml"
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(groupingConfigPath); err == nil {
+			slog.Info("Initializing Alert Grouping System", "config", groupingConfigPath)
+
+			// TN-121: Parse grouping configuration
+			parser := grouping.NewParser()
+			groupingConfig, err := parser.ParseFile(groupingConfigPath)
+			if err != nil {
+				slog.Warn("Failed to parse grouping config, grouping disabled", "error", err)
+			} else {
+				// TN-122: Create Group Key Generator (with default options)
+				keyGenerator := grouping.NewGroupKeyGenerator(
+					grouping.WithHashLongKeys(true),
+					grouping.WithMaxKeyLength(256),
+				)
+
+				// TN-124: Create Timer Storage (Redis or in-memory fallback)
+				var timerStorage grouping.TimerStorage
+				if redisCache != nil {
+					timerStorage, err = grouping.NewRedisTimerStorage(redisCache, appLogger)
+					if err != nil {
+						slog.Warn("Failed to create Redis timer storage, using in-memory fallback", "error", err)
+						timerStorage = grouping.NewInMemoryTimerStorage(appLogger)
+					} else {
+						slog.Info("✅ Redis Timer Storage initialized")
+					}
+				} else {
+					timerStorage = grouping.NewInMemoryTimerStorage(appLogger)
+					slog.Info("Using in-memory timer storage (Redis not available)")
+				}
+
+				// TN-123: Create Alert Group Manager
+				groupManager, err = grouping.NewDefaultGroupManager(grouping.DefaultGroupManagerConfig{
+					KeyGenerator: keyGenerator,
+					Config:       groupingConfig,
+					Logger:       appLogger,
+					Metrics:      businessMetrics, // Now we have BusinessMetrics!
+				})
+				if err != nil {
+					slog.Error("Failed to create group manager", "error", err)
+				} else {
+					slog.Info("✅ Alert Group Manager initialized")
+
+					// TN-124: Create Timer Manager
+					// Get concrete type for TimerManager (requires *DefaultGroupManager)
+					concreteGroupManager, ok := groupManager.(*grouping.DefaultGroupManager)
+					if !ok {
+						slog.Warn("⚠️  Timer Manager initialization skipped (groupManager is not *DefaultGroupManager)")
+					} else {
+						timerManager, err = grouping.NewDefaultTimerManager(grouping.TimerManagerConfig{
+							Storage:               timerStorage,
+							GroupManager:          concreteGroupManager,
+							DefaultGroupWait:      30 * time.Second,
+							DefaultGroupInterval:  5 * time.Minute,
+							DefaultRepeatInterval: 4 * time.Hour,
+							Logger:                appLogger,
+						})
+						if err != nil {
+							slog.Error("Failed to create timer manager", "error", err)
+						} else {
+							// Restore timers after restart (HA)
+							restored, missed, err := timerManager.RestoreTimers(ctx)
+							if err != nil {
+								slog.Warn("Failed to restore timers", "error", err)
+							} else {
+								slog.Info("✅ Alert Grouping System fully initialized",
+									"timers_restored", restored,
+									"timers_missed", missed)
+							}
+						}
+					}
+				}
+			}
+		} else {
+			slog.Info("Grouping config not found, grouping disabled", "path", groupingConfigPath)
+		}
+	}
 
 	// Initialize filter engine and publisher
 	filterEngine := services.NewSimpleFilterEngine(appLogger)
@@ -536,6 +631,16 @@ func main() {
 	defer cancel()
 
 	// Graceful shutdown
+	// TN-124: Shutdown timer manager first (if initialized)
+	if timerManager != nil {
+		slog.Info("Shutting down timer manager...")
+		if err := timerManager.Shutdown(ctx); err != nil {
+			slog.Error("Timer manager shutdown error", "error", err)
+		} else {
+			slog.Info("✅ Timer manager stopped")
+		}
+	}
+
 	if err := server.Shutdown(ctx); err != nil {
 		slog.Error("Server forced to shutdown", "error", err)
 		os.Exit(1)

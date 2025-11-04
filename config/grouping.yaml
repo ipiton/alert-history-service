@@ -1,0 +1,76 @@
+# Alert Grouping Configuration
+# TN-124: Group Wait/Interval Timers
+# Date: 2025-11-03
+
+# Global configuration
+global:
+  # Resolve timeout (how long to wait for alert to resolve before grouping)
+  resolve_timeout: 5m
+
+# Routing tree root
+route:
+  # Default receiver for all alerts
+  receiver: "default"
+
+  # Group alerts by these label keys
+  # Alerts with the same values for these labels will be grouped together
+  group_by:
+    - alertname
+    - cluster
+    - service
+
+  # TN-124: Timer configuration
+  # group_wait: Wait this long before sending first notification for a group
+  group_wait: 30s
+
+  # group_interval: Minimum time between notifications for the same group
+  group_interval: 5m
+
+  # repeat_interval: Minimum time before resending a notification (not yet implemented)
+  repeat_interval: 4h
+
+  # Child routes (optional)
+  routes:
+    # Critical alerts get faster notifications
+    - match:
+        severity: critical
+      receiver: "pagerduty"
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 30m
+
+    # Warning alerts can wait longer
+    - match:
+        severity: warning
+      receiver: "slack"
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+
+    # Database alerts grouped separately
+    - match_re:
+        alertname: "^(Database|PostgreSQL|MySQL).*"
+      receiver: "database-team"
+      group_by:
+        - alertname
+        - instance
+      group_wait: 45s
+      group_interval: 8m
+
+# Receivers configuration (for future use)
+receivers:
+  - name: "default"
+    webhook_configs:
+      - url: "http://localhost:8080/webhook"
+
+  - name: "pagerduty"
+    webhook_configs:
+      - url: "http://localhost:8080/webhook/pagerduty"
+
+  - name: "slack"
+    webhook_configs:
+      - url: "http://localhost:8080/webhook/slack"
+
+  - name: "database-team"
+    webhook_configs:
+      - url: "http://localhost:8080/webhook/database"
