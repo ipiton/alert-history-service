@@ -3,6 +3,7 @@ package grouping
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -20,9 +21,11 @@ func createBenchmarkManager() *DefaultGroupManager {
 		},
 	}
 
-	manager, _ := NewDefaultGroupManager(DefaultGroupManagerConfig{
+	manager, _ := NewDefaultGroupManager(context.Background(), DefaultGroupManagerConfig{
 		KeyGenerator: keyGen,
 		Config:       config,
+		Logger:       slog.Default(),
+		Storage:      NewMemoryGroupStorage(&MemoryGroupStorageConfig{Logger: slog.Default()}),
 	})
 	return manager
 }
@@ -198,13 +201,12 @@ func BenchmarkCleanupExpiredGroups(b *testing.B) {
 		groupKey := GroupKey(fmt.Sprintf("alertname=Alert%d,namespace=prod", i))
 		manager.AddAlertToGroup(ctx, alert, groupKey)
 
-		// Mark as expired
-		manager.mu.Lock()
-		group := manager.groups[groupKey]
+		// Mark as expired (TN-125: use storage)
+		group, _ := manager.storage.Load(ctx, groupKey)
 		twoHoursAgo := time.Now().Add(-2 * time.Hour)
 		group.Metadata.ResolvedAt = &twoHoursAgo
 		group.Metadata.UpdatedAt = twoHoursAgo
-		manager.mu.Unlock()
+		manager.storage.Store(ctx, group)
 	}
 
 	b.ResetTimer()

@@ -63,6 +63,14 @@ type BusinessMetrics struct {
 	TimersRestoredTotal       prometheus.Counter        // Total number of timers restored after restart
 	TimersMissedTotal         prometheus.Counter        // Total number of timers missed due to downtime
 	TimerOperationDurationSeconds *prometheus.HistogramVec // Duration of timer operations
+
+	// Storage subsystem - group storage metrics (TN-125)
+	StorageFallbackTotal      *prometheus.CounterVec    // Total storage fallback events by reason
+	StorageRecoveryTotal      prometheus.Counter        // Total storage recovery events
+	GroupsRestoredTotal       prometheus.Counter        // Total groups restored from storage on startup
+	StorageOperationsTotal    *prometheus.CounterVec    // Total storage operations (store/load/delete)
+	StorageDurationSeconds    *prometheus.HistogramVec  // Duration of storage operations
+	StorageHealthGauge        *prometheus.GaugeVec      // Storage health status by backend (1=healthy, 0=unhealthy)
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -359,6 +367,67 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 			[]string{"operation"}, // operation: start|cancel|reset|restore
 		),
+
+		// Storage subsystem metrics (TN-125)
+		StorageFallbackTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "storage_fallback_total",
+				Help:      "Total number of storage fallback events (Redis → Memory)",
+			},
+			[]string{"reason"}, // reason: health_check_failed|store_error|delete_error|store_all_error
+		),
+
+		StorageRecoveryTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "storage_recovery_total",
+				Help:      "Total number of storage recovery events (Memory → Redis)",
+			},
+		),
+
+		GroupsRestoredTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "groups_restored_total",
+				Help:      "Total number of groups restored from storage on startup (HA recovery)",
+			},
+		),
+
+		StorageOperationsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "storage_operations_total",
+				Help:      "Total number of group storage operations",
+			},
+			[]string{"operation", "result"}, // operation: store|load|delete|load_all, result: success|error
+		),
+
+		StorageDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "storage_duration_seconds",
+				Help:      "Duration of group storage operations",
+				// Buckets optimized for storage operations: 100µs to 100ms
+				Buckets: []float64{0.0001, 0.0005, 0.001, 0.002, 0.005, 0.010, 0.050, 0.100},
+			},
+			[]string{"operation"}, // operation: store|load|delete|load_all|store_all
+		),
+
+		StorageHealthGauge: promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_grouping",
+				Name:      "storage_health",
+				Help:      "Storage health status by backend (1=healthy, 0=unhealthy)",
+			},
+			[]string{"backend"}, // backend: redis|memory
+		),
 	}
 }
 
@@ -567,6 +636,63 @@ func (m *BusinessMetrics) RecordTimersRestored(count int) {
 //   - count: Number of timers missed
 func (m *BusinessMetrics) RecordTimersMissed(count int) {
 	m.TimersMissedTotal.Add(float64(count))
+}
+
+// === Storage Subsystem Methods (TN-125) ===
+
+// IncStorageFallback increments the storage fallback counter.
+// Called when switching from primary (Redis) to fallback (Memory) storage.
+//
+// Parameters:
+//   - reason: Reason for fallback ("health_check_failed", "store_error", "delete_error", "store_all_error")
+func (m *BusinessMetrics) IncStorageFallback(reason string) {
+	m.StorageFallbackTotal.WithLabelValues(reason).Inc()
+}
+
+// IncStorageRecovery increments the storage recovery counter.
+// Called when switching back from fallback (Memory) to primary (Redis) storage.
+func (m *BusinessMetrics) IncStorageRecovery() {
+	m.StorageRecoveryTotal.Inc()
+}
+
+// RecordGroupsRestored records the number of groups restored from storage on startup.
+// Called after successful LoadAll() during HA recovery.
+//
+// Parameters:
+//   - count: Number of groups restored
+func (m *BusinessMetrics) RecordGroupsRestored(count int) {
+	m.GroupsRestoredTotal.Add(float64(count))
+}
+
+// RecordStorageOperation records a storage operation.
+//
+// Parameters:
+//   - operation: The operation type ("store", "load", "delete", "load_all", "store_all")
+//   - result: The result ("success" or "error")
+func (m *BusinessMetrics) RecordStorageOperation(operation, result string) {
+	m.StorageOperationsTotal.WithLabelValues(operation, result).Inc()
+}
+
+// RecordStorageDuration records the duration of a storage operation.
+//
+// Parameters:
+//   - operation: The operation type ("store", "load", "delete", "load_all", "store_all")
+//   - duration: The operation duration
+func (m *BusinessMetrics) RecordStorageDuration(operation string, duration time.Duration) {
+	m.StorageDurationSeconds.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// SetStorageHealth sets the storage health status.
+//
+// Parameters:
+//   - backend: The storage backend ("redis" or "memory")
+//   - healthy: Whether the backend is healthy (true=1, false=0)
+func (m *BusinessMetrics) SetStorageHealth(backend string, healthy bool) {
+	value := 0.0
+	if healthy {
+		value = 1.0
+	}
+	m.StorageHealthGauge.WithLabelValues(backend).Set(value)
 }
 
 // RecordTimerOperationDuration records the duration of a timer operation.

@@ -84,6 +84,11 @@ type AlertGroup struct {
 	// Metadata contains group state and statistics
 	Metadata *GroupMetadata `json:"metadata"`
 
+	// Version is used for optimistic locking in distributed storage (TN-125)
+	// Incremented on every Store operation to detect concurrent modifications
+	// Redis storage will reject Store if version mismatch detected
+	Version int64 `json:"version"`
+
 	// mu protects concurrent access to Alerts and Metadata
 	// 150% Enhancement: Thread-safe by design
 	mu sync.RWMutex `json:"-"`
@@ -117,6 +122,15 @@ type GroupMetadata struct {
 	// GroupBy contains the label names used for grouping (from configuration)
 	// e.g., ["alertname", "namespace"]
 	GroupBy []string `json:"group_by"`
+
+	// GroupWaitTimer contains state for group_wait timer (TN-124, TN-125)
+	GroupWaitTimer *TimerMetadata `json:"group_wait_timer,omitempty"`
+
+	// GroupIntervalTimer contains state for group_interval timer (TN-124, TN-125)
+	GroupIntervalTimer *TimerMetadata `json:"group_interval_timer,omitempty"`
+
+	// RepeatIntervalTimer contains state for repeat_interval timer (TN-124, TN-125)
+	RepeatIntervalTimer *TimerMetadata `json:"repeat_interval_timer,omitempty"`
 
 	// Version is used for optimistic locking (future: Redis storage in TN-125)
 	Version int64 `json:"version"`
@@ -506,6 +520,10 @@ type DefaultGroupManagerConfig struct {
 	// Config is the grouping configuration (required, from TN-121)
 	Config *GroupingConfig
 
+	// Storage persists alert groups with distributed state (required, from TN-125)
+	// Typically StorageManager with Redis primary + Memory fallback
+	Storage GroupStorage
+
 	// TimerManager manages group timers (optional, from TN-124)
 	// If nil, timer functionality is disabled (backwards compatible)
 	TimerManager GroupTimerManager
@@ -524,6 +542,9 @@ func (c *DefaultGroupManagerConfig) Validate() error {
 	}
 	if c.Config == nil {
 		return fmt.Errorf("grouping config is required")
+	}
+	if c.Storage == nil {
+		return fmt.Errorf("storage is required (TN-125)")
 	}
 	return nil
 }
