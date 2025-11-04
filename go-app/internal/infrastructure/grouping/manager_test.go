@@ -62,6 +62,8 @@ func TestNewDefaultGroupManager(t *testing.T) {
 						GroupBy:  []string{"alertname"},
 					},
 				},
+				Logger:  slog.Default(),
+				Storage: NewMemoryGroupStorage(&MemoryGroupStorageConfig{Logger: slog.Default()}),
 			},
 			wantErr: false,
 		},
@@ -71,6 +73,7 @@ func TestNewDefaultGroupManager(t *testing.T) {
 				Config: &GroupingConfig{
 					Route: &Route{},
 				},
+				Storage: NewMemoryGroupStorage(&MemoryGroupStorageConfig{}),
 			},
 			wantErr: true,
 		},
@@ -78,6 +81,7 @@ func TestNewDefaultGroupManager(t *testing.T) {
 			name: "missing config",
 			config: DefaultGroupManagerConfig{
 				KeyGenerator: NewGroupKeyGenerator(),
+				Storage:      NewMemoryGroupStorage(&MemoryGroupStorageConfig{}),
 			},
 			wantErr: true,
 		},

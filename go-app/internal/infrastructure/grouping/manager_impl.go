@@ -238,9 +238,6 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 	default:
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	// Load group from storage (TN-125)
 	group, err := m.storage.Load(ctx, groupKey)
 	if err != nil {
@@ -258,7 +255,7 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 		return false, nil // Alert wasn't in the group
 	}
 
-	// Remove from fingerprint index
+	// Remove from fingerprint index (TN-125: single lock)
 	m.mu.Lock()
 	delete(m.fingerprintIndex, fingerprint)
 	m.mu.Unlock()
