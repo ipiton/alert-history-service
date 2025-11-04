@@ -17,15 +17,16 @@ import (
 func setupTestTimerManager(t *testing.T) (*DefaultTimerManager, *InMemoryTimerStorage, *DefaultGroupManager) {
 	storage := NewInMemoryTimerStorage(nil)
 
-	// Create mock group manager (we'll use a simple implementation)
+	// Create mock group manager (TN-125: use storage)
 	groupManager := &DefaultGroupManager{
-		groups:           make(map[GroupKey]*AlertGroup),
+		storage:          NewMemoryGroupStorage(&MemoryGroupStorageConfig{}),
 		fingerprintIndex: make(map[string]GroupKey),
 		logger:           slog.Default(),
 	}
 
-	// Pre-populate with empty Alerts map and metadata to avoid nil pointer panics
-	groupManager.groups["test-group"] = &AlertGroup{
+	// Pre-populate test group in storage
+	ctx := context.Background()
+	testGroup := &AlertGroup{
 		Key:    "test-group",
 		Alerts: make(map[string]*core.Alert),
 		Metadata: &GroupMetadata{
@@ -34,6 +35,7 @@ func setupTestTimerManager(t *testing.T) (*DefaultTimerManager, *InMemoryTimerSt
 			UpdatedAt: time.Now(),
 		},
 	}
+	groupManager.storage.Store(ctx, testGroup)
 
 	config := TimerManagerConfig{
 		Storage:               storage,
@@ -54,8 +56,9 @@ func setupTestTimerManager(t *testing.T) (*DefaultTimerManager, *InMemoryTimerSt
 func TestNewDefaultTimerManager(t *testing.T) {
 	storage := NewInMemoryTimerStorage(nil)
 	groupManager := &DefaultGroupManager{
-		groups: make(map[GroupKey]*AlertGroup),
-		logger: slog.Default(),
+		storage:          NewMemoryGroupStorage(&MemoryGroupStorageConfig{}),
+		fingerprintIndex: make(map[string]GroupKey),
+		logger:           slog.Default(),
 	}
 
 	config := TimerManagerConfig{
@@ -324,8 +327,8 @@ func TestDefaultTimerManager_OnTimerExpired(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Add test group to manager (already set in setup, but reset here)
-	groupManager.groups["test-group"] = &AlertGroup{
+	// Add test group to storage (TN-125)
+	testGroup := &AlertGroup{
 		Key:    "test-group",
 		Alerts: make(map[string]*core.Alert),
 		Metadata: &GroupMetadata{
@@ -334,6 +337,7 @@ func TestDefaultTimerManager_OnTimerExpired(t *testing.T) {
 			UpdatedAt: time.Now(),
 		},
 	}
+	groupManager.storage.Store(ctx, testGroup)
 
 	// Register callback
 	callbackCalled := atomic.Bool{}
@@ -362,8 +366,8 @@ func TestDefaultTimerManager_OnTimerExpired_MultipleCallbacks(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Add test group
-	groupManager.groups["test-group"] = &AlertGroup{
+	// Add test group to storage (TN-125)
+	testGroup := &AlertGroup{
 		Key:    "test-group",
 		Alerts: make(map[string]*core.Alert),
 		Metadata: &GroupMetadata{
@@ -372,6 +376,7 @@ func TestDefaultTimerManager_OnTimerExpired_MultipleCallbacks(t *testing.T) {
 			UpdatedAt: time.Now(),
 		},
 	}
+	groupManager.storage.Store(ctx, testGroup)
 
 	// Register multiple callbacks
 	called1 := atomic.Bool{}
@@ -423,12 +428,15 @@ func TestDefaultTimerManager_RestoreTimers(t *testing.T) {
 	}
 	storage.SaveTimer(ctx, expiredTimer)
 
-	// Create manager and restore
+	// Create manager and restore (TN-125: use storage)
 	groupManager := &DefaultGroupManager{
-		groups: make(map[GroupKey]*AlertGroup),
-		logger: slog.Default(),
+		storage:          NewMemoryGroupStorage(&MemoryGroupStorageConfig{}),
+		fingerprintIndex: make(map[string]GroupKey),
+		logger:           slog.Default(),
 	}
-	groupManager.groups["active-group"] = &AlertGroup{
+
+	// Add test groups to storage
+	groupManager.storage.Store(ctx, &AlertGroup{
 		Key:    "active-group",
 		Alerts: make(map[string]*core.Alert),
 		Metadata: &GroupMetadata{
@@ -436,8 +444,8 @@ func TestDefaultTimerManager_RestoreTimers(t *testing.T) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
-	}
-	groupManager.groups["expired-group"] = &AlertGroup{
+	})
+	groupManager.storage.Store(ctx, &AlertGroup{
 		Key:    "expired-group",
 		Alerts: make(map[string]*core.Alert),
 		Metadata: &GroupMetadata{
@@ -445,7 +453,7 @@ func TestDefaultTimerManager_RestoreTimers(t *testing.T) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
-	}
+	})
 
 	config := TimerManagerConfig{
 		Storage:      storage,

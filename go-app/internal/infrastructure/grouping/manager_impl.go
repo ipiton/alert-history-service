@@ -377,18 +377,17 @@ func (m *DefaultGroupManager) CleanupExpiredGroups(
 		return 0, fmt.Errorf("load groups: %w", err)
 	}
 
-	// Find expired groups
-	expiredKeys := make([]GroupKey, 0)
-	for key, group := range allGroups {
-		if group.IsExpired(maxAge) {
-			expiredKeys = append(expiredKeys, GroupKey(key))
-		}
-	}
-
-	// Delete expired groups
+	// Find expired groups and delete them
 	m.mu.Lock()
-	for _, key := range expiredKeys {
-		group := allGroups[string(key)]
+	defer m.mu.Unlock()
+
+	deletedCount := 0
+	for groupKeyStr, group := range allGroups {
+		if !group.IsExpired(maxAge) {
+			continue
+		}
+
+		groupKey := GroupKey(groupKeyStr)
 
 		// Remove all fingerprints from index
 		group.mu.RLock()
@@ -398,15 +397,15 @@ func (m *DefaultGroupManager) CleanupExpiredGroups(
 		group.mu.RUnlock()
 
 		// Delete from storage (TN-125)
-		if delErr := m.storage.Delete(ctx, key); delErr != nil {
+		if delErr := m.storage.Delete(ctx, groupKey); delErr != nil {
 			m.logger.Error("failed to delete expired group from storage",
-				"group_key", key,
+				"group_key", groupKey,
 				"error", delErr)
+			continue // Skip this group if delete fails
 		}
-	}
-	m.mu.Unlock()
 
-	deletedCount := len(expiredKeys)
+		deletedCount++
+	}
 
 	// Update stats
 	m.stats.mu.Lock()
@@ -568,9 +567,9 @@ func (m *DefaultGroupManager) GetMetrics(ctx context.Context) (*GroupMetrics, er
 		"1000+":    0,
 	}
 
-	for key, group := range allGroups {
+	for groupKey, group := range allGroups {
 		size := group.Size()
-		alertsPerGroup[string(key)] = size
+		alertsPerGroup[groupKey] = size
 
 		// Calculate size distribution
 		switch {

@@ -2,6 +2,7 @@ package grouping
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -33,9 +34,11 @@ func createTestManager(t *testing.T) *DefaultGroupManager {
 		},
 	}
 
-	manager, err := NewDefaultGroupManager(DefaultGroupManagerConfig{
+	manager, err := NewDefaultGroupManager(context.Background(), DefaultGroupManagerConfig{
 		KeyGenerator: keyGen,
 		Config:       config,
+		Logger:       slog.Default(),
+		Storage:      NewMemoryGroupStorage(&MemoryGroupStorageConfig{Logger: slog.Default()}),
 	})
 	require.NoError(t, err)
 	return manager
@@ -82,7 +85,7 @@ func TestNewDefaultGroupManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager, err := NewDefaultGroupManager(tt.config)
+			manager, err := NewDefaultGroupManager(context.Background(), tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, manager)
@@ -473,12 +476,11 @@ func TestCleanupExpiredGroups_ExpiredByResolvedTime(t *testing.T) {
 	// Add resolved alert
 	manager.AddAlertToGroup(ctx, alert, groupKey)
 
-	// Manually set resolved time to 2 hours ago
-	manager.mu.Lock()
-	group := manager.groups[groupKey]
+	// Manually set resolved time to 2 hours ago (TN-125: use storage)
+	group, _ := manager.storage.Load(ctx, groupKey)
 	twoHoursAgo := time.Now().Add(-2 * time.Hour)
 	group.Metadata.ResolvedAt = &twoHoursAgo
-	manager.mu.Unlock()
+	manager.storage.Store(ctx, group)
 
 	// Cleanup with maxAge=1 hour
 	deleted, err := manager.CleanupExpiredGroups(ctx, 1*time.Hour)
@@ -500,11 +502,10 @@ func TestCleanupExpiredGroups_ExpiredByUpdateTime(t *testing.T) {
 	// Add alert
 	manager.AddAlertToGroup(ctx, alert, groupKey)
 
-	// Manually set updated time to 2 hours ago
-	manager.mu.Lock()
-	group := manager.groups[groupKey]
+	// Manually set updated time to 2 hours ago (TN-125: use storage)
+	group, _ := manager.storage.Load(ctx, groupKey)
 	group.Metadata.UpdatedAt = time.Now().Add(-2 * time.Hour)
-	manager.mu.Unlock()
+	manager.storage.Store(ctx, group)
 
 	// Cleanup with maxAge=1 hour
 	deleted, err := manager.CleanupExpiredGroups(ctx, 1*time.Hour)

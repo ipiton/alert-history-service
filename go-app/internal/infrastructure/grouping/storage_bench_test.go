@@ -187,15 +187,13 @@ func BenchmarkRedisStorage_Store(b *testing.B) {
 	}
 	client.FlushDB(ctx)
 
-	storage, err := NewRedisGroupStorage(context.Background(), &RedisGroupStorageConfig{
+	storage, err := NewRedisGroupStorage(ctx, &RedisGroupStorageConfig{
 		Client:  client,
 		Metrics: metrics.NewBusinessMetrics("bench"),
 	})
 	if err != nil {
 		b.Skip("Redis not available:", err)
 	}
-
-	ctx := context.Background()
 	group := createTestGroup("bench:redis:store")
 
 	b.ResetTimer()
@@ -225,7 +223,6 @@ func BenchmarkRedisStorage_Load(b *testing.B) {
 		b.Skip("Redis not available:", err)
 	}
 
-	ctx := context.Background()
 	group := createTestGroup("bench:redis:load")
 	storage.Store(ctx, group)
 
@@ -255,8 +252,6 @@ func BenchmarkRedisStorage_Delete(b *testing.B) {
 	if err != nil {
 		b.Skip("Redis not available:", err)
 	}
-
-	ctx := context.Background()
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -289,8 +284,6 @@ func BenchmarkRedisStorage_StoreAll(b *testing.B) {
 	if err != nil {
 		b.Skip("Redis not available:", err)
 	}
-
-	ctx := context.Background()
 
 	// Prepare 1,000 groups
 	groups := make([]*AlertGroup, 1000)
@@ -325,8 +318,6 @@ func BenchmarkRedisStorage_LoadAll(b *testing.B) {
 	if err != nil {
 		b.Skip("Redis not available:", err)
 	}
-
-	ctx := context.Background()
 
 	// Pre-populate 1,000 groups (reduced from 10K for benchmark speed)
 	groups := make([]*AlertGroup, 1000)
