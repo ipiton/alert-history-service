@@ -244,3 +244,62 @@ func (e *StorageError) Error() string {
 func (e *StorageError) Unwrap() error {
 	return e.Err
 }
+
+// NewStorageError creates a new StorageError.
+func NewStorageError(operation string, err error) *StorageError {
+	return &StorageError{
+		Operation: operation,
+		Err:       err,
+	}
+}
+
+// NewGroupNotFoundError creates a new GroupNotFoundError.
+func NewGroupNotFoundError(key GroupKey) *GroupNotFoundError {
+	return &GroupNotFoundError{Key: key}
+}
+
+// === TN-125: Group Storage Error Types ===
+
+// ErrVersionMismatch indicates optimistic locking conflict during concurrent group updates.
+//
+// This error occurs when two replicas attempt to update the same group simultaneously,
+// and the Version field has changed between read and write operations.
+//
+// Resolution:
+//   - Retry the operation after reloading the group (exponential backoff recommended)
+//   - Merge changes if possible (application-specific logic)
+//   - Log conflict for monitoring
+//
+// Example:
+//
+//	group, err := storage.Load(ctx, groupKey)
+//	// ... modify group ...
+//	err = storage.Store(ctx, group)
+//	if errors.Is(err, &ErrVersionMismatch{}) {
+//	    // Reload and retry
+//	    group, _ = storage.Load(ctx, groupKey)
+//	    // ... apply changes again ...
+//	    err = storage.Store(ctx, group)
+//	}
+//
+// TN-125: Group Storage (Redis Backend)
+// Date: 2025-11-04
+type ErrVersionMismatch struct {
+	Key             GroupKey // Group key that experienced conflict
+	ExpectedVersion int64    // Version we expected (from previous Load)
+	ActualVersion   int64    // Version in storage (updated by another replica)
+}
+
+func (e *ErrVersionMismatch) Error() string {
+	return fmt.Sprintf("version mismatch for group %s: expected version %d, got %d (concurrent update detected)",
+		e.Key, e.ExpectedVersion, e.ActualVersion)
+}
+
+// NewVersionMismatchError creates a new ErrVersionMismatch error.
+func NewVersionMismatchError(key GroupKey, expected, actual int64) *ErrVersionMismatch {
+	return &ErrVersionMismatch{
+		Key:             key,
+		ExpectedVersion: expected,
+		ActualVersion:   actual,
+	}
+}
