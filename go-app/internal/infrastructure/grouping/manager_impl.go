@@ -2,6 +2,7 @@ package grouping
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -145,14 +146,18 @@ func (m *DefaultGroupManager) AddAlertToGroup(
 	default:
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Load or create group (TN-125: storage-backed)
+	group, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
+		// Check if group not found
+		var notFoundErr *GroupNotFoundError
+		if !errors.As(err, &notFoundErr) {
+			// Unexpected error
+			return nil, fmt.Errorf("load group: %w", err)
+		}
 
-	// Get or create group
-	group, exists := m.groups[groupKey]
-	if !exists {
+		// Create new group
 		group = m.createNewGroupUnsafe(groupKey)
-		m.groups[groupKey] = group
 
 		m.logger.Info("created new alert group",
 			"group_key", groupKey,
@@ -165,11 +170,11 @@ func (m *DefaultGroupManager) AddAlertToGroup(
 		}
 
 		// Start group_wait timer for new group (TN-124)
-		if err := m.startGroupWaitTimer(ctx, groupKey); err != nil {
+		if startErr := m.startGroupWaitTimer(ctx, groupKey); startErr != nil {
 			// Log error but don't fail the operation (timer is optional)
 			m.logger.Warn("failed to start group_wait timer for new group",
 				"group_key", groupKey,
-				"error", err)
+				"error", startErr)
 		}
 	}
 
@@ -180,10 +185,21 @@ func (m *DefaultGroupManager) AddAlertToGroup(
 	group.mu.Unlock()
 
 	// Update fingerprint index
+	m.mu.Lock()
 	m.fingerprintIndex[alert.Fingerprint] = groupKey
+	m.mu.Unlock()
 
 	// Update group state
-	m.updateGroupStateUnsafe(group)
+	m.updateGroupState(group)
+
+	// Persist to storage (TN-125)
+	if storeErr := m.storage.Store(ctx, group); storeErr != nil {
+		m.logger.Error("failed to persist group to storage",
+			"group_key", groupKey,
+			"error", storeErr)
+		// Don't fail the operation - group is in memory
+		// TODO: Consider retry logic or fallback strategy
+	}
 
 	// Update stats
 	m.stats.mu.Lock()

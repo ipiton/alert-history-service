@@ -543,5 +543,8 @@ func (c *DefaultGroupManagerConfig) Validate() error {
 	if c.Config == nil {
 		return fmt.Errorf("grouping config is required")
 	}
+	if c.Storage == nil {
+		return fmt.Errorf("storage is required (TN-125)")
+	}
 	return nil
 }

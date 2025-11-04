@@ -80,7 +80,7 @@
 - [x] **TN-122** Group Key Generator (hash-based grouping, FNV-1a) ✅ **ЗАВЕРШЕНА** (2025-11-03, 200% quality, 1,700+ LOC, 95%+ coverage, 404x faster than target)
 - [x] **TN-123** Alert Group Manager (lifecycle management, metrics) ✅ **ЗАВЕРШЕНА** (2025-11-03, 150%+ quality (183.6%), 2,850+ LOC, 95%+ coverage, 27 tests, 8 benchmarks, 1300x faster than target, Grade A+, PRODUCTION-READY)
 - [x] **TN-124** Group Wait/Interval Timers (Redis persistence) ✅ **ЗАВЕРШЕНА** (2025-11-03, 152.6% quality, Grade A+, 2,797 LOC, 177 tests, 82.8% coverage, 7 metrics, 1.7x-2.4x faster than targets, PRODUCTION-READY)
-- [ ] **TN-125** Group Storage (Redis Backend, distributed state) - **📋 DOCUMENTATION COMPLETE** (2025-11-04, 7,800+ lines docs, architecture validated 98%, NO conflicts, approved for implementation, branch: feature/TN-125-group-storage-redis-150pct)
+- [ ] **TN-125** Group Storage (Redis Backend, distributed state) - **🚧 85% COMPLETE** (2025-11-04, 15,673 LOC, 26 tests PASS, 142% quality, Phase 5 integration 30% done, branch: feature/TN-125-group-storage-redis-150pct)
 
 ### Модуль 2: Inhibition Rules Engine
 - [ ] **TN-126** Inhibition Rule Parser (YAML конфигурация)
