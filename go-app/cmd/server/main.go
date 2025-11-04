@@ -24,6 +24,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/grouping"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
@@ -316,6 +317,70 @@ func main() {
 	// Create enrichment handlers
 	enrichmentHandlers := handlers.NewEnrichmentHandlers(enrichmentManager, appLogger)
 
+	// TN-121/122/123/124: Initialize Alert Grouping System
+	var groupManager grouping.AlertGroupManager
+	var timerManager grouping.GroupTimerManager
+
+	// Check if we have a grouping config file
+	if groupingConfigPath := os.Getenv("GROUPING_CONFIG_PATH"); groupingConfigPath != "" || true {
+		// Use default path if not set
+		if groupingConfigPath == "" {
+			groupingConfigPath = "./config/grouping.yaml"
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(groupingConfigPath); err == nil {
+			slog.Info("Initializing Alert Grouping System", "config", groupingConfigPath)
+
+			// TN-121: Parse grouping configuration
+			parser := grouping.NewParser()
+			groupingConfig, err := parser.ParseFile(groupingConfigPath)
+			if err != nil {
+				slog.Warn("Failed to parse grouping config, grouping disabled", "error", err)
+			} else {
+				// TN-122: Create Group Key Generator (with default options)
+				keyGenerator := grouping.NewGroupKeyGenerator(
+					grouping.WithHashLongKeys(true),
+					grouping.WithMaxKeyLength(256),
+				)
+
+				// TN-124: Create Timer Storage (in-memory only for now)
+				// Note: Redis timer storage requires *cache.RedisCache, not cache.Cache interface
+				// This is a limitation that should be fixed in TN-124 follow-up
+				_ = grouping.NewInMemoryTimerStorage(appLogger) // timerStorage initialized but not used yet
+				slog.Info("Timer storage created (in-memory)")
+
+				// TN-123: Create Alert Group Manager
+				// Note: metricsManager is *MetricsManager, but we need *BusinessMetrics
+				// For now, skip metrics until we add GetBusinessMetrics() method
+				groupManager, err = grouping.NewDefaultGroupManager(grouping.DefaultGroupManagerConfig{
+					KeyGenerator: keyGenerator,
+					Config:       groupingConfig,
+					Logger:       appLogger,
+					Metrics:      nil, // TODO: Add BusinessMetrics accessor
+				})
+				if err != nil {
+					slog.Error("Failed to create group manager", "error", err)
+				} else {
+					slog.Info("✅ Alert Group Manager initialized")
+					slog.Info("    Group Manager ready", "groups", 0) // groupManager used
+
+					// TN-124: Create Timer Manager
+					// Note: DefaultTimerManager expects *DefaultGroupManager, but we have interface
+					// Store as interface, timer creation will work without full integration for now
+					slog.Info("⚠️  Timer Manager initialization skipped (requires full TN-123 integration)")
+					slog.Info("    Timer functionality available via AlertGroupManager interface")
+					slog.Info("    Full timer support pending main.go refactoring")
+
+					// Prevent unused variable warning
+					_ = groupManager
+				}
+			}
+		} else {
+			slog.Info("Grouping config not found, grouping disabled", "path", groupingConfigPath)
+		}
+	}
+
 	// Initialize filter engine and publisher
 	filterEngine := services.NewSimpleFilterEngine(appLogger)
 	publisher := services.NewSimplePublisher(appLogger)
@@ -536,6 +601,16 @@ func main() {
 	defer cancel()
 
 	// Graceful shutdown
+	// TN-124: Shutdown timer manager first (if initialized)
+	if timerManager != nil {
+		slog.Info("Shutting down timer manager...")
+		if err := timerManager.Shutdown(ctx); err != nil {
+			slog.Error("Timer manager shutdown error", "error", err)
+		} else {
+			slog.Info("✅ Timer manager stopped")
+		}
+	}
+
 	if err := server.Shutdown(ctx); err != nil {
 		slog.Error("Server forced to shutdown", "error", err)
 		os.Exit(1)
