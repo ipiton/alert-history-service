@@ -520,6 +520,10 @@ type DefaultGroupManagerConfig struct {
 	// Config is the grouping configuration (required, from TN-121)
 	Config *GroupingConfig
 
+	// Storage persists alert groups with distributed state (required, from TN-125)
+	// Typically StorageManager with Redis primary + Memory fallback
+	Storage GroupStorage
+
 	// TimerManager manages group timers (optional, from TN-124)
 	// If nil, timer functionality is disabled (backwards compatible)
 	TimerManager GroupTimerManager

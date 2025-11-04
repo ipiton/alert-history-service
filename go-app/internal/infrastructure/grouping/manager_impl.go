@@ -25,14 +25,17 @@ import (
 //
 // Memory: ~5KB per group (target: <10KB baseline, <5KB at 150%)
 type DefaultGroupManager struct {
-	// groups stores all active alert groups: map[GroupKey]*AlertGroup
-	groups map[GroupKey]*AlertGroup
+	// storage persists alert groups (Redis primary + Memory fallback) (TN-125)
+	// Replaces in-memory groups map for distributed state management
+	storage GroupStorage
 
 	// fingerprintIndex is a reverse index for fast lookup: map[fingerprint]GroupKey
 	// 150% Enhancement: Enables O(1) lookup of group by alert fingerprint
+	// NOTE: This remains in-memory for performance. Groups are in storage.
 	fingerprintIndex map[string]GroupKey
 
-	// mu protects concurrent access to groups and fingerprintIndex
+	// mu protects concurrent access to fingerprintIndex
+	// NOTE: Groups are protected by storage's internal locking
 	mu sync.RWMutex
 
 	// keyGenerator generates group keys from alert labels (from TN-122)
@@ -77,7 +80,7 @@ type groupStats struct {
 //	    Logger:       slog.Default(),
 //	    Metrics:      businessMetrics,
 //	})
-func NewDefaultGroupManager(cfg DefaultGroupManagerConfig) (*DefaultGroupManager, error) {
+func NewDefaultGroupManager(ctx context.Context, cfg DefaultGroupManagerConfig) (*DefaultGroupManager, error) {
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -88,8 +91,13 @@ func NewDefaultGroupManager(cfg DefaultGroupManagerConfig) (*DefaultGroupManager
 		cfg.Logger = slog.Default()
 	}
 
+	// Storage is required for distributed state (TN-125)
+	if cfg.Storage == nil {
+		return nil, fmt.Errorf("storage cannot be nil (TN-125 requirement)")
+	}
+
 	mgr := &DefaultGroupManager{
-		groups:           make(map[GroupKey]*AlertGroup),
+		storage:          cfg.Storage,
 		fingerprintIndex: make(map[string]GroupKey),
 		keyGenerator:     cfg.KeyGenerator,
 		config:           cfg.Config,
@@ -102,6 +110,11 @@ func NewDefaultGroupManager(cfg DefaultGroupManagerConfig) (*DefaultGroupManager
 	// Register timer callbacks if timer manager is configured (TN-124)
 	if err := mgr.registerTimerCallbacks(); err != nil {
 		return nil, fmt.Errorf("register timer callbacks: %w", err)
+	}
+
+	// Restore groups from storage on startup (TN-125)
+	if err := mgr.restoreGroupsFromStorage(ctx); err != nil {
+		return nil, fmt.Errorf("restore groups from storage: %w", err)
 	}
 
 	return mgr, nil
