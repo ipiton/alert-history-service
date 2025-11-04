@@ -190,7 +190,7 @@ func (m *DefaultGroupManager) AddAlertToGroup(
 	m.mu.Unlock()
 
 	// Update group state
-	m.updateGroupState(group)
+	m.updateGroupStateUnsafe(group)
 
 	// Persist to storage (TN-125)
 	if storeErr := m.storage.Store(ctx, group); storeErr != nil {
@@ -241,10 +241,10 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Find group
-	group, exists := m.groups[groupKey]
-	if !exists {
-		return false, &GroupNotFoundError{Key: groupKey}
+	// Load group from storage (TN-125)
+	group, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
+		return false, err
 	}
 
 	// Remove alert from group
@@ -259,11 +259,17 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 	}
 
 	// Remove from fingerprint index
+	m.mu.Lock()
 	delete(m.fingerprintIndex, fingerprint)
+	m.mu.Unlock()
 
 	// If group is empty - delete group
 	if groupSize == 0 {
-		delete(m.groups, groupKey)
+		if delErr := m.storage.Delete(ctx, groupKey); delErr != nil {
+			m.logger.Error("failed to delete empty group from storage",
+				"group_key", groupKey,
+				"error", delErr)
+		}
 
 		m.logger.Info("deleted empty alert group",
 			"group_key", groupKey)
@@ -278,6 +284,13 @@ func (m *DefaultGroupManager) RemoveAlertFromGroup(
 	} else {
 		// Update group state
 		m.updateGroupStateUnsafe(group)
+
+		// Persist updated group (TN-125)
+		if storeErr := m.storage.Store(ctx, group); storeErr != nil {
+			m.logger.Error("failed to persist group after alert removal",
+				"group_key", groupKey,
+				"error", storeErr)
+		}
 	}
 
 	// Update stats
@@ -311,17 +324,22 @@ func (m *DefaultGroupManager) UpdateGroupState(
 	default:
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Find group
-	group, exists := m.groups[groupKey]
-	if !exists {
-		return nil, &GroupNotFoundError{Key: groupKey}
+	// Load group from storage (TN-125)
+	group, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update state
 	m.updateGroupStateUnsafe(group)
+
+	// Persist updated group (TN-125)
+	if storeErr := m.storage.Store(ctx, group); storeErr != nil {
+		m.logger.Error("failed to persist group after state update",
+			"group_key", groupKey,
+			"error", storeErr)
+		return nil, fmt.Errorf("store group: %w", storeErr)
+	}
 
 	// Update stats
 	m.stats.mu.Lock()
@@ -351,20 +369,26 @@ func (m *DefaultGroupManager) CleanupExpiredGroups(
 	default:
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Load all groups from storage (TN-125)
+	allGroups, err := m.storage.LoadAll(ctx)
+	if err != nil {
+		m.logger.Error("failed to load groups for cleanup",
+			"error", err)
+		return 0, fmt.Errorf("load groups: %w", err)
+	}
 
 	// Find expired groups
 	expiredKeys := make([]GroupKey, 0)
-	for key, group := range m.groups {
+	for key, group := range allGroups {
 		if group.IsExpired(maxAge) {
-			expiredKeys = append(expiredKeys, key)
+			expiredKeys = append(expiredKeys, GroupKey(key))
 		}
 	}
 
 	// Delete expired groups
+	m.mu.Lock()
 	for _, key := range expiredKeys {
-		group := m.groups[key]
+		group := allGroups[string(key)]
 
 		// Remove all fingerprints from index
 		group.mu.RLock()
@@ -373,9 +397,14 @@ func (m *DefaultGroupManager) CleanupExpiredGroups(
 		}
 		group.mu.RUnlock()
 
-		// Delete group
-		delete(m.groups, key)
+		// Delete from storage (TN-125)
+		if delErr := m.storage.Delete(ctx, key); delErr != nil {
+			m.logger.Error("failed to delete expired group from storage",
+				"group_key", key,
+				"error", delErr)
+		}
 	}
+	m.mu.Unlock()
 
 	deletedCount := len(expiredKeys)
 
@@ -412,12 +441,10 @@ func (m *DefaultGroupManager) GetGroup(
 	default:
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	group, exists := m.groups[groupKey]
-	if !exists {
-		return nil, &GroupNotFoundError{Key: groupKey}
+	// Load from storage (TN-125)
+	group, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
+		return nil, err
 	}
 
 	// Return shallow copy (150% enhancement: prevent external mutation)
@@ -436,11 +463,14 @@ func (m *DefaultGroupManager) ListGroups(
 	default:
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Load all groups from storage (TN-125)
+	allGroups, err := m.storage.LoadAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load groups: %w", err)
+	}
 
 	// Pre-allocate result slice (150% optimization)
-	result := make([]*AlertGroup, 0, len(m.groups))
+	result := make([]*AlertGroup, 0, len(allGroups))
 
 	// Apply filters and collect matching groups
 	offset := 0
@@ -449,7 +479,7 @@ func (m *DefaultGroupManager) ListGroups(
 		limit = filters.Limit
 	}
 
-	for _, group := range m.groups {
+	for _, group := range allGroups {
 		// Check if group matches filters
 		if filters != nil && !filters.Matches(group) {
 			continue
@@ -496,14 +526,15 @@ func (m *DefaultGroupManager) GetGroupByFingerprint(
 		return "", nil, &GroupNotFoundError{Key: GroupKey(fmt.Sprintf("fingerprint=%s", fingerprint))}
 	}
 
-	// Get group
-	group, exists := m.groups[groupKey]
-	if !exists {
+	// Load group from storage (TN-125)
+	group, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
 		// Index inconsistency (should not happen)
 		m.logger.Error("fingerprint index inconsistency",
 			"fingerprint", fingerprint,
-			"group_key", groupKey)
-		return "", nil, &GroupNotFoundError{Key: groupKey}
+			"group_key", groupKey,
+			"error", err)
+		return "", nil, err
 	}
 
 	return groupKey, group.Clone(), nil
@@ -520,11 +551,14 @@ func (m *DefaultGroupManager) GetMetrics(ctx context.Context) (*GroupMetrics, er
 	default:
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Load all groups from storage (TN-125)
+	allGroups, err := m.storage.LoadAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load groups: %w", err)
+	}
 
 	// Collect metrics
-	alertsPerGroup := make(map[string]int, len(m.groups))
+	alertsPerGroup := make(map[string]int, len(allGroups))
 	sizeDistribution := map[string]int{
 		"1-10":     0,
 		"11-50":    0,
@@ -534,7 +568,7 @@ func (m *DefaultGroupManager) GetMetrics(ctx context.Context) (*GroupMetrics, er
 		"1000+":    0,
 	}
 
-	for key, group := range m.groups {
+	for key, group := range allGroups {
 		size := group.Size()
 		alertsPerGroup[string(key)] = size
 
@@ -565,7 +599,7 @@ func (m *DefaultGroupManager) GetMetrics(ctx context.Context) (*GroupMetrics, er
 	m.stats.mu.RUnlock()
 
 	return &GroupMetrics{
-		ActiveGroups:     len(m.groups),
+		ActiveGroups:     len(allGroups),
 		AlertsPerGroup:   alertsPerGroup,
 		SizeDistribution: sizeDistribution,
 		Operations:       operations,
@@ -584,15 +618,18 @@ func (m *DefaultGroupManager) GetStats(ctx context.Context) (*GroupStats, error)
 	default:
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Load all groups from storage (TN-125)
+	allGroups, err := m.storage.LoadAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load groups: %w", err)
+	}
 
 	// Calculate totals
 	totalAlerts := 0
 	firingAlerts := 0
 	resolvedAlerts := 0
 
-	for _, group := range m.groups {
+	for _, group := range allGroups {
 		group.mu.RLock()
 		totalAlerts += len(group.Alerts)
 		firingAlerts += group.Metadata.FiringCount
@@ -602,7 +639,7 @@ func (m *DefaultGroupManager) GetStats(ctx context.Context) (*GroupStats, error)
 
 	// Estimate memory usage (approximate)
 	// ~5KB per group: struct overhead + alerts map + metadata
-	estimatedMemory := int64(len(m.groups) * 5 * 1024)
+	estimatedMemory := int64(len(allGroups) * 5 * 1024)
 
 	// Get operation stats
 	m.stats.mu.RLock()
@@ -612,7 +649,7 @@ func (m *DefaultGroupManager) GetStats(ctx context.Context) (*GroupStats, error)
 		TotalCleanups:        m.stats.totalCleanups,
 		TotalUpdates:         m.stats.totalUpdates,
 		LastCleanupTime:      m.stats.lastCleanupTime,
-		ActiveGroups:         len(m.groups),
+		ActiveGroups:         len(allGroups),
 		TotalAlerts:          totalAlerts,
 		FiringAlerts:         firingAlerts,
 		ResolvedAlerts:       resolvedAlerts,
@@ -792,13 +829,17 @@ func (m *DefaultGroupManager) onGroupIntervalExpired(ctx context.Context, groupK
 	// TODO: Trigger notification here (will be implemented in TN-125)
 	// For now, just restart the group_interval timer if group still has alerts
 
-	// Check if group still exists and has alerts
-	m.mu.RLock()
-	currentGroup, exists := m.groups[groupKey]
-	m.mu.RUnlock()
-
-	if !exists || len(currentGroup.Alerts) == 0 {
+	// Check if group still exists and has alerts (TN-125: load from storage)
+	currentGroup, err := m.storage.Load(ctx, groupKey)
+	if err != nil {
 		m.logger.Debug("group no longer exists or is empty, not restarting timer",
+			"group_key", groupKey,
+			"error", err)
+		return nil
+	}
+
+	if len(currentGroup.Alerts) == 0 {
+		m.logger.Debug("group is empty, not restarting timer",
 			"group_key", groupKey)
 		return nil
 	}
