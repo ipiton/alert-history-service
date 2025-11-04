@@ -71,6 +71,14 @@ type BusinessMetrics struct {
 	StorageOperationsTotal    *prometheus.CounterVec    // Total storage operations (store/load/delete)
 	StorageDurationSeconds    *prometheus.HistogramVec  // Duration of storage operations
 	StorageHealthGauge        *prometheus.GaugeVec      // Storage health status by backend (1=healthy, 0=unhealthy)
+
+	// Inhibition subsystem - alert inhibition metrics (TN-126-130, Module 2)
+	InhibitionChecksTotal       *prometheus.CounterVec   // Total inhibition checks by result (inhibited/allowed)
+	InhibitionMatchesTotal      *prometheus.CounterVec   // Total inhibition matches by rule name
+	InhibitionRulesLoaded       prometheus.Gauge         // Number of currently loaded inhibition rules
+	InhibitionDurationSeconds   *prometheus.HistogramVec // Duration of inhibition check operations
+	InhibitionCacheHitsTotal    *prometheus.CounterVec   // Cache hits for active alerts (L1/L2)
+	InhibitionErrorsTotal       *prometheus.CounterVec   // Inhibition errors by type (cache_error/parse_error)
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -427,6 +435,67 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 				Help:      "Storage health status by backend (1=healthy, 0=unhealthy)",
 			},
 			[]string{"backend"}, // backend: redis|memory
+		),
+
+		// Inhibition subsystem metrics (TN-126-130, Module 2)
+		InhibitionChecksTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "checks_total",
+				Help:      "Total number of inhibition checks performed",
+			},
+			[]string{"result"}, // result: inhibited|allowed
+		),
+
+		InhibitionMatchesTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "matches_total",
+				Help:      "Total number of inhibition matches by rule",
+			},
+			[]string{"rule_name"}, // rule_name: name of the matching rule
+		),
+
+		InhibitionRulesLoaded: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "rules_loaded",
+				Help:      "Number of currently loaded inhibition rules",
+			},
+		),
+
+		InhibitionDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "duration_seconds",
+				Help:      "Duration of inhibition check operations",
+				Buckets:   []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1}, // 0.1ms to 100ms
+			},
+			[]string{"operation"}, // operation: check|find_inhibitors|match_rule
+		),
+
+		InhibitionCacheHitsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "cache_hits_total",
+				Help:      "Cache hits for active alerts during inhibition checks",
+			},
+			[]string{"cache_level"}, // cache_level: L1|L2
+		),
+
+		InhibitionErrorsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "errors_total",
+				Help:      "Inhibition errors by type",
+			},
+			[]string{"error_type"}, // error_type: cache_error|parse_error|validation_error
 		),
 	}
 }
