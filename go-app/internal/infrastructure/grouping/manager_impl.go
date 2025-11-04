@@ -382,12 +382,12 @@ func (m *DefaultGroupManager) CleanupExpiredGroups(
 	defer m.mu.Unlock()
 
 	deletedCount := 0
-	for groupKeyStr, group := range allGroups {
+	for _, group := range allGroups {
 		if !group.IsExpired(maxAge) {
 			continue
 		}
 
-		groupKey := GroupKey(groupKeyStr)
+		groupKey := group.Key
 
 		// Remove all fingerprints from index
 		group.mu.RLock()
@@ -567,9 +567,9 @@ func (m *DefaultGroupManager) GetMetrics(ctx context.Context) (*GroupMetrics, er
 		"1000+":    0,
 	}
 
-	for groupKey, group := range allGroups {
+	for _, group := range allGroups {
 		size := group.Size()
-		alertsPerGroup[groupKey] = size
+		alertsPerGroup[string(group.Key)] = size
 
 		// Calculate size distribution
 		switch {
