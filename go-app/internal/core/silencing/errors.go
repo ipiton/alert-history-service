@@ -54,3 +54,26 @@ var (
 	// This error is returned when Type is =~ or !~ and the Value is not a valid regex pattern.
 	ErrMatcherInvalidRegex = errors.New("invalid regex pattern in matcher")
 )
+
+// Matcher engine errors
+
+var (
+	// ErrInvalidAlert indicates that the alert is invalid for matching.
+	// This error is returned when alert.Labels is nil, which is required for matching.
+	ErrInvalidAlert = errors.New("invalid alert: labels cannot be nil")
+
+	// ErrInvalidSilence indicates that the silence is invalid for matching.
+	// This error is returned when silence is nil or has zero matchers.
+	// At least one matcher is required to define which alerts to silence.
+	ErrInvalidSilence = errors.New("invalid silence: cannot be nil or have zero matchers")
+
+	// ErrRegexCompilationFailed indicates that a regex pattern failed to compile.
+	// This error wraps the underlying compilation error with context about the pattern.
+	// Example: "regex pattern compilation failed: pattern=\"[invalid\": missing closing ]"
+	ErrRegexCompilationFailed = errors.New("regex pattern compilation failed")
+
+	// ErrContextCancelled indicates that the matching operation was cancelled.
+	// This error is returned when the context is cancelled during matching,
+	// typically during long-running MatchesAny operations with many silences.
+	ErrContextCancelled = errors.New("matching cancelled: context done")
+)
