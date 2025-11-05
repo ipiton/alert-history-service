@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
 // InhibitionState represents the state of an inhibition relationship between alerts.
@@ -76,7 +77,8 @@ type DefaultStateManager struct {
 	// Logger
 	logger *slog.Logger
 
-	// Metrics would go here (already added to pkg/metrics/business.go)
+	// Metrics for observability (TN-129)
+	metrics *metrics.BusinessMetrics
 }
 
 // NewDefaultStateManager creates a new DefaultStateManager instance.
@@ -84,10 +86,11 @@ type DefaultStateManager struct {
 // Parameters:
 //   - redisStore: Optional Redis cache for persistence. If nil, only in-memory storage is used.
 //   - logger: Logger instance for debug/error logging.
+//   - metrics: BusinessMetrics instance for observability. If nil, metrics are not recorded.
 //
 // Returns:
 //   - *DefaultStateManager: Initialized state manager.
-func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger) *DefaultStateManager {
+func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger, metrics *metrics.BusinessMetrics) *DefaultStateManager {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -98,11 +101,14 @@ func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger) *Defaul
 		redisPrefix: "inhibition:state:",
 		redisTTL:    24 * time.Hour,
 		logger:      logger,
+		metrics:     metrics,
 	}
 }
 
 // RecordInhibition records a new inhibition relationship in both memory and Redis.
 func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *InhibitionState) error {
+	start := time.Now()
+
 	if state == nil {
 		return fmt.Errorf("state cannot be nil")
 	}
@@ -131,8 +137,21 @@ func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *Inhi
 				"error", err,
 				"target", state.TargetFingerprint,
 			)
+			// Record Redis error metric
+			if sm.metrics != nil {
+				sm.metrics.RecordInhibitionStateRedisError("persist")
+			}
 			// Non-critical: in-memory state is still valid
 		}
+	}
+
+	// Record metrics
+	duration := time.Since(start)
+	if sm.metrics != nil {
+		sm.metrics.RecordInhibitionStateRecord(state.RuleName, duration)
+		// Update active gauge
+		count := sm.countActiveStates()
+		sm.metrics.SetInhibitionStateActive(count)
 	}
 
 	return nil
@@ -140,6 +159,8 @@ func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *Inhi
 
 // RemoveInhibition removes an inhibition relationship from both memory and Redis.
 func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFingerprint string) error {
+	start := time.Now()
+
 	if targetFingerprint == "" {
 		return fmt.Errorf("target fingerprint cannot be empty")
 	}
@@ -159,8 +180,21 @@ func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFinge
 				"error", err,
 				"target", targetFingerprint,
 			)
+			// Record Redis error metric
+			if sm.metrics != nil {
+				sm.metrics.RecordInhibitionStateRedisError("delete")
+			}
 			// Non-critical: in-memory state is already removed
 		}
+	}
+
+	// Record metrics
+	duration := time.Since(start)
+	if sm.metrics != nil {
+		sm.metrics.RecordInhibitionStateRemoval("manual", duration)
+		// Update active gauge
+		count := sm.countActiveStates()
+		sm.metrics.SetInhibitionStateActive(count)
 	}
 
 	return nil
@@ -168,6 +202,7 @@ func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFinge
 
 // GetActiveInhibitions returns all currently active inhibition relationships.
 func (sm *DefaultStateManager) GetActiveInhibitions(ctx context.Context) ([]*InhibitionState, error) {
+	start := time.Now()
 	states := make([]*InhibitionState, 0)
 
 	sm.states.Range(func(key, value interface{}) bool {
@@ -182,6 +217,12 @@ func (sm *DefaultStateManager) GetActiveInhibitions(ctx context.Context) ([]*Inh
 		}
 		return true
 	})
+
+	// Record metrics
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("get", duration)
+	}
 
 	return states, nil
 }
@@ -207,12 +248,19 @@ func (sm *DefaultStateManager) GetInhibitedAlerts(ctx context.Context) ([]string
 
 // IsInhibited checks if a specific alert is currently inhibited.
 func (sm *DefaultStateManager) IsInhibited(ctx context.Context, targetFingerprint string) (bool, error) {
+	start := time.Now()
+
 	if targetFingerprint == "" {
 		return false, fmt.Errorf("target fingerprint cannot be empty")
 	}
 
 	value, ok := sm.states.Load(targetFingerprint)
 	if !ok {
+		// Record metrics for fast path (not found)
+		if sm.metrics != nil {
+			duration := time.Since(start)
+			sm.metrics.RecordInhibitionStateOperation("check", duration)
+		}
 		return false, nil
 	}
 
@@ -225,7 +273,19 @@ func (sm *DefaultStateManager) IsInhibited(ctx context.Context, targetFingerprin
 	if state.ExpiresAt != nil && time.Now().After(*state.ExpiresAt) {
 		// Clean up expired state
 		sm.states.Delete(targetFingerprint)
+
+		// Record metrics
+		if sm.metrics != nil {
+			duration := time.Since(start)
+			sm.metrics.RecordInhibitionStateOperation("check", duration)
+		}
 		return false, nil
+	}
+
+	// Record metrics for successful check
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("check", duration)
 	}
 
 	return true, nil
@@ -288,6 +348,10 @@ func (sm *DefaultStateManager) loadFromRedis(ctx context.Context, targetFingerpr
 
 	var data string
 	if err := sm.redisStore.Get(ctx, key, &data); err != nil {
+		// Record Redis error metric
+		if sm.metrics != nil {
+			sm.metrics.RecordInhibitionStateRedisError("load")
+		}
 		return nil, fmt.Errorf("failed to get Redis key: %w", err)
 	}
 
@@ -297,4 +361,23 @@ func (sm *DefaultStateManager) loadFromRedis(ctx context.Context, targetFingerpr
 	}
 
 	return &state, nil
+}
+
+// countActiveStates counts the number of currently active (non-expired) inhibition states.
+// This is a helper method used for updating the InhibitionStateActiveGauge metric.
+func (sm *DefaultStateManager) countActiveStates() int {
+	count := 0
+	now := time.Now()
+
+	sm.states.Range(func(key, value interface{}) bool {
+		if state, ok := value.(*InhibitionState); ok {
+			// Only count non-expired states
+			if state.ExpiresAt == nil || now.Before(*state.ExpiresAt) {
+				count++
+			}
+		}
+		return true
+	})
+
+	return count
 }
