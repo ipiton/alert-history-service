@@ -222,7 +222,7 @@ func TestGetSilenceByID_InvalidUUID(t *testing.T) {
 	// Create repository with nil pool (will panic on actual query, but we test validation first)
 	repo := &PostgresSilenceRepository{
 		logger:  slog.Default(),
-		metrics: NewSilenceMetrics(),
+		metrics: nil,
 	}
 
 	ctx := context.Background()
@@ -371,7 +371,7 @@ func TestDeleteSilence_InvalidUUID(t *testing.T) {
 	// This test can run without database
 	repo := &PostgresSilenceRepository{
 		logger:  slog.Default(),
-		metrics: NewSilenceMetrics(),
+		metrics: nil,
 	}
 
 	ctx := context.Background()
