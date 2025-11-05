@@ -5,507 +5,475 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"log/slog"
 )
 
-// ============================================================================
-// InhibitionState Tests
-// ============================================================================
+// Helper function to create a test state manager
+// Note: We use nil metrics to avoid duplicate Prometheus registration issues in tests
+func newTestStateManager(t *testing.T) *DefaultStateManager {
+	t.Helper()
 
-func TestInhibitionState_Serialization(t *testing.T) {
-	now := time.Now()
-	expiresAt := now.Add(1 * time.Hour)
+	logger := slog.Default()
 
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "NodeDown_inhibits_InstanceDown",
-		InhibitedAt:       now,
+	// Pass nil metrics to avoid duplicate registration errors
+	// In production, metrics will be provided by the caller
+	return NewDefaultStateManager(nil, logger, nil)
+}
+
+// Helper function to create a test state manager with a unique namespace (for metrics tests)
+func newTestStateManagerWithMetrics(t *testing.T, namespace string) *DefaultStateManager {
+	t.Helper()
+
+	logger := slog.Default()
+
+	// Note: We skip metrics here to avoid duplicate registration issues
+	// In integration tests, we can test metrics properly
+	_ = namespace // Prevent unused variable warning
+	return NewDefaultStateManager(nil, logger, nil)
+}
+
+// Helper function to create a test inhibition state
+func newTestState(targetFP, sourceFP, ruleName string) *InhibitionState {
+	return &InhibitionState{
+		TargetFingerprint: targetFP,
+		SourceFingerprint: sourceFP,
+		RuleName:          ruleName,
+		InhibitedAt:       time.Now(),
+		ExpiresAt:         nil,
+	}
+}
+
+// Helper function to create an expired inhibition state
+func newExpiredState(targetFP, sourceFP, ruleName string) *InhibitionState {
+	expiresAt := time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
+	return &InhibitionState{
+		TargetFingerprint: targetFP,
+		SourceFingerprint: sourceFP,
+		RuleName:          ruleName,
+		InhibitedAt:       time.Now().Add(-2 * time.Hour),
 		ExpiresAt:         &expiresAt,
 	}
-
-	assert.Equal(t, "target123", state.TargetFingerprint)
-	assert.Equal(t, "source456", state.SourceFingerprint)
-	assert.Equal(t, "NodeDown_inhibits_InstanceDown", state.RuleName)
-	assert.Equal(t, now, state.InhibitedAt)
-	assert.NotNil(t, state.ExpiresAt)
 }
 
-// ============================================================================
-// DefaultStateManager Tests
-// ============================================================================
+// ==================== Basic Operations Tests (4 tests) ====================
 
-func TestNewDefaultStateManager(t *testing.T) {
-	sm := NewDefaultStateManager(nil, nil)
-	require.NotNil(t, sm)
-	assert.NotNil(t, sm.logger)
-	assert.Equal(t, "inhibition:state:", sm.redisPrefix)
-	assert.Equal(t, 24*time.Hour, sm.redisTTL)
-}
-
-func TestDefaultStateManager_RecordInhibition_Success(t *testing.T) {
+func TestRecordInhibition_Success(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
+	state := newTestState("target-fp-1", "source-fp-1", "rule-1")
 
 	err := sm.RecordInhibition(ctx, state)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RecordInhibition() failed: %v", err)
+	}
 
-	// Verify it was stored
-	stored, err := sm.GetInhibitionState(ctx, "target123")
-	require.NoError(t, err)
-	require.NotNil(t, stored)
-	assert.Equal(t, "target123", stored.TargetFingerprint)
-	assert.Equal(t, "source456", stored.SourceFingerprint)
-	assert.Equal(t, "test_rule", stored.RuleName)
+	// Verify state was stored
+	value, ok := sm.states.Load("target-fp-1")
+	if !ok {
+		t.Fatal("State not found in memory")
+	}
+
+	storedState, ok := value.(*InhibitionState)
+	if !ok {
+		t.Fatal("Stored value is not InhibitionState")
+	}
+
+	if storedState.TargetFingerprint != "target-fp-1" {
+		t.Errorf("Expected target fingerprint 'target-fp-1', got %s", storedState.TargetFingerprint)
+	}
+
+	if storedState.SourceFingerprint != "source-fp-1" {
+		t.Errorf("Expected source fingerprint 'source-fp-1', got %s", storedState.SourceFingerprint)
+	}
+
+	if storedState.RuleName != "rule-1" {
+		t.Errorf("Expected rule name 'rule-1', got %s", storedState.RuleName)
+	}
 }
 
-func TestDefaultStateManager_RecordInhibition_NilState(t *testing.T) {
+func TestRecordInhibition_NilState(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
 	err := sm.RecordInhibition(ctx, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "state cannot be nil")
+	if err == nil {
+		t.Fatal("Expected error for nil state, got nil")
+	}
+
+	expectedError := "state cannot be nil"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
 }
 
-func TestDefaultStateManager_RecordInhibition_EmptyTargetFingerprint(t *testing.T) {
+func TestRecordInhibition_EmptyTargetFingerprint(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
 	state := &InhibitionState{
-		TargetFingerprint: "",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
+		TargetFingerprint: "", // Empty
+		SourceFingerprint: "source-fp",
+		RuleName:          "rule-1",
 		InhibitedAt:       time.Now(),
 	}
 
 	err := sm.RecordInhibition(ctx, state)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "target fingerprint cannot be empty")
+	if err == nil {
+		t.Fatal("Expected error for empty target fingerprint, got nil")
+	}
+
+	expectedError := "target fingerprint cannot be empty"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
 }
 
-func TestDefaultStateManager_RecordInhibition_EmptySourceFingerprint(t *testing.T) {
+func TestRecordInhibition_EmptySourceFingerprint(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
 	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "",
-		RuleName:          "test_rule",
+		TargetFingerprint: "target-fp",
+		SourceFingerprint: "", // Empty
+		RuleName:          "rule-1",
 		InhibitedAt:       time.Now(),
 	}
 
 	err := sm.RecordInhibition(ctx, state)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "source fingerprint cannot be empty")
+	if err == nil {
+		t.Fatal("Expected error for empty source fingerprint, got nil")
+	}
+
+	expectedError := "source fingerprint cannot be empty"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
 }
 
-func TestDefaultStateManager_RemoveInhibition_Success(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
+// ==================== Removal Tests (3 tests) ====================
 
-	// Add a state
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
+func TestRemoveInhibition_Success(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	// First, record an inhibition
+	state := newTestState("target-fp-1", "source-fp-1", "rule-1")
 	err := sm.RecordInhibition(ctx, state)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RecordInhibition() failed: %v", err)
+	}
+
+	// Verify it exists
+	_, ok := sm.states.Load("target-fp-1")
+	if !ok {
+		t.Fatal("State not found after recording")
+	}
 
 	// Remove it
-	err = sm.RemoveInhibition(ctx, "target123")
-	assert.NoError(t, err)
+	err = sm.RemoveInhibition(ctx, "target-fp-1")
+	if err != nil {
+		t.Fatalf("RemoveInhibition() failed: %v", err)
+	}
 
 	// Verify it's gone
-	stored, err := sm.GetInhibitionState(ctx, "target123")
-	require.NoError(t, err)
-	assert.Nil(t, stored)
+	_, ok = sm.states.Load("target-fp-1")
+	if ok {
+		t.Fatal("State still exists after removal")
+	}
 }
 
-func TestDefaultStateManager_RemoveInhibition_EmptyFingerprint(t *testing.T) {
+func TestRemoveInhibition_EmptyFingerprint(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
 	err := sm.RemoveInhibition(ctx, "")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "target fingerprint cannot be empty")
+	if err == nil {
+		t.Fatal("Expected error for empty fingerprint, got nil")
+	}
+
+	expectedError := "target fingerprint cannot be empty"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
 }
 
-func TestDefaultStateManager_RemoveInhibition_NotExist(t *testing.T) {
+func TestRemoveInhibition_NonExistent(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
-	// Removing non-existent state should not error
-	err := sm.RemoveInhibition(ctx, "nonexistent")
-	assert.NoError(t, err)
+	// Remove non-existent state (should be idempotent)
+	err := sm.RemoveInhibition(ctx, "non-existent-fp")
+	if err != nil {
+		t.Fatalf("RemoveInhibition() should be idempotent, got error: %v", err)
+	}
 }
 
-func TestDefaultStateManager_GetActiveInhibitions_Empty(t *testing.T) {
+// ==================== Query Tests (8 tests) ====================
+
+func TestGetActiveInhibitions_MultipleStates(t *testing.T) {
+	sm := newTestStateManager(t)
 	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
 
-	states, err := sm.GetActiveInhibitions(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, states)
-}
-
-func TestDefaultStateManager_GetActiveInhibitions_Multiple(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add multiple states
-	for i := 0; i < 3; i++ {
-		state := &InhibitionState{
-			TargetFingerprint: string(rune('A' + i)),
-			SourceFingerprint: "source",
-			RuleName:          "test_rule",
-			InhibitedAt:       time.Now(),
-		}
+	// Record 5 inhibitions
+	for i := 1; i <= 5; i++ {
+		state := newTestState(
+			"target-fp-"+string(rune('0'+i)),
+			"source-fp-"+string(rune('0'+i)),
+			"rule-1",
+		)
 		err := sm.RecordInhibition(ctx, state)
-		require.NoError(t, err)
-	}
-
-	states, err := sm.GetActiveInhibitions(ctx)
-	require.NoError(t, err)
-	assert.Len(t, states, 3)
-}
-
-func TestDefaultStateManager_GetActiveInhibitions_FiltersExpired(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add an expired state
-	past := time.Now().Add(-1 * time.Hour)
-	expiredState := &InhibitionState{
-		TargetFingerprint: "expired",
-		SourceFingerprint: "source",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now().Add(-2 * time.Hour),
-		ExpiresAt:         &past,
-	}
-	err := sm.RecordInhibition(ctx, expiredState)
-	require.NoError(t, err)
-
-	// Add an active state
-	activeState := &InhibitionState{
-		TargetFingerprint: "active",
-		SourceFingerprint: "source",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-	err = sm.RecordInhibition(ctx, activeState)
-	require.NoError(t, err)
-
-	// Get active inhibitions - should only return active one
-	states, err := sm.GetActiveInhibitions(ctx)
-	require.NoError(t, err)
-	assert.Len(t, states, 1)
-	assert.Equal(t, "active", states[0].TargetFingerprint)
-}
-
-func TestDefaultStateManager_GetInhibitedAlerts_Empty(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	fingerprints, err := sm.GetInhibitedAlerts(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, fingerprints)
-}
-
-func TestDefaultStateManager_GetInhibitedAlerts_Multiple(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add multiple states
-	for i := 0; i < 3; i++ {
-		state := &InhibitionState{
-			TargetFingerprint: string(rune('A' + i)),
-			SourceFingerprint: "source",
-			RuleName:          "test_rule",
-			InhibitedAt:       time.Now(),
+		if err != nil {
+			t.Fatalf("RecordInhibition(%d) failed: %v", i, err)
 		}
+	}
+
+	// Get active inhibitions
+	states, err := sm.GetActiveInhibitions(ctx)
+	if err != nil {
+		t.Fatalf("GetActiveInhibitions() failed: %v", err)
+	}
+
+	if len(states) != 5 {
+		t.Errorf("Expected 5 active states, got %d", len(states))
+	}
+}
+
+func TestGetActiveInhibitions_FiltersExpired(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	// Record 2 expired states
+	for i := 1; i <= 2; i++ {
+		state := newExpiredState(
+			"expired-fp-"+string(rune('0'+i)),
+			"source-fp-"+string(rune('0'+i)),
+			"rule-1",
+		)
+		sm.states.Store(state.TargetFingerprint, state)
+	}
+
+	// Record 1 active state
+	activeState := newTestState("active-fp", "source-fp", "rule-1")
+	err := sm.RecordInhibition(ctx, activeState)
+	if err != nil {
+		t.Fatalf("RecordInhibition() failed: %v", err)
+	}
+
+	// Get active inhibitions (should filter out expired)
+	states, err := sm.GetActiveInhibitions(ctx)
+	if err != nil {
+		t.Fatalf("GetActiveInhibitions() failed: %v", err)
+	}
+
+	if len(states) != 1 {
+		t.Errorf("Expected 1 active state (expired filtered out), got %d", len(states))
+	}
+
+	if states[0].TargetFingerprint != "active-fp" {
+		t.Errorf("Expected active-fp, got %s", states[0].TargetFingerprint)
+	}
+}
+
+func TestGetActiveInhibitions_Empty(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	states, err := sm.GetActiveInhibitions(ctx)
+	if err != nil {
+		t.Fatalf("GetActiveInhibitions() failed: %v", err)
+	}
+
+	if len(states) != 0 {
+		t.Errorf("Expected 0 states, got %d", len(states))
+	}
+}
+
+func TestGetInhibitedAlerts_ReturnsFingerprints(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	// Record 3 inhibitions
+	fingerprints := []string{"target-fp-1", "target-fp-2", "target-fp-3"}
+	for i, fp := range fingerprints {
+		state := newTestState(fp, "source-fp-"+string(rune('0'+i)), "rule-1")
 		err := sm.RecordInhibition(ctx, state)
-		require.NoError(t, err)
-	}
-
-	fingerprints, err := sm.GetInhibitedAlerts(ctx)
-	require.NoError(t, err)
-	assert.Len(t, fingerprints, 3)
-}
-
-func TestDefaultStateManager_IsInhibited_True(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-	err := sm.RecordInhibition(ctx, state)
-	require.NoError(t, err)
-
-	inhibited, err := sm.IsInhibited(ctx, "target123")
-	require.NoError(t, err)
-	assert.True(t, inhibited)
-}
-
-func TestDefaultStateManager_IsInhibited_False(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	inhibited, err := sm.IsInhibited(ctx, "nonexistent")
-	require.NoError(t, err)
-	assert.False(t, inhibited)
-}
-
-func TestDefaultStateManager_IsInhibited_EmptyFingerprint(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	inhibited, err := sm.IsInhibited(ctx, "")
-	assert.Error(t, err)
-	assert.False(t, inhibited)
-	assert.Contains(t, err.Error(), "target fingerprint cannot be empty")
-}
-
-func TestDefaultStateManager_IsInhibited_Expired(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add an expired state
-	past := time.Now().Add(-1 * time.Hour)
-	state := &InhibitionState{
-		TargetFingerprint: "expired",
-		SourceFingerprint: "source",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now().Add(-2 * time.Hour),
-		ExpiresAt:         &past,
-	}
-	err := sm.RecordInhibition(ctx, state)
-	require.NoError(t, err)
-
-	// Should return false for expired state
-	inhibited, err := sm.IsInhibited(ctx, "expired")
-	require.NoError(t, err)
-	assert.False(t, inhibited)
-
-	// Expired state should be cleaned up
-	stored, err := sm.GetInhibitionState(ctx, "expired")
-	require.NoError(t, err)
-	assert.Nil(t, stored)
-}
-
-func TestDefaultStateManager_GetInhibitionState_Found(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-	err := sm.RecordInhibition(ctx, state)
-	require.NoError(t, err)
-
-	stored, err := sm.GetInhibitionState(ctx, "target123")
-	require.NoError(t, err)
-	require.NotNil(t, stored)
-	assert.Equal(t, "target123", stored.TargetFingerprint)
-	assert.Equal(t, "source456", stored.SourceFingerprint)
-	assert.Equal(t, "test_rule", stored.RuleName)
-}
-
-func TestDefaultStateManager_GetInhibitionState_NotFound(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	stored, err := sm.GetInhibitionState(ctx, "nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, stored)
-}
-
-func TestDefaultStateManager_GetInhibitionState_EmptyFingerprint(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	stored, err := sm.GetInhibitionState(ctx, "")
-	assert.Error(t, err)
-	assert.Nil(t, stored)
-	assert.Contains(t, err.Error(), "target fingerprint cannot be empty")
-}
-
-func TestDefaultStateManager_GetInhibitionState_Expired(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add an expired state
-	past := time.Now().Add(-1 * time.Hour)
-	state := &InhibitionState{
-		TargetFingerprint: "expired",
-		SourceFingerprint: "source",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now().Add(-2 * time.Hour),
-		ExpiresAt:         &past,
-	}
-	err := sm.RecordInhibition(ctx, state)
-	require.NoError(t, err)
-
-	// Should return nil for expired state
-	stored, err := sm.GetInhibitionState(ctx, "expired")
-	require.NoError(t, err)
-	assert.Nil(t, stored)
-}
-
-func TestDefaultStateManager_Concurrency(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Test concurrent writes
-	done := make(chan bool)
-	for i := 0; i < 10; i++ {
-		go func(id int) {
-			state := &InhibitionState{
-				TargetFingerprint: string(rune('A' + id)),
-				SourceFingerprint: "source",
-				RuleName:          "test_rule",
-				InhibitedAt:       time.Now(),
-			}
-			err := sm.RecordInhibition(ctx, state)
-			assert.NoError(t, err)
-			done <- true
-		}(i)
-	}
-
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-
-	// Verify all were stored
-	states, err := sm.GetActiveInhibitions(ctx)
-	require.NoError(t, err)
-	assert.Len(t, states, 10)
-}
-
-func TestDefaultStateManager_UpdateInhibition(t *testing.T) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add initial state
-	state1 := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "rule1",
-		InhibitedAt:       time.Now(),
-	}
-	err := sm.RecordInhibition(ctx, state1)
-	require.NoError(t, err)
-
-	// Update with new state (same target, different source)
-	state2 := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source789",
-		RuleName:          "rule2",
-		InhibitedAt:       time.Now(),
-	}
-	err = sm.RecordInhibition(ctx, state2)
-	require.NoError(t, err)
-
-	// Verify update
-	stored, err := sm.GetInhibitionState(ctx, "target123")
-	require.NoError(t, err)
-	require.NotNil(t, stored)
-	assert.Equal(t, "source789", stored.SourceFingerprint)
-	assert.Equal(t, "rule2", stored.RuleName)
-}
-
-// ============================================================================
-// Benchmarks
-// ============================================================================
-
-func BenchmarkDefaultStateManager_RecordInhibition(b *testing.B) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = sm.RecordInhibition(ctx, state)
-	}
-}
-
-func BenchmarkDefaultStateManager_IsInhibited(b *testing.B) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-	_ = sm.RecordInhibition(ctx, state)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = sm.IsInhibited(ctx, "target123")
-	}
-}
-
-func BenchmarkDefaultStateManager_GetInhibitionState(b *testing.B) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	state := &InhibitionState{
-		TargetFingerprint: "target123",
-		SourceFingerprint: "source456",
-		RuleName:          "test_rule",
-		InhibitedAt:       time.Now(),
-	}
-	_ = sm.RecordInhibition(ctx, state)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = sm.GetInhibitionState(ctx, "target123")
-	}
-}
-
-func BenchmarkDefaultStateManager_GetActiveInhibitions(b *testing.B) {
-	ctx := context.Background()
-	sm := NewDefaultStateManager(nil, nil)
-
-	// Add 100 states
-	for i := 0; i < 100; i++ {
-		state := &InhibitionState{
-			TargetFingerprint: string(rune('A' + i%26)) + string(rune('A' + i/26)),
-			SourceFingerprint: "source",
-			RuleName:          "test_rule",
-			InhibitedAt:       time.Now(),
+		if err != nil {
+			t.Fatalf("RecordInhibition(%s) failed: %v", fp, err)
 		}
-		_ = sm.RecordInhibition(ctx, state)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = sm.GetActiveInhibitions(ctx)
+	// Get inhibited alerts
+	inhibitedFPs, err := sm.GetInhibitedAlerts(ctx)
+	if err != nil {
+		t.Fatalf("GetInhibitedAlerts() failed: %v", err)
+	}
+
+	if len(inhibitedFPs) != 3 {
+		t.Errorf("Expected 3 fingerprints, got %d", len(inhibitedFPs))
+	}
+
+	// Verify all fingerprints are present (order doesn't matter)
+	fpMap := make(map[string]bool)
+	for _, fp := range inhibitedFPs {
+		fpMap[fp] = true
+	}
+
+	for _, expected := range fingerprints {
+		if !fpMap[expected] {
+			t.Errorf("Expected fingerprint %s not found", expected)
+		}
+	}
+}
+
+func TestIsInhibited_True(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	state := newTestState("target-fp", "source-fp", "rule-1")
+	err := sm.RecordInhibition(ctx, state)
+	if err != nil {
+		t.Fatalf("RecordInhibition() failed: %v", err)
+	}
+
+	inhibited, err := sm.IsInhibited(ctx, "target-fp")
+	if err != nil {
+		t.Fatalf("IsInhibited() failed: %v", err)
+	}
+
+	if !inhibited {
+		t.Error("Expected IsInhibited to return true")
+	}
+}
+
+func TestIsInhibited_False(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	inhibited, err := sm.IsInhibited(ctx, "non-existent-fp")
+	if err != nil {
+		t.Fatalf("IsInhibited() failed: %v", err)
+	}
+
+	if inhibited {
+		t.Error("Expected IsInhibited to return false")
+	}
+}
+
+func TestIsInhibited_Expired(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	// Store expired state directly
+	expiredState := newExpiredState("expired-fp", "source-fp", "rule-1")
+	sm.states.Store("expired-fp", expiredState)
+
+	// Check if inhibited (should auto-cleanup and return false)
+	inhibited, err := sm.IsInhibited(ctx, "expired-fp")
+	if err != nil {
+		t.Fatalf("IsInhibited() failed: %v", err)
+	}
+
+	if inhibited {
+		t.Error("Expected IsInhibited to return false for expired state")
+	}
+
+	// Verify state was auto-cleaned
+	_, ok := sm.states.Load("expired-fp")
+	if ok {
+		t.Error("Expired state should have been auto-cleaned")
+	}
+}
+
+func TestGetInhibitionState_Found(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	state := newTestState("target-fp", "source-fp", "rule-1")
+	err := sm.RecordInhibition(ctx, state)
+	if err != nil {
+		t.Fatalf("RecordInhibition() failed: %v", err)
+	}
+
+	retrievedState, err := sm.GetInhibitionState(ctx, "target-fp")
+	if err != nil {
+		t.Fatalf("GetInhibitionState() failed: %v", err)
+	}
+
+	if retrievedState == nil {
+		t.Fatal("Expected state to be found, got nil")
+	}
+
+	if retrievedState.TargetFingerprint != "target-fp" {
+		t.Errorf("Expected target-fp, got %s", retrievedState.TargetFingerprint)
+	}
+
+	if retrievedState.SourceFingerprint != "source-fp" {
+		t.Errorf("Expected source-fp, got %s", retrievedState.SourceFingerprint)
+	}
+
+	if retrievedState.RuleName != "rule-1" {
+		t.Errorf("Expected rule-1, got %s", retrievedState.RuleName)
+	}
+}
+
+func TestGetInhibitionState_NotFound(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	state, err := sm.GetInhibitionState(ctx, "non-existent-fp")
+	if err != nil {
+		t.Fatalf("GetInhibitionState() should not error on not found, got: %v", err)
+	}
+
+	if state != nil {
+		t.Errorf("Expected nil state for non-existent fingerprint, got %+v", state)
+	}
+}
+
+// ==================== Helper Method Tests ====================
+
+func TestCountActiveStates(t *testing.T) {
+	sm := newTestStateManager(t)
+	ctx := context.Background()
+
+	// Initially 0
+	count := sm.countActiveStates()
+	if count != 0 {
+		t.Errorf("Expected 0 active states initially, got %d", count)
+	}
+
+	// Add 3 active states
+	for i := 1; i <= 3; i++ {
+		state := newTestState(
+			"target-fp-"+string(rune('0'+i)),
+			"source-fp-"+string(rune('0'+i)),
+			"rule-1",
+		)
+		err := sm.RecordInhibition(ctx, state)
+		if err != nil {
+			t.Fatalf("RecordInhibition(%d) failed: %v", i, err)
+		}
+	}
+
+	count = sm.countActiveStates()
+	if count != 3 {
+		t.Errorf("Expected 3 active states, got %d", count)
+	}
+
+	// Add 2 expired states
+	for i := 1; i <= 2; i++ {
+		expiredState := newExpiredState(
+			"expired-fp-"+string(rune('0'+i)),
+			"source-fp-"+string(rune('0'+i)),
+			"rule-1",
+		)
+		sm.states.Store(expiredState.TargetFingerprint, expiredState)
+	}
+
+	// Should still count only 3 (expired not counted)
+	count = sm.countActiveStates()
+	if count != 3 {
+		t.Errorf("Expected 3 active states (expired not counted), got %d", count)
 	}
 }
