@@ -79,6 +79,14 @@ type BusinessMetrics struct {
 	InhibitionDurationSeconds   *prometheus.HistogramVec // Duration of inhibition check operations
 	InhibitionCacheHitsTotal    *prometheus.CounterVec   // Cache hits for active alerts (L1/L2)
 	InhibitionErrorsTotal       *prometheus.CounterVec   // Inhibition errors by type (cache_error/parse_error)
+
+	// Inhibition State subsystem - state tracking metrics (TN-129, Module 2)
+	InhibitionStateRecordsTotal         *prometheus.CounterVec   // Total inhibition state records by rule name
+	InhibitionStateRemovalsTotal        *prometheus.CounterVec   // Total inhibition state removals by reason (expired/manual/source_resolved)
+	InhibitionStateActiveGauge          prometheus.Gauge         // Current number of active inhibition states
+	InhibitionStateExpiredTotal         prometheus.Counter       // Total expired inhibition states cleaned up
+	InhibitionStateOperationDurationSeconds *prometheus.HistogramVec // Duration of state operations (record/remove/get/check)
+	InhibitionStateRedisErrorsTotal     *prometheus.CounterVec   // Redis errors during state persistence by operation (persist/load/delete)
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -497,6 +505,67 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 			[]string{"error_type"}, // error_type: cache_error|parse_error|validation_error
 		),
+
+		// Inhibition State subsystem metrics (TN-129, Module 2)
+		InhibitionStateRecordsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_records_total",
+				Help:      "Total number of inhibition state records created",
+			},
+			[]string{"rule_name"}, // rule_name: name of the inhibition rule
+		),
+
+		InhibitionStateRemovalsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_removals_total",
+				Help:      "Total number of inhibition state removals",
+			},
+			[]string{"reason"}, // reason: expired|manual|source_resolved
+		),
+
+		InhibitionStateActiveGauge: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_active",
+				Help:      "Current number of active inhibition states",
+			},
+		),
+
+		InhibitionStateExpiredTotal: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_expired_total",
+				Help:      "Total number of expired inhibition states cleaned up by background worker",
+			},
+		),
+
+		InhibitionStateOperationDurationSeconds: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_operation_duration_seconds",
+				Help:      "Duration of inhibition state operations",
+				// Buckets optimized for state operations: 10µs to 10ms
+				Buckets: []float64{0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01},
+			},
+			[]string{"operation"}, // operation: record|remove|get|check|cleanup
+		),
+
+		InhibitionStateRedisErrorsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_inhibition",
+				Name:      "state_redis_errors_total",
+				Help:      "Redis errors during inhibition state persistence operations",
+			},
+			[]string{"operation"}, // operation: persist|load|delete
+		),
 	}
 }
 
@@ -783,4 +852,62 @@ func (m *BusinessMetrics) RecordGroupsCleanedUp(count int) {
 	for i := 0; i < count; i++ {
 		m.AlertGroupOperationsTotal.WithLabelValues("cleanup", "success").Inc()
 	}
+}
+
+// ==================== Inhibition State Manager Metrics (TN-129) ====================
+
+// RecordInhibitionStateRecord records a new inhibition state record.
+// Called when RecordInhibition() successfully stores a new inhibition relationship.
+//
+// Parameters:
+//   - ruleName: The name of the inhibition rule that caused this state
+//   - duration: The duration of the record operation
+func (m *BusinessMetrics) RecordInhibitionStateRecord(ruleName string, duration time.Duration) {
+	m.InhibitionStateRecordsTotal.WithLabelValues(ruleName).Inc()
+	m.InhibitionStateOperationDurationSeconds.WithLabelValues("record").Observe(duration.Seconds())
+}
+
+// RecordInhibitionStateRemoval records an inhibition state removal.
+// Called when RemoveInhibition() successfully removes an inhibition relationship.
+//
+// Parameters:
+//   - reason: The reason for removal ("expired", "manual", "source_resolved")
+//   - duration: The duration of the remove operation
+func (m *BusinessMetrics) RecordInhibitionStateRemoval(reason string, duration time.Duration) {
+	m.InhibitionStateRemovalsTotal.WithLabelValues(reason).Inc()
+	m.InhibitionStateOperationDurationSeconds.WithLabelValues("remove").Observe(duration.Seconds())
+}
+
+// SetInhibitionStateActive sets the current number of active inhibition states.
+// Called after Record/Remove operations to maintain accurate gauge.
+//
+// Parameters:
+//   - count: The current number of active inhibition states
+func (m *BusinessMetrics) SetInhibitionStateActive(count int) {
+	m.InhibitionStateActiveGauge.Set(float64(count))
+}
+
+// RecordInhibitionStateExpired increments the expired inhibition states counter.
+// Called by the cleanup worker when it removes an expired inhibition state.
+func (m *BusinessMetrics) RecordInhibitionStateExpired() {
+	m.InhibitionStateExpiredTotal.Inc()
+}
+
+// RecordInhibitionStateOperation records the duration of a state operation.
+// Generic method for operations that don't fit Record/Remove (e.g., get, check, cleanup).
+//
+// Parameters:
+//   - operation: The operation type ("get", "check", "cleanup")
+//   - duration: The duration of the operation
+func (m *BusinessMetrics) RecordInhibitionStateOperation(operation string, duration time.Duration) {
+	m.InhibitionStateOperationDurationSeconds.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordInhibitionStateRedisError records a Redis error during state persistence.
+// Called when Redis operations fail (graceful degradation to memory-only mode).
+//
+// Parameters:
+//   - operation: The operation that failed ("persist", "load", "delete")
+func (m *BusinessMetrics) RecordInhibitionStateRedisError(operation string) {
+	m.InhibitionStateRedisErrorsTotal.WithLabelValues(operation).Inc()
 }

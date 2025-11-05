@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
+	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
 // InhibitionState represents the state of an inhibition relationship between alerts.
@@ -76,7 +77,13 @@ type DefaultStateManager struct {
 	// Logger
 	logger *slog.Logger
 
-	// Metrics would go here (already added to pkg/metrics/business.go)
+	// Metrics for observability (TN-129)
+	metrics *metrics.BusinessMetrics
+
+	// Cleanup worker control (TN-129 Phase 6)
+	cleanupInterval time.Duration
+	cleanupStop     chan struct{}
+	cleanupDone     sync.WaitGroup
 }
 
 // NewDefaultStateManager creates a new DefaultStateManager instance.
@@ -84,25 +91,33 @@ type DefaultStateManager struct {
 // Parameters:
 //   - redisStore: Optional Redis cache for persistence. If nil, only in-memory storage is used.
 //   - logger: Logger instance for debug/error logging.
+//   - metrics: BusinessMetrics instance for observability. If nil, metrics are not recorded.
 //
 // Returns:
 //   - *DefaultStateManager: Initialized state manager.
-func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger) *DefaultStateManager {
+//
+// Note: Call StartCleanupWorker(ctx) after creation to enable automatic cleanup of expired states.
+func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger, metrics *metrics.BusinessMetrics) *DefaultStateManager {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	return &DefaultStateManager{
-		states:      sync.Map{},
-		redisStore:  redisStore,
-		redisPrefix: "inhibition:state:",
-		redisTTL:    24 * time.Hour,
-		logger:      logger,
+		states:          sync.Map{},
+		redisStore:      redisStore,
+		redisPrefix:     "inhibition:state:",
+		redisTTL:        24 * time.Hour,
+		logger:          logger,
+		metrics:         metrics,
+		cleanupInterval: 1 * time.Minute, // Default: cleanup every minute
+		cleanupStop:     make(chan struct{}),
 	}
 }
 
 // RecordInhibition records a new inhibition relationship in both memory and Redis.
 func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *InhibitionState) error {
+	start := time.Now()
+
 	if state == nil {
 		return fmt.Errorf("state cannot be nil")
 	}
@@ -131,8 +146,21 @@ func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *Inhi
 				"error", err,
 				"target", state.TargetFingerprint,
 			)
+			// Record Redis error metric
+			if sm.metrics != nil {
+				sm.metrics.RecordInhibitionStateRedisError("persist")
+			}
 			// Non-critical: in-memory state is still valid
 		}
+	}
+
+	// Record metrics
+	duration := time.Since(start)
+	if sm.metrics != nil {
+		sm.metrics.RecordInhibitionStateRecord(state.RuleName, duration)
+		// Update active gauge
+		count := sm.countActiveStates()
+		sm.metrics.SetInhibitionStateActive(count)
 	}
 
 	return nil
@@ -140,6 +168,8 @@ func (sm *DefaultStateManager) RecordInhibition(ctx context.Context, state *Inhi
 
 // RemoveInhibition removes an inhibition relationship from both memory and Redis.
 func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFingerprint string) error {
+	start := time.Now()
+
 	if targetFingerprint == "" {
 		return fmt.Errorf("target fingerprint cannot be empty")
 	}
@@ -159,8 +189,21 @@ func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFinge
 				"error", err,
 				"target", targetFingerprint,
 			)
+			// Record Redis error metric
+			if sm.metrics != nil {
+				sm.metrics.RecordInhibitionStateRedisError("delete")
+			}
 			// Non-critical: in-memory state is already removed
 		}
+	}
+
+	// Record metrics
+	duration := time.Since(start)
+	if sm.metrics != nil {
+		sm.metrics.RecordInhibitionStateRemoval("manual", duration)
+		// Update active gauge
+		count := sm.countActiveStates()
+		sm.metrics.SetInhibitionStateActive(count)
 	}
 
 	return nil
@@ -168,6 +211,7 @@ func (sm *DefaultStateManager) RemoveInhibition(ctx context.Context, targetFinge
 
 // GetActiveInhibitions returns all currently active inhibition relationships.
 func (sm *DefaultStateManager) GetActiveInhibitions(ctx context.Context) ([]*InhibitionState, error) {
+	start := time.Now()
 	states := make([]*InhibitionState, 0)
 
 	sm.states.Range(func(key, value interface{}) bool {
@@ -182,6 +226,12 @@ func (sm *DefaultStateManager) GetActiveInhibitions(ctx context.Context) ([]*Inh
 		}
 		return true
 	})
+
+	// Record metrics
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("get", duration)
+	}
 
 	return states, nil
 }
@@ -207,12 +257,19 @@ func (sm *DefaultStateManager) GetInhibitedAlerts(ctx context.Context) ([]string
 
 // IsInhibited checks if a specific alert is currently inhibited.
 func (sm *DefaultStateManager) IsInhibited(ctx context.Context, targetFingerprint string) (bool, error) {
+	start := time.Now()
+
 	if targetFingerprint == "" {
 		return false, fmt.Errorf("target fingerprint cannot be empty")
 	}
 
 	value, ok := sm.states.Load(targetFingerprint)
 	if !ok {
+		// Record metrics for fast path (not found)
+		if sm.metrics != nil {
+			duration := time.Since(start)
+			sm.metrics.RecordInhibitionStateOperation("check", duration)
+		}
 		return false, nil
 	}
 
@@ -225,7 +282,19 @@ func (sm *DefaultStateManager) IsInhibited(ctx context.Context, targetFingerprin
 	if state.ExpiresAt != nil && time.Now().After(*state.ExpiresAt) {
 		// Clean up expired state
 		sm.states.Delete(targetFingerprint)
+
+		// Record metrics
+		if sm.metrics != nil {
+			duration := time.Since(start)
+			sm.metrics.RecordInhibitionStateOperation("check", duration)
+		}
 		return false, nil
+	}
+
+	// Record metrics for successful check
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("check", duration)
 	}
 
 	return true, nil
@@ -288,6 +357,10 @@ func (sm *DefaultStateManager) loadFromRedis(ctx context.Context, targetFingerpr
 
 	var data string
 	if err := sm.redisStore.Get(ctx, key, &data); err != nil {
+		// Record Redis error metric
+		if sm.metrics != nil {
+			sm.metrics.RecordInhibitionStateRedisError("load")
+		}
 		return nil, fmt.Errorf("failed to get Redis key: %w", err)
 	}
 
@@ -297,4 +370,158 @@ func (sm *DefaultStateManager) loadFromRedis(ctx context.Context, targetFingerpr
 	}
 
 	return &state, nil
+}
+
+// countActiveStates counts the number of currently active (non-expired) inhibition states.
+// This is a helper method used for updating the InhibitionStateActiveGauge metric.
+func (sm *DefaultStateManager) countActiveStates() int {
+	count := 0
+	now := time.Now()
+
+	sm.states.Range(func(key, value interface{}) bool {
+		if state, ok := value.(*InhibitionState); ok {
+			// Only count non-expired states
+			if state.ExpiresAt == nil || now.Before(*state.ExpiresAt) {
+				count++
+			}
+		}
+		return true
+	})
+
+	return count
+}
+
+// ==================== Cleanup Worker (TN-129 Phase 6) ====================
+
+// StartCleanupWorker starts the background cleanup worker that periodically removes expired inhibition states.
+// The worker runs every cleanupInterval (default: 1 minute) and removes states where ExpiresAt has passed.
+//
+// This method is safe to call multiple times - only one worker will be active.
+//
+// Parameters:
+//   - ctx: Context for cancellation. When ctx is cancelled, the worker stops gracefully.
+//
+// Example:
+//
+//	sm := NewDefaultStateManager(redis, logger, metrics)
+//	sm.StartCleanupWorker(ctx)
+//	defer sm.StopCleanupWorker()
+func (sm *DefaultStateManager) StartCleanupWorker(ctx context.Context) {
+	sm.cleanupDone.Add(1)
+	go sm.cleanupWorker(ctx)
+
+	sm.logger.Info("Inhibition state cleanup worker started",
+		"interval", sm.cleanupInterval,
+	)
+}
+
+// cleanupWorker is the main loop for the cleanup worker.
+// It runs periodically and removes expired inhibition states.
+func (sm *DefaultStateManager) cleanupWorker(ctx context.Context) {
+	defer sm.cleanupDone.Done()
+
+	ticker := time.NewTicker(sm.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			sm.logger.Info("Cleanup worker stopped (context cancelled)")
+			return
+
+		case <-sm.cleanupStop:
+			sm.logger.Info("Cleanup worker stopped (explicit stop)")
+			return
+
+		case <-ticker.C:
+			sm.cleanupExpiredStates(ctx)
+		}
+	}
+}
+
+// cleanupExpiredStates removes all expired inhibition states from memory.
+// This is called periodically by the cleanup worker.
+func (sm *DefaultStateManager) cleanupExpiredStates(ctx context.Context) {
+	start := time.Now()
+	cleanedCount := 0
+	now := time.Now()
+
+	// Collect expired fingerprints
+	expiredFingerprints := make([]string, 0)
+
+	sm.states.Range(func(key, value interface{}) bool {
+		fingerprint, ok := key.(string)
+		if !ok {
+			return true
+		}
+
+		state, ok := value.(*InhibitionState)
+		if !ok {
+			return true
+		}
+
+		// Check if expired
+		if state.ExpiresAt != nil && now.After(*state.ExpiresAt) {
+			expiredFingerprints = append(expiredFingerprints, fingerprint)
+		}
+
+		return true
+	})
+
+	// Delete expired states
+	for _, fp := range expiredFingerprints {
+		sm.states.Delete(fp)
+		cleanedCount++
+
+		// Record metrics
+		if sm.metrics != nil {
+			sm.metrics.RecordInhibitionStateExpired()
+		}
+
+		sm.logger.Debug("Cleaned up expired inhibition state",
+			"target_fingerprint", fp,
+		)
+	}
+
+	// Record cleanup duration
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("cleanup", duration)
+
+		// Update active gauge
+		if cleanedCount > 0 {
+			count := sm.countActiveStates()
+			sm.metrics.SetInhibitionStateActive(count)
+		}
+	}
+
+	if cleanedCount > 0 {
+		sm.logger.Info("Cleanup completed",
+			"expired_states_removed", cleanedCount,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+	}
+}
+
+// StopCleanupWorker gracefully stops the cleanup worker.
+// This method blocks until the worker has fully stopped.
+//
+// It's safe to call this multiple times.
+//
+// Example:
+//
+//	sm.StartCleanupWorker(ctx)
+//	defer sm.StopCleanupWorker()
+func (sm *DefaultStateManager) StopCleanupWorker() {
+	select {
+	case <-sm.cleanupStop:
+		// Already stopped
+		return
+	default:
+		close(sm.cleanupStop)
+	}
+
+	sm.cleanupDone.Wait()
+
+	sm.logger.Info("Cleanup worker stopped gracefully")
 }
