@@ -449,6 +449,484 @@ func TestShouldInhibit_Performance(t *testing.T) {
 	t.Logf("Performance: %v for 100 alerts x 10 rules", duration)
 }
 
+// --- Edge Cases & Coverage Tests ---
+
+// TestShouldInhibit_ContextCancellation tests early exit on cancelled context
+func TestShouldInhibit_ContextCancellation(t *testing.T) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{sourceAlert},
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	// Create cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	// Execute
+	_, err := matcher.ShouldInhibit(ctx, targetAlert)
+
+	// Assert - should return context error
+	if err == nil {
+		t.Error("Expected context error, got nil")
+	}
+	if err != context.Canceled {
+		t.Errorf("Expected context.Canceled error, got %v", err)
+	}
+}
+
+// TestFindInhibitors_ContextCancellation tests early exit on cancelled context
+func TestFindInhibitors_ContextCancellation(t *testing.T) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{sourceAlert},
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	// Create cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Execute
+	_, err := matcher.FindInhibitors(ctx, targetAlert)
+
+	// Assert
+	if err == nil {
+		t.Error("Expected context error, got nil")
+	}
+	if err != context.Canceled {
+		t.Errorf("Expected context.Canceled error, got %v", err)
+	}
+}
+
+// TestShouldInhibit_EmptyFiringAlerts_FastPath tests the empty alerts optimization
+func TestShouldInhibit_EmptyFiringAlerts_FastPath(t *testing.T) {
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{}, // Empty
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	start := time.Now()
+	result, err := matcher.ShouldInhibit(context.Background(), targetAlert)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("ShouldInhibit() error = %v", err)
+	}
+
+	if result.Matched {
+		t.Error("Expected no match (empty firing alerts)")
+	}
+
+	// Should be very fast (fast path)
+	if duration > 100*time.Microsecond {
+		t.Errorf("Fast path too slow: %v (expected <100µs)", duration)
+	}
+}
+
+// TestFindInhibitors_EmptyFiringAlerts tests empty alerts path
+func TestFindInhibitors_EmptyFiringAlerts(t *testing.T) {
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{},
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	results, err := matcher.FindInhibitors(context.Background(), targetAlert)
+
+	if err != nil {
+		t.Fatalf("FindInhibitors() error = %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf("Expected 0 inhibitors (empty alerts), got %d", len(results))
+	}
+}
+
+// TestShouldInhibit_PrefilterOptimization tests alertname pre-filtering
+func TestShouldInhibit_PrefilterOptimization(t *testing.T) {
+	// Create 50 alerts with different alertnames
+	firingAlerts := make([]*core.Alert, 50)
+	for i := 0; i < 50; i++ {
+		firingAlerts[i] = createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i), "prod")
+	}
+
+	// Add ONE NodeDown alert (the one we're looking for)
+	nodeDownAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	firingAlerts = append(firingAlerts, nodeDownAlert)
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("prefilter-test")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	start := time.Now()
+	result, err := matcher.ShouldInhibit(context.Background(), targetAlert)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("ShouldInhibit() error = %v", err)
+	}
+
+	if !result.Matched {
+		t.Error("Expected match (should find NodeDown alert)")
+	}
+
+	// Should be fast due to pre-filtering (not checking all 50 irrelevant alerts)
+	if duration > 500*time.Microsecond {
+		t.Errorf("Pre-filter optimization not working: took %v", duration)
+	}
+
+	t.Logf("Pre-filter performance: %v for 51 alerts (only 1 relevant)", duration)
+}
+
+// TestShouldInhibit_NoAlertnameFilter tests path without alertname pre-filtering
+func TestShouldInhibit_NoAlertnameFilter(t *testing.T) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{sourceAlert},
+	}
+
+	// Rule WITHOUT alertname in source_match (no pre-filtering)
+	rule := InhibitionRule{
+		Name: "no-alertname-filter",
+		SourceMatch: map[string]string{
+			"severity": "critical", // No alertname!
+		},
+		TargetMatch: map[string]string{
+			"alertname": "InstanceDown",
+		},
+		Equal: []string{"node", "cluster"},
+	}
+	rule.compiledSourceRE = make(map[string]*regexp.Regexp)
+	rule.compiledTargetRE = make(map[string]*regexp.Regexp)
+
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	result, err := matcher.ShouldInhibit(context.Background(), targetAlert)
+
+	if err != nil {
+		t.Fatalf("ShouldInhibit() error = %v", err)
+	}
+
+	if !result.Matched {
+		t.Error("Expected match (rule without alertname filter)")
+	}
+}
+
+// TestMatchRuleFast_AllConditions tests all conditions in matchRuleFast
+func TestMatchRuleFast_AllConditions(t *testing.T) {
+	sourceAlert := &core.Alert{
+		AlertName:   "ServiceDown",
+		Fingerprint: "fp-service",
+		Labels: map[string]string{
+			"alertname":   "ServiceDown",
+			"severity":    "critical",
+			"service":     "api-backend", // Matches ^api.*
+			"environment": "production",  // Matches prod.*
+			"cluster":     "prod-eu",
+		},
+	}
+
+	targetAlert := &core.Alert{
+		AlertName:   "HighLatency",
+		Fingerprint: "fp-latency",
+		Labels: map[string]string{
+			"alertname":   "HighLatency",
+			"severity":    "warning",      // Matches warning|info
+			"component":   "api-gateway",  // Matches .*gateway
+			"environment": "production",
+			"cluster":     "prod-eu",
+		},
+	}
+
+	// Rule with ALL types of conditions
+	rule := InhibitionRule{
+		Name: "complex-rule",
+		SourceMatch: map[string]string{
+			"alertname": "ServiceDown",
+			"severity":  "critical",
+		},
+		SourceMatchRE: map[string]string{
+			"service":     "^api.*",
+			"environment": "prod.*",
+		},
+		TargetMatch: map[string]string{
+			"alertname": "HighLatency",
+		},
+		TargetMatchRE: map[string]string{
+			"severity":  "warning|info",
+			"component": ".*gateway",
+		},
+		Equal: []string{"cluster", "environment"},
+	}
+
+	// Compile regex
+	rule.setCompiledSourceRE("service", regexp.MustCompile("^api.*"))
+	rule.setCompiledSourceRE("environment", regexp.MustCompile("prod.*"))
+	rule.setCompiledTargetRE("severity", regexp.MustCompile("warning|info"))
+	rule.setCompiledTargetRE("component", regexp.MustCompile(".*gateway"))
+
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Test match
+	if !matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected complex rule to match (all conditions satisfied)")
+	}
+
+	// Test mismatch - change cluster
+	targetAlert.Labels["cluster"] = "prod-us" // Different cluster
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (cluster mismatch)")
+	}
+}
+
+// TestFindInhibitors_PrefilterOptimization tests pre-filtering in FindInhibitors
+func TestFindInhibitors_PrefilterOptimization(t *testing.T) {
+	// Create 30 alerts with different alertnames
+	firingAlerts := make([]*core.Alert, 30)
+	for i := 0; i < 30; i++ {
+		firingAlerts[i] = createTestAlert(fmt.Sprintf("Alert%d", i), "warning", "node1", "prod")
+	}
+
+	// Add 3 NodeDown alerts (matching ones)
+	for i := 0; i < 3; i++ {
+		nodeDownAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+		nodeDownAlert.Fingerprint = fmt.Sprintf("fp-NodeDown-node1-%d", i) // Unique fingerprints
+		firingAlerts = append(firingAlerts, nodeDownAlert)
+	}
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("prefilter-find")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	results, err := matcher.FindInhibitors(context.Background(), targetAlert)
+
+	if err != nil {
+		t.Fatalf("FindInhibitors() error = %v", err)
+	}
+
+	// Should find all 3 NodeDown alerts
+	if len(results) != 3 {
+		t.Errorf("Expected 3 inhibitors, got %d", len(results))
+	}
+
+	// All should be matched
+	for i, result := range results {
+		if !result.Matched {
+			t.Errorf("Result %d: Expected matched=true", i)
+		}
+		if result.InhibitedBy.AlertName != "NodeDown" {
+			t.Errorf("Result %d: Expected NodeDown alert, got %s", i, result.InhibitedBy.AlertName)
+		}
+	}
+}
+
+// TestFindInhibitors_MultipleRulesMatching tests multiple rules with multiple matches
+func TestFindInhibitors_MultipleRulesMatching(t *testing.T) {
+	sourceAlert1 := createTestAlert("NodeDown", "critical", "node1", "prod")
+	sourceAlert2 := createTestAlert("ClusterDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{sourceAlert1, sourceAlert2},
+	}
+
+	// Two rules that both match
+	rule1 := createTestRule("rule1") // Matches NodeDown
+	rule2 := InhibitionRule{
+		Name: "rule2",
+		SourceMatch: map[string]string{
+			"alertname": "ClusterDown",
+			"severity":  "critical",
+		},
+		TargetMatch: map[string]string{
+			"alertname": "InstanceDown",
+		},
+		Equal: []string{"node", "cluster"},
+	}
+	rule2.compiledSourceRE = make(map[string]*regexp.Regexp)
+	rule2.compiledTargetRE = make(map[string]*regexp.Regexp)
+
+	matcher := NewMatcher(cache, []InhibitionRule{rule1, rule2}, nil)
+
+	results, err := matcher.FindInhibitors(context.Background(), targetAlert)
+
+	if err != nil {
+		t.Fatalf("FindInhibitors() error = %v", err)
+	}
+
+	// Should find both inhibitors
+	if len(results) != 2 {
+		t.Errorf("Expected 2 inhibitors (one per rule), got %d", len(results))
+	}
+}
+
+// TestMatchRuleFast_MissingLabelInSource tests missing label in source alert
+func TestMatchRuleFast_MissingLabelInSource(t *testing.T) {
+	sourceAlert := &core.Alert{
+		AlertName:   "NodeDown",
+		Fingerprint: "fp-node",
+		Labels: map[string]string{
+			"alertname": "NodeDown",
+			// Missing "severity" label!
+		},
+	}
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	rule := createTestRule("missing-source-label")
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Should NOT match (source missing required label)
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (source missing severity label)")
+	}
+}
+
+// TestMatchRuleFast_MissingLabelInTarget tests missing label in target alert
+func TestMatchRuleFast_MissingLabelInTarget(t *testing.T) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+
+	targetAlert := &core.Alert{
+		AlertName:   "InstanceDown",
+		Fingerprint: "fp-instance",
+		Labels: map[string]string{
+			// Missing "alertname" label!
+			"node":    "node1",
+			"cluster": "prod",
+		},
+	}
+
+	rule := createTestRule("missing-target-label")
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Should NOT match (target missing alertname)
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (target missing alertname)")
+	}
+}
+
+// TestMatchRuleFast_MissingRegexLabel tests missing label for regex check
+func TestMatchRuleFast_MissingRegexLabel(t *testing.T) {
+	sourceAlert := &core.Alert{
+		AlertName:   "ServiceDown",
+		Fingerprint: "fp-service",
+		Labels: map[string]string{
+			"alertname": "ServiceDown",
+			// Missing "service" label for regex check!
+		},
+	}
+
+	targetAlert := createTestAlert("HighLatency", "warning", "node1", "prod")
+
+	rule := InhibitionRule{
+		Name:          "missing-regex-label",
+		SourceMatchRE: map[string]string{"service": "^api.*"},
+		TargetMatch:   map[string]string{"alertname": "HighLatency"},
+	}
+	rule.setCompiledSourceRE("service", regexp.MustCompile("^api.*"))
+
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Should NOT match (source missing label for regex)
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (source missing service label for regex)")
+	}
+}
+
+// TestMatchRuleFast_EmptyConditions tests empty source/target conditions
+func TestMatchRuleFast_EmptyConditions(t *testing.T) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	// Rule with ONLY equal labels (empty source/target match)
+	rule := InhibitionRule{
+		Name:        "empty-conditions",
+		SourceMatch: map[string]string{}, // Empty
+		TargetMatch: map[string]string{}, // Empty
+		Equal:       []string{"cluster"},
+	}
+	rule.compiledSourceRE = make(map[string]*regexp.Regexp)
+	rule.compiledTargetRE = make(map[string]*regexp.Regexp)
+
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Should match (empty conditions = always true, only equal matters)
+	if !matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected match (empty source/target conditions with matching equal labels)")
+	}
+
+	// Test mismatch in equal labels
+	targetAlert.Labels["cluster"] = "staging" // Different cluster
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (equal label mismatch)")
+	}
+}
+
+// TestMatchRuleFast_MissingRegexCompilation tests handling of missing compiled regex
+func TestMatchRuleFast_MissingRegexCompilation(t *testing.T) {
+	sourceAlert := &core.Alert{
+		AlertName:   "ServiceDown",
+		Fingerprint: "fp-service",
+		Labels: map[string]string{
+			"alertname": "ServiceDown",
+			"service":   "api-backend",
+		},
+	}
+
+	targetAlert := &core.Alert{
+		AlertName:   "HighLatency",
+		Fingerprint: "fp-latency",
+		Labels: map[string]string{
+			"alertname": "HighLatency",
+		},
+	}
+
+	rule := InhibitionRule{
+		Name:          "missing-regex",
+		SourceMatchRE: map[string]string{"service": "^api.*"},
+		TargetMatch:   map[string]string{"alertname": "HighLatency"},
+	}
+	// Deliberately NOT compiling the regex to test error path
+	rule.compiledSourceRE = make(map[string]*regexp.Regexp)
+	rule.compiledTargetRE = make(map[string]*regexp.Regexp)
+	// compiledSourceRE["service"] is missing!
+
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	// Should NOT match (regex not compiled)
+	if matcher.matchRuleFast(&rule, sourceAlert, targetAlert) {
+		t.Error("Expected no match (regex not compiled)")
+	}
+}
+
 // --- Benchmarks ---
 
 func BenchmarkShouldInhibit_SingleRule(b *testing.B) {
