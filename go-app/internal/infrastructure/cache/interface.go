@@ -33,6 +33,20 @@ type Cache interface {
 
 	// Flush очищает весь cache
 	Flush(ctx context.Context) error
+
+	// --- Redis SET Operations (for alert tracking) ---
+
+	// SAdd добавляет один или несколько элементов в SET
+	SAdd(ctx context.Context, key string, members ...interface{}) error
+
+	// SMembers возвращает все элементы SET
+	SMembers(ctx context.Context, key string) ([]string, error)
+
+	// SRem удаляет один или несколько элементов из SET
+	SRem(ctx context.Context, key string, members ...interface{}) error
+
+	// SCard возвращает количество элементов в SET
+	SCard(ctx context.Context, key string) (int64, error)
 }
 
 // CacheStats содержит статистику по работе cache
