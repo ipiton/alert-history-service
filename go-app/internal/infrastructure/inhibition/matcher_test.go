@@ -1009,3 +1009,233 @@ func BenchmarkFindInhibitors(b *testing.B) {
 		_, _ = matcher.FindInhibitors(ctx, targetAlert)
 	}
 }
+
+// --- Additional Advanced Benchmarks for 150% Quality ---
+
+// BenchmarkShouldInhibit_NoMatch measures worst-case performance (no match found)
+func BenchmarkShouldInhibit_NoMatch(b *testing.B) {
+	// Create 50 alerts that DON'T match
+	firingAlerts := make([]*core.Alert, 50)
+	for i := 0; i < 50; i++ {
+		firingAlerts[i] = createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i), "prod")
+	}
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node999", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.ShouldInhibit(ctx, targetAlert)
+	}
+}
+
+// BenchmarkShouldInhibit_EarlyMatch measures best-case performance (first alert matches)
+func BenchmarkShouldInhibit_EarlyMatch(b *testing.B) {
+	// First alert matches, rest don't
+	matchingAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+
+	firingAlerts := []*core.Alert{matchingAlert}
+	for i := 0; i < 49; i++ {
+		firingAlerts = append(firingAlerts, createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i), "prod"))
+	}
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.ShouldInhibit(ctx, targetAlert)
+	}
+}
+
+// BenchmarkShouldInhibit_1000Alerts_100Rules measures extreme stress test
+func BenchmarkShouldInhibit_1000Alerts_100Rules(b *testing.B) {
+	// Create 1000 firing alerts
+	firingAlerts := make([]*core.Alert, 1000)
+	for i := 0; i < 1000; i++ {
+		firingAlerts[i] = createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i%100), "prod")
+	}
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	// Create 100 rules
+	rules := make([]InhibitionRule, 100)
+	for i := 0; i < 100; i++ {
+		rules[i] = createTestRule(fmt.Sprintf("rule%d", i))
+	}
+
+	matcher := NewMatcher(cache, rules, nil)
+	targetAlert := createTestAlert("TargetAlert", "info", "node50", "prod")
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.ShouldInhibit(ctx, targetAlert)
+	}
+}
+
+// BenchmarkMatchRuleFast benchmarks the optimized matchRuleFast method
+func BenchmarkMatchRuleFast(b *testing.B) {
+	sourceAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = matcher.matchRuleFast(&rule, sourceAlert, targetAlert)
+	}
+}
+
+// BenchmarkMatchRule_Regex benchmarks regex-heavy rule matching
+func BenchmarkMatchRule_Regex(b *testing.B) {
+	sourceAlert := &core.Alert{
+		AlertName:   "ServiceDown",
+		Fingerprint: "fp-service",
+		Labels: map[string]string{
+			"alertname":   "ServiceDown",
+			"service":     "api-backend-v2",
+			"environment": "production-eu-west-1",
+			"cluster":     "prod-k8s-01",
+		},
+	}
+
+	targetAlert := &core.Alert{
+		AlertName:   "HighLatency",
+		Fingerprint: "fp-latency",
+		Labels: map[string]string{
+			"alertname":   "HighLatency",
+			"severity":    "warning",
+			"component":   "api-gateway-v2",
+			"environment": "production-eu-west-1",
+			"cluster":     "prod-k8s-01",
+		},
+	}
+
+	// Regex-heavy rule
+	rule := InhibitionRule{
+		Name: "regex-heavy",
+		SourceMatchRE: map[string]string{
+			"service":     "^api-.*-v[0-9]+$",
+			"environment": "^production-[a-z]+-[a-z]+-[0-9]+$",
+		},
+		TargetMatchRE: map[string]string{
+			"severity":  "warning|info|critical",
+			"component": "^api-.*-v[0-9]+$",
+		},
+		Equal: []string{"cluster", "environment"},
+	}
+	rule.setCompiledSourceRE("service", regexp.MustCompile("^api-.*-v[0-9]+$"))
+	rule.setCompiledSourceRE("environment", regexp.MustCompile("^production-[a-z]+-[a-z]+-[0-9]+$"))
+	rule.setCompiledTargetRE("severity", regexp.MustCompile("warning|info|critical"))
+	rule.setCompiledTargetRE("component", regexp.MustCompile("^api-.*-v[0-9]+$"))
+
+	matcher := NewMatcher(&mockCache{}, []InhibitionRule{rule}, nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = matcher.MatchRule(&rule, sourceAlert, targetAlert)
+	}
+}
+
+// BenchmarkShouldInhibit_PrefilterOptimization benchmarks pre-filtering efficiency
+func BenchmarkShouldInhibit_PrefilterOptimization(b *testing.B) {
+	// Create 200 alerts with different alertnames
+	firingAlerts := make([]*core.Alert, 200)
+	for i := 0; i < 200; i++ {
+		firingAlerts[i] = createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i), "prod")
+	}
+
+	// Add ONE matching NodeDown alert
+	matchingAlert := createTestAlert("NodeDown", "critical", "node1", "prod")
+	firingAlerts = append(firingAlerts, matchingAlert)
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("prefilter-bench")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.ShouldInhibit(ctx, targetAlert)
+	}
+}
+
+// BenchmarkFindInhibitors_MultipleMatches benchmarks finding all inhibitors
+func BenchmarkFindInhibitors_MultipleMatches(b *testing.B) {
+	// Create 10 matching NodeDown alerts
+	firingAlerts := make([]*core.Alert, 10)
+	for i := 0; i < 10; i++ {
+		alert := createTestAlert("NodeDown", "critical", "node1", "prod")
+		alert.Fingerprint = fmt.Sprintf("fp-NodeDown-node1-%d", i)
+		firingAlerts[i] = alert
+	}
+
+	// Add 90 non-matching alerts
+	for i := 0; i < 90; i++ {
+		firingAlerts = append(firingAlerts, createTestAlert(fmt.Sprintf("Alert%d", i), "warning", fmt.Sprintf("node%d", i), "prod"))
+	}
+
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: firingAlerts,
+	}
+
+	rule := createTestRule("find-all")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.FindInhibitors(ctx, targetAlert)
+	}
+}
+
+// BenchmarkShouldInhibit_EmptyCache benchmarks fast path with no firing alerts
+func BenchmarkShouldInhibit_EmptyCache(b *testing.B) {
+	targetAlert := createTestAlert("InstanceDown", "warning", "node1", "prod")
+
+	cache := &mockCache{
+		firingAlerts: []*core.Alert{}, // Empty
+	}
+
+	rule := createTestRule("test-rule")
+	matcher := NewMatcher(cache, []InhibitionRule{rule}, nil)
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = matcher.ShouldInhibit(ctx, targetAlert)
+	}
+}
