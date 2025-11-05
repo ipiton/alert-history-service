@@ -1,0 +1,187 @@
+# Inhibition Rules Configuration
+# TN-126: Inhibition Rule Parser
+# Date: 2025-11-04
+#
+# Inhibition rules allow you to mute a set of alerts given that another alert is firing.
+# This is useful for silencing alerts about dependent services when the root cause is known.
+#
+# Reference: https://prometheus.io/docs/alerting/latest/configuration/#inhibit_rule
+
+inhibit_rules:
+  # Rule 1: NodeDown inhibits InstanceDown on the same node
+  #
+  # Use case: When a node goes down, all instances on that node will also be down.
+  # We only want to alert about the root cause (NodeDown), not the symptoms.
+  #
+  - name: "node-down-inhibits-instance-down"
+    source_match:
+      alertname: "NodeDown"
+      severity: "critical"
+    target_match:
+      alertname: "InstanceDown"
+    equal:
+      - node          # Must be on the same node
+      - cluster       # Must be in the same cluster
+
+  # Rule 2: Critical alerts inhibit warning/info alerts for the same service
+  #
+  # Use case: If a service has a critical alert, we don't need to see warnings/info
+  # alerts for the same service - the critical alert already requires attention.
+  #
+  - name: "critical-inhibits-warning"
+    source_match:
+      severity: "critical"
+    target_match_re:
+      severity: "warning|info"
+    equal:
+      - service       # Must be the same service
+      - namespace     # Must be in the same namespace
+
+  # Rule 3: Database primary down inhibits replica alerts
+  #
+  # Use case: If the primary database is down, replicas will fail too.
+  # Only alert about the primary failure.
+  #
+  - name: "db-primary-down-inhibits-replica-alerts"
+    source_match:
+      alertname: "DatabasePrimaryDown"
+      component: "database"
+    target_match_re:
+      alertname: "(DatabaseReplicaDown|DatabaseReplicationLag)"
+    equal:
+      - cluster
+      - environment
+
+  # Rule 4: Network partition inhibits connectivity alerts
+  #
+  # Use case: During a network partition, many connectivity alerts will fire.
+  # The root cause is the network partition itself.
+  #
+  - name: "network-partition-inhibits-connectivity"
+    source_match:
+      alertname: "NetworkPartition"
+    target_match_re:
+      alertname: ".*(Unreachable|Timeout|ConnectionFailed)"
+    equal:
+      - datacenter
+      - zone
+
+  # Rule 5: Kubernetes cluster down inhibits all pod/deployment alerts
+  #
+  # Use case: If the entire Kubernetes cluster is down, all workload alerts
+  # are symptoms of the cluster issue.
+  #
+  - name: "cluster-down-inhibits-workload-alerts"
+    source_match:
+      alertname: "KubernetesClusterDown"
+      severity: "critical"
+    target_match_re:
+      alertname: "(Pod.*|Deployment.*|StatefulSet.*|DaemonSet.*)"
+    equal:
+      - cluster
+
+  # Rule 6: High CPU on host inhibits high CPU on containers
+  #
+  # Use case: If the host has high CPU, containers on that host will also
+  # report high CPU. Focus on the host issue first.
+  #
+  - name: "host-high-cpu-inhibits-container-alerts"
+    source_match:
+      alertname: "HostHighCPU"
+    target_match:
+      alertname: "ContainerHighCPU"
+    equal:
+      - instance      # Same physical host
+      - cluster
+
+  # Rule 7: Disk full inhibits disk pressure alerts
+  #
+  # Use case: When disk is full, many related alerts fire. Focus on the
+  # disk full alert as the root cause.
+  #
+  - name: "disk-full-inhibits-disk-pressure"
+    source_match:
+      alertname: "DiskFull"
+      severity: "critical"
+    target_match_re:
+      alertname: "(DiskPressure|DiskNearFull)"
+      severity: "warning"
+    equal:
+      - instance
+      - device        # Same disk device
+
+  # Rule 8: API gateway down inhibits backend service alerts
+  #
+  # Use case: If the API gateway is down, backend services become
+  # unreachable. The root cause is the gateway, not the services.
+  #
+  - name: "gateway-down-inhibits-backend-alerts"
+    source_match:
+      alertname: "APIGatewayDown"
+      component: "gateway"
+    target_match_re:
+      alertname: "(ServiceUnreachable|ServiceTimeout)"
+    equal:
+      - environment
+      - region
+
+  # Rule 9: Load balancer failure inhibits target health alerts
+  #
+  # Use case: If a load balancer fails, all targets behind it will appear
+  # unhealthy. Focus on fixing the load balancer first.
+  #
+  - name: "lb-failure-inhibits-target-health"
+    source_match:
+      alertname: "LoadBalancerFailure"
+    target_match_re:
+      alertname: "(TargetUnhealthy|HealthCheckFailed)"
+    equal:
+      - lb_name       # Same load balancer
+      - vpc
+
+  # Rule 10: DNS resolution failure inhibits service discovery alerts
+  #
+  # Use case: If DNS is down, service discovery will fail. This is a
+  # cascading failure - fix DNS first.
+  #
+  - name: "dns-failure-inhibits-service-discovery"
+    source_match:
+      alertname: "DNSResolutionFailure"
+      severity: "critical"
+    target_match:
+      alertname: "ServiceDiscoveryFailure"
+    equal:
+      - cluster
+      - namespace
+
+# Best Practices for Inhibition Rules:
+#
+# 1. Use 'equal' labels to ensure source and target are related
+#    - Common labels: cluster, namespace, node, instance, service
+#
+# 2. Source alert should be the ROOT CAUSE
+#    - NodeDown is root cause, InstanceDown is symptom
+#
+# 3. Target alert should be the SYMPTOM
+#    - Use target_match_re for multiple related alerts
+#
+# 4. Give rules descriptive names
+#    - Names are used for debugging and metrics
+#
+# 5. Order rules by importance
+#    - Critical infrastructure first (nodes, clusters)
+#    - Services second
+#
+# 6. Test rules thoroughly
+#    - Ensure inhibition happens when expected
+#    - Ensure important alerts are NOT inhibited
+#
+# 7. Monitor inhibition metrics
+#    - Track inhibited_alerts_total by rule name
+#    - Adjust rules based on false positives/negatives
+
+# Performance Notes:
+# - Rules are evaluated in order (first match wins)
+# - Regex patterns are pre-compiled for performance
+# - Target: <1ms evaluation per alert
+# - Recommended: <100 inhibition rules per configuration
