@@ -299,6 +299,100 @@ func (e *CacheError) WithCause(cause error) *CacheError {
 	return e
 }
 
+// SAdd adds one or more members to a SET (TN-128: Redis SET operations for alert tracking)
+func (rc *RedisCache) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	if rc.isClosed {
+		return ErrConnectionFailed
+	}
+
+	if key == "" {
+		return NewCacheError("key cannot be empty", "INVALID_KEY")
+	}
+
+	if len(members) == 0 {
+		return nil // No-op if no members
+	}
+
+	if err := rc.client.SAdd(ctx, key, members...).Err(); err != nil {
+		rc.logger.Error("Failed to add members to SET", "key", key, "error", err)
+		return NewCacheError("failed to add members to SET", "SADD_ERROR").WithCause(err)
+	}
+
+	rc.logger.Debug("Added members to SET", "key", key, "count", len(members))
+	return nil
+}
+
+// SMembers returns all members of a SET (TN-128: Redis SET operations)
+func (rc *RedisCache) SMembers(ctx context.Context, key string) ([]string, error) {
+	if rc.isClosed {
+		return nil, ErrConnectionFailed
+	}
+
+	if key == "" {
+		return nil, NewCacheError("key cannot be empty", "INVALID_KEY")
+	}
+
+	members, err := rc.client.SMembers(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			// Key doesn't exist, return empty slice
+			return []string{}, nil
+		}
+		rc.logger.Error("Failed to get SET members", "key", key, "error", err)
+		return nil, NewCacheError("failed to get SET members", "SMEMBERS_ERROR").WithCause(err)
+	}
+
+	rc.logger.Debug("Retrieved SET members", "key", key, "count", len(members))
+	return members, nil
+}
+
+// SRem removes one or more members from a SET (TN-128: Redis SET operations)
+func (rc *RedisCache) SRem(ctx context.Context, key string, members ...interface{}) error {
+	if rc.isClosed {
+		return ErrConnectionFailed
+	}
+
+	if key == "" {
+		return NewCacheError("key cannot be empty", "INVALID_KEY")
+	}
+
+	if len(members) == 0 {
+		return nil // No-op if no members
+	}
+
+	if err := rc.client.SRem(ctx, key, members...).Err(); err != nil {
+		rc.logger.Error("Failed to remove members from SET", "key", key, "error", err)
+		return NewCacheError("failed to remove members from SET", "SREM_ERROR").WithCause(err)
+	}
+
+	rc.logger.Debug("Removed members from SET", "key", key, "count", len(members))
+	return nil
+}
+
+// SCard returns the number of members in a SET (TN-128: Redis SET operations)
+func (rc *RedisCache) SCard(ctx context.Context, key string) (int64, error) {
+	if rc.isClosed {
+		return 0, ErrConnectionFailed
+	}
+
+	if key == "" {
+		return 0, NewCacheError("key cannot be empty", "INVALID_KEY")
+	}
+
+	count, err := rc.client.SCard(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			// Key doesn't exist, return 0
+			return 0, nil
+		}
+		rc.logger.Error("Failed to get SET cardinality", "key", key, "error", err)
+		return 0, NewCacheError("failed to get SET cardinality", "SCARD_ERROR").WithCause(err)
+	}
+
+	rc.logger.Debug("Retrieved SET cardinality", "key", key, "count", count)
+	return count, nil
+}
+
 // NewRedisCacheFromURL создает Redis cache из URL строки
 func NewRedisCacheFromURL(url string, logger *slog.Logger) (*RedisCache, error) {
 	opt, err := redis.ParseURL(url)

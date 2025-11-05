@@ -46,8 +46,8 @@ func NewInhibitionHandler(
 
 // InhibitionRulesResponse represents the response for GET /api/v2/inhibition/rules
 type InhibitionRulesResponse struct {
-	Rules []*inhibition.InhibitionRule `json:"rules"`
-	Count int                          `json:"count"`
+	Rules []inhibition.InhibitionRule `json:"rules"`
+	Count int                         `json:"count"`
 }
 
 // InhibitionStatusResponse represents the response for GET /api/v2/inhibition/status
@@ -63,17 +63,11 @@ type InhibitionCheckRequest struct {
 
 // InhibitionCheckResponse represents the response for POST /api/v2/inhibition/check
 type InhibitionCheckResponse struct {
-	Alert       *core.Alert              `json:"alert"`
-	Inhibited   bool                     `json:"inhibited"`
-	InhibitedBy *core.Alert              `json:"inhibited_by,omitempty"`
+	Alert       *core.Alert             `json:"alert"`
+	Inhibited   bool                    `json:"inhibited"`
+	InhibitedBy *core.Alert             `json:"inhibited_by,omitempty"`
 	Rule        *inhibition.InhibitionRule `json:"rule,omitempty"`
-	LatencyMs   int64                    `json:"latency_ms"`
-}
-
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error string `json:"error"`
-	Code  int    `json:"code"`
+	LatencyMs   int64                   `json:"latency_ms"`
 }
 
 // GetRules handles GET /api/v2/inhibition/rules
@@ -224,11 +218,12 @@ func (h *InhibitionHandler) CheckAlert(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// sendError sends an error response
+// sendError sends an error response (reuses ErrorResponse from enrichment.go)
 func (h *InhibitionHandler) sendError(w http.ResponseWriter, message string, code int) {
-	response := ErrorResponse{
+	response := struct {
+		Error string `json:"error"`
+	}{
 		Error: message,
-		Code:  code,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
