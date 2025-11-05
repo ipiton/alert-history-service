@@ -30,15 +30,9 @@ func main() {
 		log.Fatalf("Failed to create migration manager: %v", err)
 	}
 
-	backupManager, err := migrations.NewBackupManager(backupConfig, nil, migrationConfig.Logger)
-	if err != nil {
-		log.Fatalf("Failed to create backup manager: %v", err)
-	}
+	backupManager := migrations.NewBackupManager(backupConfig, nil, migrationConfig.Logger)
 
-	healthChecker, err := migrations.NewHealthChecker(nil, healthConfig, migrationConfig.Logger)
-	if err != nil {
-		log.Fatalf("Failed to create health checker: %v", err)
-	}
+	healthChecker := migrations.NewHealthChecker(nil, healthConfig, migrationConfig.Logger)
 
 	// Создаем CLI
 	cli := migrations.NewCLI(manager, backupManager, healthChecker, migrationConfig.Logger)
