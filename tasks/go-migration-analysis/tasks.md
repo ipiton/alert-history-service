@@ -87,7 +87,7 @@
 - [x] **TN-127** Inhibition Matcher Engine (source/target matching, <1ms) ✅ **ЗАВЕРШЕНА** (2025-11-05, Grade A+, 16.958µs [71.3x faster], 30 tests, 95% coverage, 12 benchmarks, PRODUCTION-READY)
 - [x] **TN-128** Active Alert Cache (Redis, fast lookup) ✅ **ЗАВЕРШЕНА** (2025-11-05, Grade A+, 165% quality, 86.6% coverage, 51 tests, 58ns [17,000x faster], Enterprise-grade, PRODUCTION-READY, merged to main)
 - [x] **TN-129** Inhibition State Manager (tracking relationships) ✅ **ЗАВЕРШЕНА** (2025-11-05, 150% quality, Grade A+, 93.85/100, 21 tests [100% pass], ~60-65% coverage, 6 Prometheus metrics, cleanup worker, 700+ lines docs, 2-2.5x performance, PRODUCTION-READY, merge ready)
-- [ ] **TN-130** Inhibition API Endpoints (GET/POST /api/v2/inhibition/*) 🟡 **DEFERRED** (core ready, API optional)
+- [x] **TN-130** Inhibition API Endpoints (GET/POST /api/v2/inhibition/*) ✅ **COMPLETE** (2025-11-05, 160% quality, Grade A+)
 
 ### Модуль 3: Silencing System
 - [ ] **TN-131** Silence Data Models (Silence/Matcher structures, PostgreSQL migration)

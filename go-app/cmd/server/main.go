@@ -25,6 +25,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/grouping"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/inhibition"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
@@ -365,7 +366,8 @@ func main() {
 				}
 
 				// TN-123: Create Alert Group Manager
-				groupManager, err = grouping.NewDefaultGroupManager(grouping.DefaultGroupManagerConfig{
+				groupManagerCtx := context.Background()
+				groupManager, err = grouping.NewDefaultGroupManager(groupManagerCtx, grouping.DefaultGroupManagerConfig{
 					KeyGenerator: keyGenerator,
 					Config:       groupingConfig,
 					Logger:       appLogger,
@@ -408,6 +410,77 @@ func main() {
 			}
 		} else {
 			slog.Info("Grouping config not found, grouping disabled", "path", groupingConfigPath)
+		}
+	}
+
+	// TN-130: Initialize Inhibition Rules Engine (Module 2 - API Layer)
+	var inhibitionParser inhibition.InhibitionParser
+	var inhibitionMatcher inhibition.InhibitionMatcher
+	var inhibitionStateManager inhibition.InhibitionStateManager
+	var activeAlertCache inhibition.ActiveAlertCache
+	var inhibitionHandler *handlers.InhibitionHandler
+
+	// Check if we have an inhibition config file
+	if inhibitionConfigPath := os.Getenv("INHIBITION_CONFIG_PATH"); inhibitionConfigPath != "" || true {
+		// Use default path if not set
+		if inhibitionConfigPath == "" {
+			inhibitionConfigPath = "./config/inhibition.yaml"
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(inhibitionConfigPath); err == nil {
+			slog.Info("Initializing Inhibition Rules Engine (TN-130)", "config", inhibitionConfigPath)
+
+			// TN-126: Parse inhibition configuration
+			inhibitionParser = inhibition.NewParser()
+			config, err := inhibitionParser.ParseFile(inhibitionConfigPath)
+			if err != nil {
+				slog.Warn("Failed to parse inhibition config, inhibition disabled", "error", err)
+			} else {
+				slog.Info("✅ Loaded inhibition rules", "count", len(config.Rules))
+
+				// TN-128: Create Active Alert Cache (L1 memory + L2 Redis)
+				if redisCache != nil {
+					activeAlertCache = inhibition.NewTwoTierAlertCache(redisCache, appLogger)
+					slog.Info("✅ Active Alert Cache initialized (L1 memory + L2 Redis)")
+				} else {
+					activeAlertCache = inhibition.NewTwoTierAlertCache(nil, appLogger)
+					slog.Info("Active Alert Cache initialized (memory-only, Redis not available)")
+				}
+
+				// Note: TwoTierAlertCache doesn't have cleanup worker (uses LRU eviction)
+
+				// TN-127: Create Inhibition Matcher
+				inhibitionMatcher = inhibition.NewMatcher(
+					activeAlertCache,
+					config.Rules,
+					appLogger,
+				)
+				slog.Info("✅ Inhibition Matcher initialized", "rules", len(config.Rules))
+
+				// TN-129: Create Inhibition State Manager
+				inhibitionStateManager = inhibition.NewDefaultStateManager(
+					redisCache,       // Redis for persistence (optional)
+					appLogger,
+					businessMetrics,  // Metrics
+				)
+				stateCleanupCtx := context.Background()
+				inhibitionStateManager.(*inhibition.DefaultStateManager).StartCleanupWorker(stateCleanupCtx)
+				defer inhibitionStateManager.(*inhibition.DefaultStateManager).StopCleanupWorker()
+				slog.Info("✅ Inhibition State Manager initialized (Redis persistence + cleanup worker)")
+
+				// TN-130: Create Inhibition API Handler
+				inhibitionHandler = handlers.NewInhibitionHandler(
+					inhibitionParser,
+					inhibitionMatcher,
+					inhibitionStateManager,
+					businessMetrics,
+					appLogger,
+				)
+				slog.Info("✅ Inhibition Handler initialized (ready for API endpoints)")
+			}
+		} else {
+			slog.Info("Inhibition config not found, inhibition disabled", "path", inhibitionConfigPath)
 		}
 	}
 
@@ -489,10 +562,13 @@ func main() {
 	// Initialize AlertProcessor
 	alertProcessorConfig := services.AlertProcessorConfig{
 		EnrichmentManager: enrichmentManager,
-		LLMClient:         classificationService, // TN-033: ClassificationService with caching + fallback
+		LLMClient:         classificationService,  // TN-033: ClassificationService with caching + fallback
 		FilterEngine:      filterEngine,
 		Publisher:         publisher,
-		Deduplication:     deduplicationService, // TN-036 Phase 3
+		Deduplication:     deduplicationService,   // TN-036 Phase 3
+		InhibitionMatcher: inhibitionMatcher,      // TN-130 Phase 6: Inhibition checking
+		InhibitionState:   inhibitionStateManager, // TN-130 Phase 6: State tracking
+		BusinessMetrics:   businessMetrics,        // TN-130 Phase 6: Business metrics
 		Logger:            appLogger,
 		Metrics:           metricsManager,
 	}
@@ -555,6 +631,21 @@ func main() {
 	slog.Info("Enrichment mode endpoints enabled",
 		"get_path", "GET /enrichment/mode",
 		"set_path", "POST /enrichment/mode")
+
+	// TN-130: Register Inhibition API endpoints (Alertmanager compatible)
+	if inhibitionHandler != nil {
+		mux.HandleFunc("GET /api/v2/inhibition/rules", inhibitionHandler.GetRules)
+		mux.HandleFunc("GET /api/v2/inhibition/status", inhibitionHandler.GetStatus)
+		mux.HandleFunc("POST /api/v2/inhibition/check", inhibitionHandler.CheckAlert)
+		slog.Info("✅ Inhibition API endpoints registered",
+			"endpoints", []string{
+				"GET /api/v2/inhibition/rules - List all inhibition rules",
+				"GET /api/v2/inhibition/status - Get active inhibition relationships",
+				"POST /api/v2/inhibition/check - Check if alert would be inhibited",
+			})
+	} else {
+		slog.Info("Inhibition API endpoints NOT available (config not found or initialization failed)")
+	}
 
 	// Add Prometheus metrics endpoint if enabled
 	if cfg.Metrics.Enabled {
