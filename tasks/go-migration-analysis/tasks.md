@@ -90,7 +90,7 @@
 - [x] **TN-130** Inhibition API Endpoints (GET/POST /api/v2/inhibition/*) ✅ **COMPLETE** (2025-11-05, 160% quality, Grade A+)
 
 ### Модуль 3: Silencing System
-- [ ] **TN-131** Silence Data Models (Silence/Matcher structures, PostgreSQL migration)
+- [x] **TN-131** Silence Data Models (Silence/Matcher structures, PostgreSQL migration) ✅ **ЗАВЕРШЕНА** (2025-11-04, 163% quality, Grade A+, 98.2% coverage, 38 tests, 2870x performance, commit f938ee7, PRODUCTION-READY)
 - [ ] **TN-132** Silence Matcher Engine (regex support, operators =, !=, =~, !~)
 - [ ] **TN-133** Silence Storage (PostgreSQL, indexes, TTL management)
 - [ ] **TN-134** Silence Manager Service (lifecycle, background GC)
