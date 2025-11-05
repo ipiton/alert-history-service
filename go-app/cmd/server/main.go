@@ -562,10 +562,13 @@ func main() {
 	// Initialize AlertProcessor
 	alertProcessorConfig := services.AlertProcessorConfig{
 		EnrichmentManager: enrichmentManager,
-		LLMClient:         classificationService, // TN-033: ClassificationService with caching + fallback
+		LLMClient:         classificationService,  // TN-033: ClassificationService with caching + fallback
 		FilterEngine:      filterEngine,
 		Publisher:         publisher,
-		Deduplication:     deduplicationService, // TN-036 Phase 3
+		Deduplication:     deduplicationService,   // TN-036 Phase 3
+		InhibitionMatcher: inhibitionMatcher,      // TN-130 Phase 6: Inhibition checking
+		InhibitionState:   inhibitionStateManager, // TN-130 Phase 6: State tracking
+		BusinessMetrics:   businessMetrics,        // TN-130 Phase 6: Business metrics
 		Logger:            appLogger,
 		Metrics:           metricsManager,
 	}

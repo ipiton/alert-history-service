@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/core"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/inhibition"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
@@ -33,7 +34,10 @@ type AlertProcessor struct {
 	llmClient         LLMClient
 	filterEngine      FilterEngine
 	publisher         Publisher
-	deduplication     DeduplicationService // TN-036 Phase 3: Deduplication service
+	deduplication     DeduplicationService                  // TN-036 Phase 3: Deduplication service
+	inhibitionMatcher inhibition.InhibitionMatcher          // TN-130 Phase 6: Inhibition checking
+	inhibitionState   inhibition.InhibitionStateManager     // TN-130 Phase 6: State tracking
+	businessMetrics   *metrics.BusinessMetrics              // TN-130 Phase 6: Business metrics for inhibition
 	logger            *slog.Logger
 	metrics           *metrics.MetricsManager
 }
@@ -44,7 +48,10 @@ type AlertProcessorConfig struct {
 	LLMClient         LLMClient // optional, required only for enriched mode
 	FilterEngine      FilterEngine
 	Publisher         Publisher
-	Deduplication     DeduplicationService // TN-036 Phase 3: optional, recommended for production
+	Deduplication     DeduplicationService                  // TN-036 Phase 3: optional, recommended for production
+	InhibitionMatcher inhibition.InhibitionMatcher          // TN-130 Phase 6: optional, recommended for inhibition
+	InhibitionState   inhibition.InhibitionStateManager     // TN-130 Phase 6: optional, for state tracking
+	BusinessMetrics   *metrics.BusinessMetrics              // TN-130 Phase 6: required if using inhibition
 	Logger            *slog.Logger
 	Metrics           *metrics.MetricsManager
 }
@@ -71,6 +78,9 @@ func NewAlertProcessor(config AlertProcessorConfig) (*AlertProcessor, error) {
 		filterEngine:      config.FilterEngine,
 		publisher:         config.Publisher,
 		deduplication:     config.Deduplication,
+		inhibitionMatcher: config.InhibitionMatcher, // TN-130 Phase 6
+		inhibitionState:   config.InhibitionState,   // TN-130 Phase 6
+		businessMetrics:   config.BusinessMetrics,   // TN-130 Phase 6
 		logger:            config.Logger,
 		metrics:           config.Metrics,
 	}, nil
@@ -103,6 +113,60 @@ func (p *AlertProcessor) ProcessAlert(ctx context.Context, alert *core.Alert) er
 
 			// Use deduplicated alert for further processing (may be updated)
 			alert = dedupResult.Alert
+		}
+	}
+
+	// TN-130 Phase 6: Step 1 - Inhibition check (after dedup, before classification)
+	if p.inhibitionMatcher != nil && alert.Status == core.StatusFiring {
+		inhibitionResult, err := p.inhibitionMatcher.ShouldInhibit(ctx, alert)
+		if err != nil {
+			p.logger.Warn("Inhibition check failed, continuing with processing",
+				"error", err,
+				"alert", alert.AlertName,
+				"fingerprint", alert.Fingerprint)
+			// Fail-safe: continue processing on inhibition error
+		} else if inhibitionResult != nil && inhibitionResult.Matched {
+			p.logger.Info("Alert inhibited by rule",
+				"alert", alert.AlertName,
+				"fingerprint", alert.Fingerprint,
+				"inhibited_by", inhibitionResult.InhibitedBy.Fingerprint,
+				"rule", inhibitionResult.Rule.Name,
+				"duration", inhibitionResult.MatchDuration)
+
+			// Record inhibition state for tracking
+			if p.inhibitionState != nil {
+				inhibitionStateRecord := &inhibition.InhibitionState{
+					TargetFingerprint: alert.Fingerprint,
+					SourceFingerprint: inhibitionResult.InhibitedBy.Fingerprint,
+					RuleName:          inhibitionResult.Rule.Name,
+					InhibitedAt:       time.Now(),
+					// ExpiresAt: nil means lasts until source resolves
+				}
+				if err := p.inhibitionState.RecordInhibition(ctx, inhibitionStateRecord); err != nil {
+					p.logger.Warn("Failed to record inhibition state", "error", err)
+					// Non-critical: inhibition still happens
+				}
+			}
+
+			// Record inhibition metrics
+			if p.businessMetrics != nil {
+				p.businessMetrics.InhibitionChecksTotal.WithLabelValues("inhibited").Inc()
+				p.businessMetrics.InhibitionMatchesTotal.WithLabelValues(inhibitionResult.Rule.Name).Inc()
+				p.businessMetrics.InhibitionDurationSeconds.WithLabelValues("check").Observe(inhibitionResult.MatchDuration.Seconds())
+			}
+
+			// Skip publishing - alert is inhibited
+			return nil
+		} else {
+			// Alert is NOT inhibited, continue processing
+			p.logger.Debug("Alert not inhibited, continuing processing",
+				"alert", alert.AlertName,
+				"fingerprint", alert.Fingerprint)
+
+			// Record allowed metric
+			if p.businessMetrics != nil {
+				p.businessMetrics.InhibitionChecksTotal.WithLabelValues("allowed").Inc()
+			}
 		}
 	}
 
