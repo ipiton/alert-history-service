@@ -79,6 +79,11 @@ type DefaultStateManager struct {
 
 	// Metrics for observability (TN-129)
 	metrics *metrics.BusinessMetrics
+
+	// Cleanup worker control (TN-129 Phase 6)
+	cleanupInterval time.Duration
+	cleanupStop     chan struct{}
+	cleanupDone     sync.WaitGroup
 }
 
 // NewDefaultStateManager creates a new DefaultStateManager instance.
@@ -90,18 +95,22 @@ type DefaultStateManager struct {
 //
 // Returns:
 //   - *DefaultStateManager: Initialized state manager.
+//
+// Note: Call StartCleanupWorker(ctx) after creation to enable automatic cleanup of expired states.
 func NewDefaultStateManager(redisStore cache.Cache, logger *slog.Logger, metrics *metrics.BusinessMetrics) *DefaultStateManager {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	return &DefaultStateManager{
-		states:      sync.Map{},
-		redisStore:  redisStore,
-		redisPrefix: "inhibition:state:",
-		redisTTL:    24 * time.Hour,
-		logger:      logger,
-		metrics:     metrics,
+		states:          sync.Map{},
+		redisStore:      redisStore,
+		redisPrefix:     "inhibition:state:",
+		redisTTL:        24 * time.Hour,
+		logger:          logger,
+		metrics:         metrics,
+		cleanupInterval: 1 * time.Minute, // Default: cleanup every minute
+		cleanupStop:     make(chan struct{}),
 	}
 }
 
@@ -380,4 +389,139 @@ func (sm *DefaultStateManager) countActiveStates() int {
 	})
 
 	return count
+}
+
+// ==================== Cleanup Worker (TN-129 Phase 6) ====================
+
+// StartCleanupWorker starts the background cleanup worker that periodically removes expired inhibition states.
+// The worker runs every cleanupInterval (default: 1 minute) and removes states where ExpiresAt has passed.
+//
+// This method is safe to call multiple times - only one worker will be active.
+//
+// Parameters:
+//   - ctx: Context for cancellation. When ctx is cancelled, the worker stops gracefully.
+//
+// Example:
+//
+//	sm := NewDefaultStateManager(redis, logger, metrics)
+//	sm.StartCleanupWorker(ctx)
+//	defer sm.StopCleanupWorker()
+func (sm *DefaultStateManager) StartCleanupWorker(ctx context.Context) {
+	sm.cleanupDone.Add(1)
+	go sm.cleanupWorker(ctx)
+
+	sm.logger.Info("Inhibition state cleanup worker started",
+		"interval", sm.cleanupInterval,
+	)
+}
+
+// cleanupWorker is the main loop for the cleanup worker.
+// It runs periodically and removes expired inhibition states.
+func (sm *DefaultStateManager) cleanupWorker(ctx context.Context) {
+	defer sm.cleanupDone.Done()
+
+	ticker := time.NewTicker(sm.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			sm.logger.Info("Cleanup worker stopped (context cancelled)")
+			return
+
+		case <-sm.cleanupStop:
+			sm.logger.Info("Cleanup worker stopped (explicit stop)")
+			return
+
+		case <-ticker.C:
+			sm.cleanupExpiredStates(ctx)
+		}
+	}
+}
+
+// cleanupExpiredStates removes all expired inhibition states from memory.
+// This is called periodically by the cleanup worker.
+func (sm *DefaultStateManager) cleanupExpiredStates(ctx context.Context) {
+	start := time.Now()
+	cleanedCount := 0
+	now := time.Now()
+
+	// Collect expired fingerprints
+	expiredFingerprints := make([]string, 0)
+
+	sm.states.Range(func(key, value interface{}) bool {
+		fingerprint, ok := key.(string)
+		if !ok {
+			return true
+		}
+
+		state, ok := value.(*InhibitionState)
+		if !ok {
+			return true
+		}
+
+		// Check if expired
+		if state.ExpiresAt != nil && now.After(*state.ExpiresAt) {
+			expiredFingerprints = append(expiredFingerprints, fingerprint)
+		}
+
+		return true
+	})
+
+	// Delete expired states
+	for _, fp := range expiredFingerprints {
+		sm.states.Delete(fp)
+		cleanedCount++
+
+		// Record metrics
+		if sm.metrics != nil {
+			sm.metrics.RecordInhibitionStateExpired()
+		}
+
+		sm.logger.Debug("Cleaned up expired inhibition state",
+			"target_fingerprint", fp,
+		)
+	}
+
+	// Record cleanup duration
+	if sm.metrics != nil {
+		duration := time.Since(start)
+		sm.metrics.RecordInhibitionStateOperation("cleanup", duration)
+
+		// Update active gauge
+		if cleanedCount > 0 {
+			count := sm.countActiveStates()
+			sm.metrics.SetInhibitionStateActive(count)
+		}
+	}
+
+	if cleanedCount > 0 {
+		sm.logger.Info("Cleanup completed",
+			"expired_states_removed", cleanedCount,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+	}
+}
+
+// StopCleanupWorker gracefully stops the cleanup worker.
+// This method blocks until the worker has fully stopped.
+//
+// It's safe to call this multiple times.
+//
+// Example:
+//
+//	sm.StartCleanupWorker(ctx)
+//	defer sm.StopCleanupWorker()
+func (sm *DefaultStateManager) StopCleanupWorker() {
+	select {
+	case <-sm.cleanupStop:
+		// Already stopped
+		return
+	default:
+		close(sm.cleanupStop)
+	}
+
+	sm.cleanupDone.Wait()
+
+	sm.logger.Info("Cleanup worker stopped gracefully")
 }
