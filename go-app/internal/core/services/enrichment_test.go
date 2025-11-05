@@ -96,6 +96,23 @@ func (m *mockCache) Flush(ctx context.Context) error {
 	return nil
 }
 
+// Redis SET operations (for TN-128 compatibility)
+func (m *mockCache) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	return nil // Mock implementation - no-op
+}
+
+func (m *mockCache) SMembers(ctx context.Context, key string) ([]string, error) {
+	return []string{}, nil // Mock implementation - empty set
+}
+
+func (m *mockCache) SRem(ctx context.Context, key string, members ...interface{}) error {
+	return nil // Mock implementation - no-op
+}
+
+func (m *mockCache) SCard(ctx context.Context, key string) (int64, error) {
+	return 0, nil // Mock implementation - empty set
+}
+
 // TestEnrichmentMode_IsValid tests IsValid method
 func TestEnrichmentMode_IsValid(t *testing.T) {
 	tests := []struct {

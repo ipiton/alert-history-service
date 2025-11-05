@@ -303,11 +303,12 @@ func TestFromContext(t *testing.T) {
 	logger.Info("test message")
 
 	logOutput = buf.String()
-	if err := json.Unmarshal([]byte(logOutput), &logEntry); err != nil {
+	var logEntry2 map[string]interface{}
+	if err := json.Unmarshal([]byte(logOutput), &logEntry2); err != nil {
 		t.Fatalf("Failed to parse log JSON: %v", err)
 	}
 
-	if _, exists := logEntry["request_id"]; exists {
+	if _, exists := logEntry2["request_id"]; exists {
 		t.Error("request_id should not be present when not in context")
 	}
 }
