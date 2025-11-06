@@ -185,3 +185,4 @@ inhibit_rules:
 # - Regex patterns are pre-compiled for performance
 # - Target: <1ms evaluation per alert
 # - Recommended: <100 inhibition rules per configuration
+
