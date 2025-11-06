@@ -212,7 +212,6 @@ func (w *gcWorker) expireActiveSilences(ctx context.Context) (int64, error) {
 	defer func() {
 		duration := time.Since(start).Seconds()
 		w.logger.Debug("expireActiveSilences completed", "duration_seconds", duration)
-		// Metrics will be implemented in Phase 7
 	}()
 
 	// Call repository ExpireSilences (deleteExpired=false for status update)
@@ -220,6 +219,11 @@ func (w *gcWorker) expireActiveSilences(ctx context.Context) (int64, error) {
 	if err != nil {
 		w.logger.Error("ExpireSilences failed", "error", err)
 		return 0, err
+	}
+
+	// Record metrics
+	if w.metrics != nil {
+		w.metrics.RecordGCRun("expire", count)
 	}
 
 	return count, nil
@@ -248,7 +252,6 @@ func (w *gcWorker) deleteOldExpired(ctx context.Context) (int64, error) {
 	defer func() {
 		duration := time.Since(start).Seconds()
 		w.logger.Debug("deleteOldExpired completed", "duration_seconds", duration)
-		// Metrics will be implemented in Phase 7
 	}()
 
 	// Calculate cutoff time (NOW - retention)
@@ -259,6 +262,11 @@ func (w *gcWorker) deleteOldExpired(ctx context.Context) (int64, error) {
 	if err != nil {
 		w.logger.Error("DeleteOldExpired failed", "error", err)
 		return 0, err
+	}
+
+	// Record metrics
+	if w.metrics != nil {
+		w.metrics.RecordGCRun("delete", count)
 	}
 
 	return count, nil

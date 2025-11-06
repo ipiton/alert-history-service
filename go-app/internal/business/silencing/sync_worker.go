@@ -188,6 +188,12 @@ func (w *syncWorker) runSync(ctx context.Context) {
 		"removed", removed,
 		"duration", duration,
 	)
+
+	// Record metrics
+	if w.metrics != nil {
+		w.metrics.RecordSyncRun()
+		w.metrics.UpdateActiveSilencesGauge(newSize, 0, 0) // TODO: Track by status
+	}
 }
 
 // Stop gracefully stops the sync worker.
