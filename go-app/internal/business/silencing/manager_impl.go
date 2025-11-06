@@ -436,3 +436,141 @@ func (sm *DefaultSilenceManager) ListSilences(
 
 	return silences, nil
 }
+
+// ==================== Alert Filtering Integration ====================
+
+// GetActiveSilences implements SilenceManager.GetActiveSilences.
+func (sm *DefaultSilenceManager) GetActiveSilences(
+	ctx context.Context,
+) ([]*silencing.Silence, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("GetActiveSilences completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return nil, ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return nil, ErrManagerShutdown
+	}
+
+	// Step 2: Fast path - return from cache
+	silences := sm.cache.GetByStatus(silencing.SilenceStatusActive)
+
+	// Step 3: Fallback - query repository if cache is empty
+	if len(silences) == 0 {
+		sm.logger.Debug("Cache empty, querying repository for active silences")
+
+		filter := infrasilencing.SilenceFilter{
+			Statuses: []silencing.SilenceStatus{silencing.SilenceStatusActive},
+			Limit:    10000, // Max active silences to fetch
+		}
+
+		var err error
+		silences, err = sm.repo.ListSilences(ctx, filter)
+		if err != nil {
+			sm.logger.Warn("Failed to fetch active silences from repository",
+				"error", err,
+			)
+			return nil, fmt.Errorf("get active silences: %w", err)
+		}
+
+		sm.logger.Debug("Fetched active silences from repository", "count", len(silences))
+	} else {
+		sm.logger.Debug("Returned active silences from cache", "count", len(silences))
+	}
+
+	return silences, nil
+}
+
+// IsAlertSilenced implements SilenceManager.IsAlertSilenced.
+func (sm *DefaultSilenceManager) IsAlertSilenced(
+	ctx context.Context,
+	alert *silencing.Alert,
+) (bool, []string, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("IsAlertSilenced completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return false, nil, ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return false, nil, ErrManagerShutdown
+	}
+
+	// Step 2: Validate input
+	if alert == nil || alert.Labels == nil {
+		sm.logger.Error("Invalid alert: nil alert or nil labels")
+		return false, nil, ErrInvalidAlert
+	}
+
+	// Step 3: Get active silences
+	silences, err := sm.GetActiveSilences(ctx)
+	if err != nil {
+		// Fail-safe: on error, assume alert is NOT silenced (fail open)
+		// This prevents blocking alerts if silence system has issues
+		sm.logger.Warn("Failed to get active silences, assuming alert NOT silenced (fail-safe)",
+			"error", err,
+			"alert_labels", alert.Labels,
+		)
+		return false, nil, nil
+	}
+
+	// Step 4: Check if alert matches any silence
+	var matchedIDs []string
+
+	for _, silence := range silences {
+		// Check context cancellation (prevent long-running operations)
+		select {
+		case <-ctx.Done():
+			sm.logger.Warn("IsAlertSilenced cancelled", "error", ctx.Err())
+			return false, nil, ctx.Err()
+		default:
+			// Continue processing
+		}
+
+		// Use matcher to check if alert matches this silence
+		matched, err := sm.matcher.Matches(ctx, *alert, silence)
+		if err != nil {
+			// Log error but continue checking other silences (graceful degradation)
+			sm.logger.Warn("Matcher error, skipping silence",
+				"silence_id", silence.ID,
+				"error", err,
+			)
+			continue
+		}
+
+		if matched {
+			matchedIDs = append(matchedIDs, silence.ID)
+			sm.logger.Debug("Alert matched silence",
+				"silence_id", silence.ID,
+				"alert_labels", alert.Labels,
+			)
+		}
+	}
+
+	// Step 5: Return result
+	silenced := len(matchedIDs) > 0
+
+	if silenced {
+		sm.logger.Info("Alert is silenced",
+			"matched_count", len(matchedIDs),
+			"silence_ids", matchedIDs,
+			"alert_labels", alert.Labels,
+		)
+	} else {
+		sm.logger.Debug("Alert is NOT silenced",
+			"alert_labels", alert.Labels,
+			"checked_silences", len(silences),
+		)
+	}
+
+	return silenced, matchedIDs, nil
+}
