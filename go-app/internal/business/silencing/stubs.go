@@ -9,24 +9,7 @@ import (
 )
 
 // Temporary stubs for Phase 1 compilation
-// These will be replaced in Phases 4, 5, and 7
-
-// gcWorker stub (will be implemented in Phase 4)
-type gcWorker struct{}
-
-func newGCWorker(
-	repo infrasilencing.SilenceRepository,
-	cache *silenceCache,
-	interval, retention time.Duration,
-	batchSize int,
-	logger *slog.Logger,
-	metrics *SilenceMetrics,
-) *gcWorker {
-	return &gcWorker{}
-}
-
-func (w *gcWorker) Start(ctx context.Context) {}
-func (w *gcWorker) Stop()                     {}
+// These will be replaced in Phases 5 and 7
 
 // syncWorker stub (will be implemented in Phase 5)
 type syncWorker struct{}
