@@ -723,7 +723,180 @@ func (r *PostgresSilenceRepository) GetExpiringSoon(ctx context.Context, window 
 }
 
 // BulkUpdateStatus implements SilenceRepository.BulkUpdateStatus.
-// Implementation TBD in Phase 5.
+//
+// This method updates the status of multiple silences in a single transaction.
+// Useful for mass operations (e.g., expiring multiple silences, bulk cancellation).
+//
+// Performance target: <100ms for 1000 silences
+//
+// Example:
+//
+//	// Bulk expire 100 silences
+//	ids := []string{"uuid1", "uuid2", ..., "uuid100"}
+//	err := repo.BulkUpdateStatus(ctx, ids, silencing.SilenceStatusExpired)
 func (r *PostgresSilenceRepository) BulkUpdateStatus(ctx context.Context, ids []string, status silencing.SilenceStatus) error {
-	return fmt.Errorf("not implemented yet")
+	start := time.Now()
+	operation := "bulk_update_status"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	// Step 1: Validation
+	if len(ids) == 0 {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "validation").Inc()
+		}
+		return fmt.Errorf("%w: ids cannot be empty", ErrInvalidFilter)
+	}
+
+	if status == "" {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "validation").Inc()
+		}
+		return fmt.Errorf("%w: status cannot be empty", ErrInvalidFilter)
+	}
+
+	// Step 2: Build UPDATE query with ANY($1) for array matching
+	query := `
+		UPDATE silences
+		SET status = $1,
+		    updated_at = NOW()
+		WHERE id = ANY($2)
+	`
+
+	r.logger.Debug("bulk updating silence statuses",
+		"count", len(ids),
+		"status", status,
+	)
+
+	// Step 3: Execute bulk update
+	result, err := r.pool.Exec(ctx, query, status, ids)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return fmt.Errorf("bulk update status: %w", err)
+	}
+
+	affected := result.RowsAffected()
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	r.logger.Info("bulk status update completed",
+		"requested", len(ids),
+		"updated", affected,
+		"status", status,
+	)
+
+	return nil
+}
+
+// GetSilenceStats implements SilenceRepository.GetSilenceStats.
+//
+// This method returns aggregate statistics about silences:
+//   - Total silences count
+//   - Count by status (active, pending, expired)
+//   - Count by creator (top 10)
+//
+// Performance target: <30ms
+//
+// Example:
+//
+//	stats, err := repo.GetSilenceStats(ctx)
+//	fmt.Printf("Active: %d, Expired: %d\n", stats.Active, stats.Expired)
+func (r *PostgresSilenceRepository) GetSilenceStats(ctx context.Context) (*SilenceStats, error) {
+	start := time.Now()
+	operation := "get_stats"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	stats := &SilenceStats{
+		ByCreator: make(map[string]int64),
+	}
+
+	// Query 1: Total and by-status counts
+	countQuery := `
+		SELECT
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE status = $1) AS active,
+			COUNT(*) FILTER (WHERE status = $2) AS pending,
+			COUNT(*) FILTER (WHERE status = $3) AS expired
+		FROM silences
+	`
+
+	err := r.pool.QueryRow(ctx, countQuery,
+		silencing.SilenceStatusActive,
+		silencing.SilenceStatusPending,
+		silencing.SilenceStatusExpired,
+	).Scan(&stats.Total, &stats.Active, &stats.Pending, &stats.Expired)
+
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return nil, fmt.Errorf("query silence counts: %w", err)
+	}
+
+	// Query 2: Top 10 creators
+	creatorQuery := `
+		SELECT created_by, COUNT(*) AS count
+		FROM silences
+		GROUP BY created_by
+		ORDER BY count DESC
+		LIMIT 10
+	`
+
+	rows, err := r.pool.Query(ctx, creatorQuery)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return nil, fmt.Errorf("query creators: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var creator string
+		var count int64
+
+		if err := rows.Scan(&creator, &count); err != nil {
+			if r.metrics != nil {
+				r.metrics.Errors.WithLabelValues(operation, "scan").Inc()
+			}
+			return nil, fmt.Errorf("scan creator stats: %w", err)
+		}
+
+		stats.ByCreator[creator] = count
+	}
+
+	if err := rows.Err(); err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "rows").Inc()
+		}
+		return nil, fmt.Errorf("iterate creator rows: %w", err)
+	}
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	r.logger.Debug("silence stats retrieved",
+		"total", stats.Total,
+		"active", stats.Active,
+		"pending", stats.Pending,
+		"expired", stats.Expired,
+	)
+
+	return stats, nil
 }

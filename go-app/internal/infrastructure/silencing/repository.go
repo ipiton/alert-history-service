@@ -110,6 +110,23 @@ type SilenceRepository interface {
 	//   - ErrTransactionFailed if the transaction fails
 	//   - ErrDatabaseConnection for database errors
 	BulkUpdateStatus(ctx context.Context, ids []string, status silencing.SilenceStatus) error
+
+	// GetSilenceStats returns aggregate statistics about silences.
+	//
+	// Returns counts by status (active, pending, expired) and top creators.
+	//
+	// Errors:
+	//   - ErrDatabaseConnection for database errors
+	GetSilenceStats(ctx context.Context) (*SilenceStats, error)
+}
+
+// SilenceStats contains aggregate statistics about silences.
+type SilenceStats struct {
+	Total     int64            `json:"total"`              // Total number of silences
+	Active    int64            `json:"active"`             // Number of active silences
+	Pending   int64            `json:"pending"`            // Number of pending silences
+	Expired   int64            `json:"expired"`            // Number of expired silences
+	ByCreator map[string]int64 `json:"by_creator"`         // Top 10 creators by silence count
 }
 
 // SilenceFilter defines filtering and pagination options for ListSilences.
