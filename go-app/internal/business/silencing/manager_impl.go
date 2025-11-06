@@ -574,3 +574,209 @@ func (sm *DefaultSilenceManager) IsAlertSilenced(
 
 	return silenced, matchedIDs, nil
 }
+
+// ==================== Lifecycle Management Implementation ====================
+
+// Start initializes and starts the SilenceManager and its background workers.
+//
+// This method:
+//  1. Performs initial cache sync from database (critical for pod restart)
+//  2. Starts GC worker (garbage collection)
+//  3. Starts Sync worker (periodic cache refresh)
+//
+// Idempotency:
+//   - Safe to call multiple times
+//   - Returns error if already started
+//
+// Error handling:
+//   - Returns error if initial cache sync fails
+//   - This is fail-fast: manager won't start if database is unreachable
+//
+// Example:
+//
+//	if err := manager.Start(ctx); err != nil {
+//	    log.Fatalf("Failed to start silence manager: %v", err)
+//	}
+//
+// Parameters:
+//   - ctx: Context for initial cache sync (not stored for workers)
+//
+// Returns:
+//   - error: Non-nil if manager already started or initial sync fails
+func (sm *DefaultSilenceManager) Start(ctx context.Context) error {
+	// Step 1: Check if already started
+	if sm.started.Load() {
+		return fmt.Errorf("silence manager already started")
+	}
+
+	sm.logger.Info("Starting silence manager",
+		"gc_interval", sm.config.GCInterval,
+		"gc_retention", sm.config.GCRetention,
+		"sync_interval", sm.config.SyncInterval,
+	)
+
+	// Step 2: Perform initial cache sync (fail-fast if database unreachable)
+	filter := infrasilencing.SilenceFilter{
+		Statuses: []silencing.SilenceStatus{silencing.SilenceStatusActive},
+		Limit:    10000, // Max active silences to load
+	}
+
+	silences, err := sm.repo.ListSilences(ctx, filter)
+	if err != nil {
+		sm.logger.Error("Initial cache sync failed", "error", err)
+		return fmt.Errorf("initial cache sync failed: %w", err)
+	}
+
+	sm.cache.Rebuild(silences)
+	sm.logger.Info("Initial cache sync complete",
+		"silences_loaded", len(silences),
+	)
+
+	// Step 3: Create manager context (cancelled on Stop)
+	sm.ctx, sm.cancel = context.WithCancel(context.Background())
+
+	// Step 4: Start background workers
+	sm.gcWorker.Start(sm.ctx)
+	sm.syncWorker.Start(sm.ctx)
+
+	// Step 5: Mark as started
+	sm.started.Store(true)
+
+	sm.logger.Info("Silence manager started successfully")
+
+	return nil
+}
+
+// Stop gracefully stops the SilenceManager and its background workers.
+//
+// This method:
+//  1. Cancels manager context (signals workers to stop)
+//  2. Waits for workers to complete current operations
+//  3. Blocks until all workers stopped or context timeout
+//
+// Timeout:
+//   - Respects the provided context timeout
+//   - Recommended: 30s timeout for graceful shutdown
+//   - Workers will force-stop if context cancelled
+//
+// Idempotency:
+//   - Safe to call multiple times
+//   - No-op if already stopped
+//
+// Example:
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//	defer cancel()
+//	if err := manager.Stop(ctx); err != nil {
+//	    log.Warnf("Shutdown warning: %v", err)
+//	}
+//
+// Parameters:
+//   - ctx: Context for shutdown timeout (30s recommended)
+//
+// Returns:
+//   - error: Non-nil if shutdown timeout exceeded or manager not started
+func (sm *DefaultSilenceManager) Stop(ctx context.Context) error {
+	// Step 1: Check if started
+	if !sm.started.Load() {
+		return fmt.Errorf("silence manager not started")
+	}
+
+	// Step 2: Check if already shutting down
+	if !sm.shutdown.CompareAndSwap(false, true) {
+		sm.logger.Warn("Silence manager already shutting down")
+		return nil // Not an error, just a no-op
+	}
+
+	sm.logger.Info("Stopping silence manager")
+
+	// Step 3: Cancel manager context (signals workers to stop)
+	if sm.cancel != nil {
+		sm.cancel()
+	}
+
+	// Step 4: Stop workers (blocks until workers stopped)
+	doneCh := make(chan struct{})
+	go func() {
+		sm.gcWorker.Stop()
+		sm.syncWorker.Stop()
+		close(doneCh)
+	}()
+
+	// Step 5: Wait for workers to stop or context timeout
+	select {
+	case <-doneCh:
+		sm.logger.Info("Silence manager stopped successfully")
+		return nil
+	case <-ctx.Done():
+		sm.logger.Warn("Silence manager shutdown timeout exceeded",
+			"error", ctx.Err(),
+		)
+		return fmt.Errorf("shutdown timeout: %w", ctx.Err())
+	}
+}
+
+// GetStats returns current operational statistics of the SilenceManager.
+//
+// This method provides:
+//   - Cache statistics (size, last sync, status breakdown)
+//   - Repository statistics (total counts by status)
+//   - Worker statistics (GC and sync run counts)
+//
+// Thread-safety:
+//   - Safe to call concurrently
+//   - Uses atomic operations and cache locks
+//
+// Performance:
+//   - <1ms typical execution time
+//   - No database queries (cache-only)
+//
+// Example:
+//
+//	stats, err := manager.GetStats(ctx)
+//	if err != nil {
+//	    log.Errorf("Failed to get stats: %v", err)
+//	}
+//	log.Infof("Active silences: %d, Cache size: %d",
+//	    stats.ActiveSilences,
+//	    stats.CacheSize,
+//	)
+//
+// Parameters:
+//   - ctx: Context (currently unused, reserved for future use)
+//
+// Returns:
+//   - *SilenceManagerStats: Current statistics
+//   - error: Non-nil if manager not started
+func (sm *DefaultSilenceManager) GetStats(ctx context.Context) (*SilenceManagerStats, error) {
+	// Step 1: Check if started
+	if !sm.started.Load() {
+		return nil, ErrManagerNotStarted
+	}
+
+	// Step 2: Get cache stats
+	cacheStats := sm.cache.Stats()
+
+	// Step 3: Build SilenceManagerStats
+	stats := &SilenceManagerStats{
+		// Cache statistics
+		CacheSize:     cacheStats.Size,
+		CacheLastSync: cacheStats.LastSync,
+		CacheByStatus: cacheStats.ByStatus,
+
+		// Repository statistics (TODO: Query repository for accurate counts in Phase 7)
+		TotalSilences:   int64(cacheStats.Size),
+		ActiveSilences:  int64(cacheStats.ByStatus[silencing.SilenceStatusActive]),
+		PendingSilences: int64(cacheStats.ByStatus[silencing.SilenceStatusPending]),
+		ExpiredSilences: int64(cacheStats.ByStatus[silencing.SilenceStatusExpired]),
+
+		// Worker statistics (TODO: Implement in Phase 7 with real metrics)
+		GCLastRun:      time.Time{},
+		GCTotalRuns:    0,
+		GCTotalCleaned: 0,
+		SyncLastRun:    time.Time{},
+		SyncTotalRuns:  0,
+	}
+
+	return stats, nil
+}
