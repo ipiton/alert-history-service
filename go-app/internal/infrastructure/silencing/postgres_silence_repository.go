@@ -434,27 +434,292 @@ func (r *PostgresSilenceRepository) silenceExists(ctx context.Context, id string
 }
 
 // ListSilences implements SilenceRepository.ListSilences.
-// Implementation TBD in Phase 3.
 func (r *PostgresSilenceRepository) ListSilences(ctx context.Context, filter SilenceFilter) ([]*silencing.Silence, error) {
-	return nil, fmt.Errorf("not implemented yet")
+	start := time.Now()
+	operation := "list"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	filter.ApplyDefaults()
+	if err := filter.Validate(); err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "validation").Inc()
+		}
+		return nil, err
+	}
+
+	query, args := r.buildListQuery(filter)
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return nil, fmt.Errorf("query silences: %w", err)
+	}
+	defer rows.Close()
+
+	silences := []*silencing.Silence{}
+	for rows.Next() {
+		var silence silencing.Silence
+		var matchersJSON []byte
+		var updatedAt *time.Time
+
+		err := rows.Scan(
+			&silence.ID, &silence.CreatedBy, &silence.Comment,
+			&silence.StartsAt, &silence.EndsAt, &matchersJSON,
+			&silence.Status, &silence.CreatedAt, &updatedAt,
+		)
+		if err != nil {
+			if r.metrics != nil {
+				r.metrics.Errors.WithLabelValues(operation, "scan").Inc()
+			}
+			return nil, fmt.Errorf("scan silence: %w", err)
+		}
+
+		if err := json.Unmarshal(matchersJSON, &silence.Matchers); err != nil {
+			if r.metrics != nil {
+				r.metrics.Errors.WithLabelValues(operation, "unmarshal").Inc()
+			}
+			return nil, fmt.Errorf("unmarshal matchers: %w", err)
+		}
+
+		silence.UpdatedAt = updatedAt
+		silences = append(silences, &silence)
+	}
+
+	if err := rows.Err(); err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "rows").Inc()
+		}
+		return nil, fmt.Errorf("iterate rows: %w", err)
+	}
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	return silences, nil
 }
 
 // CountSilences implements SilenceRepository.CountSilences.
-// Implementation TBD in Phase 3.
 func (r *PostgresSilenceRepository) CountSilences(ctx context.Context, filter SilenceFilter) (int64, error) {
-	return 0, fmt.Errorf("not implemented yet")
+	start := time.Now()
+	operation := "count"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	query, args := r.buildCountQuery(filter)
+	var count int64
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&count)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return 0, fmt.Errorf("count silences: %w", err)
+	}
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	return count, nil
 }
 
 // ExpireSilences implements SilenceRepository.ExpireSilences.
-// Implementation TBD in Phase 4.
+//
+// This method transitions silences to "expired" status if their ends_at
+// is before the given time. If deleteExpired is true, expired silences
+// are permanently deleted instead.
+//
+// Performance target: <50ms for 1000 silences
+//
+// Example:
+//
+//	// Expire silences ended before now
+//	count, err := repo.ExpireSilences(ctx, time.Now(), false)
+//
+//	// Delete silences expired 30+ days ago
+//	cutoff := time.Now().Add(-30 * 24 * time.Hour)
+//	count, err := repo.ExpireSilences(ctx, cutoff, true)
 func (r *PostgresSilenceRepository) ExpireSilences(ctx context.Context, before time.Time, deleteExpired bool) (int64, error) {
-	return 0, fmt.Errorf("not implemented yet")
+	start := time.Now()
+	operation := "expire"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	var query string
+	var args []interface{}
+
+	if deleteExpired {
+		// DELETE expired silences
+		query = `
+			DELETE FROM silences
+			WHERE status = $1
+			  AND ends_at < $2
+		`
+		args = []interface{}{silencing.SilenceStatusExpired, before}
+		operation = "delete_expired"
+	} else {
+		// UPDATE active/pending silences to expired
+		query = `
+			UPDATE silences
+			SET status = $1,
+			    updated_at = NOW()
+			WHERE status IN ($2, $3)
+			  AND ends_at < $4
+		`
+		args = []interface{}{
+			silencing.SilenceStatusExpired,
+			silencing.SilenceStatusActive,
+			silencing.SilenceStatusPending,
+			before,
+		}
+	}
+
+	r.logger.Debug("expiring silences",
+		"before", before,
+		"delete_expired", deleteExpired,
+	)
+
+	result, err := r.pool.Exec(ctx, query, args...)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return 0, fmt.Errorf("expire silences: %w", err)
+	}
+
+	affected := result.RowsAffected()
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	r.logger.Info("silences expired",
+		"count", affected,
+		"before", before,
+		"deleted", deleteExpired,
+	)
+
+	return affected, nil
 }
 
 // GetExpiringSoon implements SilenceRepository.GetExpiringSoon.
-// Implementation TBD in Phase 4.
+//
+// This method returns silences that will expire within the given window.
+// Useful for sending expiration notifications.
+//
+// Performance target: <30ms for 100 results
+//
+// Example:
+//
+//	// Get silences expiring in next 24 hours
+//	silences, err := repo.GetExpiringSoon(ctx, 24*time.Hour)
 func (r *PostgresSilenceRepository) GetExpiringSoon(ctx context.Context, window time.Duration) ([]*silencing.Silence, error) {
-	return nil, fmt.Errorf("not implemented yet")
+	start := time.Now()
+	operation := "get_expiring_soon"
+
+	defer func() {
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
+	}()
+
+	now := time.Now()
+	expiresBy := now.Add(window)
+
+	query := `
+		SELECT id, created_by, comment, starts_at, ends_at,
+		       matchers, status, created_at, updated_at
+		FROM silences
+		WHERE status IN ($1, $2)
+		  AND ends_at > $3
+		  AND ends_at <= $4
+		ORDER BY ends_at ASC
+		LIMIT 1000
+	`
+
+	r.logger.Debug("getting expiring silences",
+		"window", window,
+		"expires_by", expiresBy,
+	)
+
+	rows, err := r.pool.Query(ctx, query,
+		silencing.SilenceStatusActive,
+		silencing.SilenceStatusPending,
+		now,
+		expiresBy,
+	)
+	if err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "query").Inc()
+		}
+		return nil, fmt.Errorf("query expiring silences: %w", err)
+	}
+	defer rows.Close()
+
+	silences := []*silencing.Silence{}
+	for rows.Next() {
+		var silence silencing.Silence
+		var matchersJSON []byte
+		var updatedAt *time.Time
+
+		err := rows.Scan(
+			&silence.ID, &silence.CreatedBy, &silence.Comment,
+			&silence.StartsAt, &silence.EndsAt, &matchersJSON,
+			&silence.Status, &silence.CreatedAt, &updatedAt,
+		)
+		if err != nil {
+			if r.metrics != nil {
+				r.metrics.Errors.WithLabelValues(operation, "scan").Inc()
+			}
+			return nil, fmt.Errorf("scan silence: %w", err)
+		}
+
+		if err := json.Unmarshal(matchersJSON, &silence.Matchers); err != nil {
+			if r.metrics != nil {
+				r.metrics.Errors.WithLabelValues(operation, "unmarshal").Inc()
+			}
+			return nil, fmt.Errorf("unmarshal matchers: %w", err)
+		}
+
+		silence.UpdatedAt = updatedAt
+		silences = append(silences, &silence)
+	}
+
+	if err := rows.Err(); err != nil {
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "rows").Inc()
+		}
+		return nil, fmt.Errorf("iterate rows: %w", err)
+	}
+
+	if r.metrics != nil {
+		r.metrics.Operations.WithLabelValues(operation, "success").Inc()
+	}
+
+	r.logger.Debug("expiring silences found",
+		"count", len(silences),
+		"window", window,
+	)
+
+	return silences, nil
 }
 
 // BulkUpdateStatus implements SilenceRepository.BulkUpdateStatus.
