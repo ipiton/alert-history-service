@@ -403,4 +403,3 @@ log.Println("Config reloaded successfully")
 **Автор**: AlertHistory Team
 **Версия**: 1.0
 **Статус**: READY FOR IMPLEMENTATION
-

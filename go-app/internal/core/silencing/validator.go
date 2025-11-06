@@ -172,4 +172,3 @@ func isAlpha(r rune) bool {
 func isAlphaNumeric(r rune) bool {
 	return isAlpha(r) || (r >= '0' && r <= '9')
 }
-
