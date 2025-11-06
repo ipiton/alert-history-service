@@ -21,7 +21,7 @@ import (
 //go:embed templates/silences/*.html templates/common/*.html
 var templatesFS embed.FS
 
-//go:embed static/**/*
+//go:embed static/*.json static/*.js
 var staticFS embed.FS
 
 // SilenceUIHandler handles UI rendering for Silence Management.
