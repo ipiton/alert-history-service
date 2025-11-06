@@ -200,3 +200,239 @@ func (c *SilenceManagerConfig) Validate() error {
 	}
 	return nil
 }
+
+// ==================== CRUD Operations Implementation ====================
+
+// CreateSilence implements SilenceManager.CreateSilence.
+func (sm *DefaultSilenceManager) CreateSilence(
+	ctx context.Context,
+	silence *silencing.Silence,
+) (*silencing.Silence, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		// Metrics will be implemented in Phase 7
+		sm.logger.Debug("CreateSilence completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return nil, ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return nil, ErrManagerShutdown
+	}
+
+	// Step 2: Delegate to repository (validation happens there)
+	created, err := sm.repo.CreateSilence(ctx, silence)
+	if err != nil {
+		sm.logger.Error("Failed to create silence in repository",
+			"error", err,
+			"created_by", silence.CreatedBy,
+		)
+		return nil, fmt.Errorf("create silence: %w", err)
+	}
+
+	// Step 3: Add to cache if status is active
+	if created.Status == silencing.SilenceStatusActive {
+		sm.cache.Set(created)
+		sm.logger.Debug("Added active silence to cache", "silence_id", created.ID)
+	}
+
+	sm.logger.Info("Silence created",
+		"silence_id", created.ID,
+		"created_by", created.CreatedBy,
+		"status", created.Status,
+		"starts_at", created.StartsAt.Format(time.RFC3339),
+		"ends_at", created.EndsAt.Format(time.RFC3339),
+	)
+
+	return created, nil
+}
+
+// GetSilence implements SilenceManager.GetSilence.
+func (sm *DefaultSilenceManager) GetSilence(
+	ctx context.Context,
+	id string,
+) (*silencing.Silence, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("GetSilence completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return nil, ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return nil, ErrManagerShutdown
+	}
+
+	// Step 2: Try cache first (fast path)
+	if silence, found := sm.cache.Get(id); found {
+		sm.logger.Debug("Cache hit", "silence_id", id)
+		return silence, nil
+	}
+
+	sm.logger.Debug("Cache miss, querying repository", "silence_id", id)
+
+	// Step 3: Fallback to repository (slow path)
+	silence, err := sm.repo.GetSilenceByID(ctx, id)
+	if err != nil {
+		// Don't log error for "not found" (expected case)
+		if err != infrasilencing.ErrSilenceNotFound {
+			sm.logger.Error("Failed to get silence from repository",
+				"error", err,
+				"silence_id", id,
+			)
+		}
+		return nil, err
+	}
+
+	// Step 4: Update cache if active
+	if silence.Status == silencing.SilenceStatusActive {
+		sm.cache.Set(silence)
+		sm.logger.Debug("Added silence to cache after retrieval", "silence_id", id)
+	}
+
+	return silence, nil
+}
+
+// UpdateSilence implements SilenceManager.UpdateSilence.
+func (sm *DefaultSilenceManager) UpdateSilence(
+	ctx context.Context,
+	silence *silencing.Silence,
+) error {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("UpdateSilence completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return ErrManagerShutdown
+	}
+
+	// Step 2: Update in repository (validation happens there)
+	err := sm.repo.UpdateSilence(ctx, silence)
+	if err != nil {
+		sm.logger.Error("Failed to update silence in repository",
+			"error", err,
+			"silence_id", silence.ID,
+		)
+		return fmt.Errorf("update silence: %w", err)
+	}
+
+	// Step 3: Invalidate cache entry
+	sm.cache.Delete(silence.ID)
+	sm.logger.Debug("Invalidated cache entry", "silence_id", silence.ID)
+
+	// Step 4: Re-add to cache if new status is active
+	if silence.Status == silencing.SilenceStatusActive {
+		sm.cache.Set(silence)
+		sm.logger.Debug("Re-added updated silence to cache", "silence_id", silence.ID)
+	}
+
+	sm.logger.Info("Silence updated",
+		"silence_id", silence.ID,
+		"status", silence.Status,
+	)
+
+	return nil
+}
+
+// DeleteSilence implements SilenceManager.DeleteSilence.
+func (sm *DefaultSilenceManager) DeleteSilence(
+	ctx context.Context,
+	id string,
+) error {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("DeleteSilence completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return ErrManagerShutdown
+	}
+
+	// Step 2: Delete from repository
+	err := sm.repo.DeleteSilence(ctx, id)
+	if err != nil {
+		sm.logger.Error("Failed to delete silence from repository",
+			"error", err,
+			"silence_id", id,
+		)
+		return fmt.Errorf("delete silence: %w", err)
+	}
+
+	// Step 3: Remove from cache
+	sm.cache.Delete(id)
+	sm.logger.Debug("Removed silence from cache", "silence_id", id)
+
+	sm.logger.Info("Silence deleted", "silence_id", id)
+
+	return nil
+}
+
+// ListSilences implements SilenceManager.ListSilences.
+func (sm *DefaultSilenceManager) ListSilences(
+	ctx context.Context,
+	filter infrasilencing.SilenceFilter,
+) ([]*silencing.Silence, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		sm.logger.Debug("ListSilences completed", "duration_seconds", duration)
+	}()
+
+	// Step 1: Check manager state
+	if !sm.started.Load() {
+		return nil, ErrManagerNotStarted
+	}
+	if sm.shutdown.Load() {
+		return nil, ErrManagerShutdown
+	}
+
+	// Step 2: Fast path - if filter is only "status=active" and no pagination, use cache
+	if len(filter.Statuses) == 1 &&
+		filter.Statuses[0] == silencing.SilenceStatusActive &&
+		filter.Limit == 0 &&
+		filter.Offset == 0 &&
+		filter.CreatedBy == "" &&
+		filter.MatcherName == "" &&
+		filter.MatcherValue == "" &&
+		filter.StartsAfter == nil &&
+		filter.StartsBefore == nil &&
+		filter.EndsAfter == nil &&
+		filter.EndsBefore == nil {
+		silences := sm.cache.GetByStatus(silencing.SilenceStatusActive)
+		sm.logger.Debug("List silences (cache hit)", "count", len(silences))
+		return silences, nil
+	}
+
+	sm.logger.Debug("List silences (cache miss, querying repository)")
+
+	// Step 3: Slow path - complex filters, query repository
+	silences, err := sm.repo.ListSilences(ctx, filter)
+	if err != nil {
+		sm.logger.Error("Failed to list silences from repository",
+			"error", err,
+			"filter_statuses", filter.Statuses,
+		)
+		return nil, fmt.Errorf("list silences: %w", err)
+	}
+
+	sm.logger.Debug("List silences completed", "count", len(silences))
+
+	return silences, nil
+}
