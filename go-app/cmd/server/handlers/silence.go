@@ -30,7 +30,6 @@
 package handlers
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -70,7 +69,7 @@ import (
 //	mux.HandleFunc("GET /api/v2/silences", handler.ListSilences)
 type SilenceHandler struct {
 	manager silencing.SilenceManager // Business logic orchestrator
-	metrics *metrics.APIMetrics      // Prometheus metrics (optional)
+	metrics *metrics.BusinessMetrics // Prometheus metrics (optional)
 	logger  *slog.Logger             // Structured logger
 	cache   cache.Cache              // Response cache (optional)
 }
@@ -79,7 +78,7 @@ type SilenceHandler struct {
 //
 // Parameters:
 //   - manager: SilenceManager for business logic (required)
-//   - metrics: APIMetrics for Prometheus metrics (optional, can be nil)
+//   - metrics: BusinessMetrics for Prometheus metrics (optional, can be nil)
 //   - logger: Structured logger (optional, defaults to slog.Default())
 //   - cache: Cache for response caching (optional, can be nil)
 //
@@ -96,7 +95,7 @@ type SilenceHandler struct {
 //	)
 func NewSilenceHandler(
 	manager silencing.SilenceManager,
-	metrics *metrics.APIMetrics,
+	metrics *metrics.BusinessMetrics,
 	logger *slog.Logger,
 	cache cache.Cache,
 ) *SilenceHandler {
@@ -252,7 +251,8 @@ func (h *SilenceHandler) ListSilences(w http.ResponseWriter, r *http.Request) {
 	// Check cache for fast path (status=active only)
 	if params.isSimpleQuery() && h.cache != nil {
 		cacheKey := "silences:active"
-		if cached, found := h.cache.Get(ctx, cacheKey); found {
+		var cached *ListSilencesResponse
+		if err := h.cache.Get(ctx, cacheKey, &cached); err == nil && cached != nil {
 			// Generate ETag
 			etag := h.generateETag(cached)
 
@@ -535,7 +535,9 @@ func (h *SilenceHandler) DeleteSilence(w http.ResponseWriter, r *http.Request) {
 
 // sendError sends an error response with the given message and HTTP status code.
 func (h *SilenceHandler) sendError(w http.ResponseWriter, message string, code int) {
-	response := ErrorResponse{
+	response := struct {
+		Error string `json:"error"`
+	}{
 		Error: message,
 	}
 
@@ -600,6 +602,5 @@ func (h *SilenceHandler) recordMetrics(method, endpoint, status string, start ti
 	}
 
 	duration := time.Since(start)
-	h.metrics.SilenceRequestsTotal.WithLabelValues(method, endpoint, status).Inc()
-	h.metrics.SilenceRequestDuration.WithLabelValues(method, endpoint).Observe(duration.Seconds())
+	h.metrics.RecordSilenceRequest(method, endpoint, status, duration)
 }

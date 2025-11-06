@@ -28,6 +28,9 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/inhibition"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
+	businesssilencing "github.com/vitaliisemenov/alert-history/internal/business/silencing"
+	coresilencing "github.com/vitaliisemenov/alert-history/internal/core/silencing"
+	infrasilencing "github.com/vitaliisemenov/alert-history/internal/infrastructure/silencing"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 	pkgmiddleware "github.com/vitaliisemenov/alert-history/pkg/middleware"
@@ -645,6 +648,98 @@ func main() {
 			})
 	} else {
 		slog.Info("Inhibition API endpoints NOT available (config not found or initialization failed)")
+	}
+
+	// TN-134/135: Initialize Silence Management System (Module 3)
+	var silenceHandler *handlers.SilenceHandler
+	if pool != nil && businessMetrics != nil {
+		slog.Info("Initializing Silence Management System (TN-134, TN-135)")
+
+		// TN-131: Silence repository with PostgreSQL
+		silenceRepo := infrasilencing.NewPostgresSilenceRepository(pool.Pool(), appLogger)
+		slog.Info("✅ Silence Repository initialized (PostgreSQL)")
+
+		// TN-132: Silence matcher engine with regex support
+		silenceMatcher := coresilencing.NewSilenceMatcher()
+		slog.Info("✅ Silence Matcher initialized (regex support, 4 operators)")
+
+		// TN-134: Silence manager service with lifecycle management
+		silenceManager := businesssilencing.NewDefaultSilenceManager(
+			silenceRepo,
+			silenceMatcher,
+			appLogger,
+			nil, // No custom config (uses defaults)
+		)
+
+		// Start silence manager (initializes cache + background workers)
+		silenceCtx := context.Background()
+		if err := silenceManager.Start(silenceCtx); err != nil {
+			slog.Error("Failed to start silence manager", "error", err)
+		} else {
+			slog.Info("✅ Silence Manager started",
+				"features", []string{
+					"In-memory cache (fast lookups <50ns)",
+					"Background GC worker (5m interval)",
+					"Background sync worker (1m interval)",
+					"8 Prometheus metrics",
+				})
+
+			// Graceful shutdown on exit
+			defer func() {
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := silenceManager.Stop(shutdownCtx); err != nil {
+					slog.Warn("Silence manager shutdown timeout", "error", err)
+				} else {
+					slog.Info("✅ Silence Manager stopped gracefully")
+				}
+			}()
+
+			// TN-135: Create Silence API Handler
+			silenceHandler = handlers.NewSilenceHandler(
+				silenceManager,
+				businessMetrics,
+				appLogger,
+				redisCache, // For ETag response caching
+			)
+			slog.Info("✅ Silence API Handler initialized (ready for 7 endpoints)")
+		}
+	} else {
+		slog.Warn("⚠️ Silence Management System NOT initialized (database or metrics not available)")
+	}
+
+	// TN-135: Register Silence API endpoints (Alertmanager compatible)
+	if silenceHandler != nil {
+		mux.HandleFunc("POST /api/v2/silences", silenceHandler.CreateSilence)
+		mux.HandleFunc("GET /api/v2/silences", silenceHandler.ListSilences)
+		// Extract ID from path manually for GET/PUT/DELETE (Go 1.22+ pattern matching)
+		mux.HandleFunc("/api/v2/silences/", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				silenceHandler.GetSilence(w, r)
+			case http.MethodPut:
+				silenceHandler.UpdateSilence(w, r)
+			case http.MethodDelete:
+				silenceHandler.DeleteSilence(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+		mux.HandleFunc("POST /api/v2/silences/check", silenceHandler.CheckAlert)
+		mux.HandleFunc("POST /api/v2/silences/bulk/delete", silenceHandler.BulkDelete)
+
+		slog.Info("✅ Silence API endpoints registered (TN-135, 150% quality)",
+			"endpoints", []string{
+				"POST /api/v2/silences - Create silence",
+				"GET /api/v2/silences - List silences (with filters, pagination, sorting)",
+				"GET /api/v2/silences/{id} - Get silence by ID",
+				"PUT /api/v2/silences/{id} - Update silence (partial update)",
+				"DELETE /api/v2/silences/{id} - Delete silence",
+				"POST /api/v2/silences/check - Check if alert would be silenced (150%)",
+				"POST /api/v2/silences/bulk/delete - Bulk delete silences (150%)",
+			})
+	} else {
+		slog.Info("Silence API endpoints NOT available (database or metrics not available)")
 	}
 
 	// Add Prometheus metrics endpoint if enabled

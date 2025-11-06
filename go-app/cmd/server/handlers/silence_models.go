@@ -101,7 +101,7 @@ func (p *ListSilencesParams) toSilenceFilter() infrasilencing.SilenceFilter {
 
 	// Creator filter
 	if p.CreatedBy != nil {
-		filter.CreatedBy = p.CreatedBy
+		filter.CreatedBy = *p.CreatedBy
 	}
 
 	// Time range filters
@@ -118,13 +118,8 @@ func (p *ListSilencesParams) toSilenceFilter() infrasilencing.SilenceFilter {
 		filter.EndsBefore = p.EndsBefore
 	}
 
-	// Sorting
-	if p.Sort != "" {
-		filter.SortBy = p.Sort
-	}
-	if p.Order != "" {
-		filter.SortOrder = p.Order
-	}
+	// Note: Sorting handled by repository layer via SQL ORDER BY
+	// SilenceFilter doesn't have SortBy/SortOrder fields (TN-133 design)
 
 	return filter
 }
@@ -175,11 +170,10 @@ type BulkDeleteError struct {
 	Error string `json:"error"` // Error message
 }
 
-// ErrorResponse represents a standard error response.
-type ErrorResponse struct {
-	Error   string            `json:"error"`             // Error message
-	Details map[string]string `json:"details,omitempty"` // Additional error details (field errors, etc.)
-	Code    string            `json:"code,omitempty"`    // Error code (for programmatic handling)
+// SilenceErrorResponse represents a standard error response for silence API.
+// Note: We reuse ErrorResponse from enrichment.go to avoid duplication
+type SilenceErrorResponse = struct {
+	Error string `json:"error"`
 }
 
 // ==================== Conversion Helpers ====================
