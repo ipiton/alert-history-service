@@ -88,7 +88,7 @@ func (h *SilenceUIHandler) RenderDashboard(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Fetch silences from manager
-	silences, err := h.manager.ListSilences(ctx, filters.ToRepositoryFilters())
+	silences, err := h.manager.ListSilences(ctx, filters.ToSilenceFilter())
 	if err != nil {
 		h.logger.Error("Failed to list silences", "error", err)
 		h.renderError(w, r, "Failed to load silences", http.StatusInternalServerError)
@@ -278,10 +278,10 @@ func (h *SilenceUIHandler) RenderAnalytics(w http.ResponseWriter, r *http.Reques
 
 	// Convert stats to our format
 	analyticsStats := &SilenceStats{
-		Total:        stats.Total,
-		Active:       stats.Active,
-		Pending:      stats.Pending,
-		Expired:      stats.Expired,
+		Total:        int(stats.TotalSilences),
+		Active:       int(stats.ActiveSilences),
+		Pending:      int(stats.PendingSilences),
+		Expired:      int(stats.ExpiredSilences),
 		Expired24h:   0, // TODO: Calculate from stats
 		AvgDuration:  0, // TODO: Calculate from stats
 		TotalMatchers: 0, // TODO: Calculate from stats

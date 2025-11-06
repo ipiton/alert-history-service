@@ -2,9 +2,11 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	coresilencing "github.com/vitaliisemenov/alert-history/internal/core/silencing"
+	infrasilencing "github.com/vitaliisemenov/alert-history/internal/infrastructure/silencing"
 )
 
 // ============================================================================
@@ -304,45 +306,58 @@ func (f *FilterParams) Validate() error {
 
 // ToRepositoryFilters converts FilterParams to repository filter format.
 // This method будет использоваться для передачи фильтров в SilenceRepository.
-func (f *FilterParams) ToRepositoryFilters() map[string]interface{} {
-	filters := make(map[string]interface{})
+func (f *FilterParams) ToSilenceFilter() infrasilencing.SilenceFilter {
+	filter := infrasilencing.SilenceFilter{
+		Limit:  f.Limit,
+		Offset: f.Offset,
+	}
 
 	// Status filter
-	if f.Status != "all" {
-		filters["status"] = f.Status
+	if f.Status != "all" && f.Status != "" {
+		// Parse status string to SilenceStatus enum
+		switch f.Status {
+		case "active":
+			filter.Statuses = []coresilencing.SilenceStatus{coresilencing.SilenceStatusActive}
+		case "pending":
+			filter.Statuses = []coresilencing.SilenceStatus{coresilencing.SilenceStatusPending}
+		case "expired":
+			filter.Statuses = []coresilencing.SilenceStatus{coresilencing.SilenceStatusExpired}
+		}
 	}
 
 	// Creator filter
 	if f.Creator != "" {
-		filters["creator"] = f.Creator
+		filter.CreatedBy = f.Creator
 	}
 
-	// Matcher filter (TODO: parse matcher string)
+	// Matcher filter (parse "name=value" format)
 	if f.Matcher != "" {
-		filters["matcher"] = f.Matcher
+		// Simple parsing for UI matcher filter
+		// Format: "alertname=HighCPU" or just "alertname"
+		parts := strings.SplitN(f.Matcher, "=", 2)
+		if len(parts) > 0 {
+			filter.MatcherName = parts[0]
+			if len(parts) == 2 {
+				filter.MatcherValue = parts[1]
+			}
+		}
 	}
 
 	// Time range filters
 	if !f.StartsAfter.IsZero() {
-		filters["starts_after"] = f.StartsAfter
+		filter.StartsAfter = &f.StartsAfter
 	}
 	if !f.StartsBefore.IsZero() {
-		filters["starts_before"] = f.StartsBefore
+		filter.StartsBefore = &f.StartsBefore
 	}
 	if !f.EndsAfter.IsZero() {
-		filters["ends_after"] = f.EndsAfter
+		filter.EndsAfter = &f.EndsAfter
 	}
 	if !f.EndsBefore.IsZero() {
-		filters["ends_before"] = f.EndsBefore
+		filter.EndsBefore = &f.EndsBefore
 	}
 
-	// Pagination
-	filters["limit"] = f.Limit
-	filters["offset"] = f.Offset
+	// Note: Sorting is not part of SilenceFilter, handled at application level
 
-	// Sorting
-	filters["sort_by"] = f.SortBy
-	filters["sort_order"] = f.SortOrder
-
-	return filters
+	return filter
 }

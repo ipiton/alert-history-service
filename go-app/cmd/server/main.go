@@ -707,17 +707,24 @@ func main() {
 			slog.Info("✅ Silence API Handler initialized (ready for 7 endpoints)")
 
 			// TN-136: Create Silence UI Handler & WebSocket Hub
-			silenceUIHandler = handlers.NewSilenceUIHandler(silenceManager, appLogger)
-			wsHub = handlers.NewWebSocketHub(appLogger, 5*time.Second)
-			go wsHub.Run() // Start WebSocket hub in background
-			slog.Info("✅ Silence UI Handler initialized (TN-136, 150% quality)",
-				"features", []string{
-					"8 HTML templates (dashboard, forms, detail, analytics)",
-					"WebSocket real-time updates",
-					"PWA support (offline-capable)",
-					"WCAG 2.1 AA compliant",
-					"Mobile-responsive design",
-				})
+			wsHub = handlers.NewWebSocketHub(appLogger)
+			go wsHub.Start(context.Background()) // Start WebSocket hub in background
+
+			var silenceUIErr error
+			silenceUIHandler, silenceUIErr = handlers.NewSilenceUIHandler(silenceManager, silenceHandler, wsHub, redisCache, appLogger)
+			if silenceUIErr != nil {
+				slog.Error("Failed to create Silence UI Handler", "error", silenceUIErr)
+				silenceUIHandler = nil // Set to nil so we skip route registration
+			} else {
+				slog.Info("✅ Silence UI Handler initialized (TN-136, 150% quality)",
+					"features", []string{
+						"8 HTML templates (dashboard, forms, detail, analytics)",
+						"WebSocket real-time updates",
+						"PWA support (offline-capable)",
+						"WCAG 2.1 AA compliant",
+						"Mobile-responsive design",
+					})
+			}
 		}
 	} else {
 		slog.Warn("⚠️ Silence Management System NOT initialized (database or metrics not available)")
