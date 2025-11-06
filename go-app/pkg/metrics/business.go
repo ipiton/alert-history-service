@@ -87,6 +87,16 @@ type BusinessMetrics struct {
 	InhibitionStateExpiredTotal         prometheus.Counter       // Total expired inhibition states cleaned up
 	InhibitionStateOperationDurationSeconds *prometheus.HistogramVec // Duration of state operations (record/remove/get/check)
 	InhibitionStateRedisErrorsTotal     *prometheus.CounterVec   // Redis errors during state persistence by operation (persist/load/delete)
+
+	// Silence API subsystem - silence management metrics (TN-135, Module 3)
+	SilenceRequestsTotal           *prometheus.CounterVec   // Total silence API requests by method, endpoint, status
+	SilenceRequestDuration         *prometheus.HistogramVec // Duration of silence API requests by method, endpoint
+	SilenceValidationErrors        *prometheus.CounterVec   // Silence validation errors by field
+	SilenceOperationsTotal         *prometheus.CounterVec   // Silence operations (create/update/delete/check/bulk_delete) by operation, result
+	SilenceActiveSilences          prometheus.Gauge         // Current number of active silences
+	SilenceCacheHitsTotal          *prometheus.CounterVec   // Silence API cache hits by endpoint
+	SilenceResponseSizeBytes       *prometheus.HistogramVec // Size of silence API responses by endpoint
+	SilenceRateLimitExceeded       *prometheus.CounterVec   // Rate limit exceeded events by endpoint
 }
 
 // NewBusinessMetrics creates a new BusinessMetrics instance with standard configuration.
@@ -566,6 +576,90 @@ func NewBusinessMetrics(namespace string) *BusinessMetrics {
 			},
 			[]string{"operation"}, // operation: persist|load|delete
 		),
+
+		// Silence API subsystem metrics (TN-135, Module 3)
+		SilenceRequestsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "api_requests_total",
+				Help:      "Total number of silence API requests",
+			},
+			[]string{"method", "endpoint", "status"}, // method: POST|GET|PUT|DELETE, endpoint: /silences|/silences/:id|/silences/check|/silences/bulk/delete, status: 200|201|204|400|404|409|500
+		),
+
+		SilenceRequestDuration: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "api_request_duration_seconds",
+				Help:      "Duration of silence API requests",
+				// Buckets optimized for API requests: 1ms to 1s
+				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
+			},
+			[]string{"method", "endpoint"}, // method: POST|GET|PUT|DELETE, endpoint: /silences|/silences/:id
+		),
+
+		SilenceValidationErrors: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "validation_errors_total",
+				Help:      "Total number of silence validation errors",
+			},
+			[]string{"field"}, // field: createdBy|comment|startsAt|endsAt|matchers
+		),
+
+		SilenceOperationsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "operations_total",
+				Help:      "Total number of silence operations",
+			},
+			[]string{"operation", "result"}, // operation: create|update|delete|check|bulk_delete, result: success|error|silenced|not_silenced
+		),
+
+		SilenceActiveSilences: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "active_silences",
+				Help:      "Current number of active silences",
+			},
+		),
+
+		SilenceCacheHitsTotal: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "cache_hits_total",
+				Help:      "Total number of cache hits for silence API",
+			},
+			[]string{"endpoint"}, // endpoint: /silences|/silences/:id
+		),
+
+		SilenceResponseSizeBytes: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "response_size_bytes",
+				Help:      "Size of silence API responses in bytes",
+				// Buckets optimized for JSON responses: 100B to 100KB
+				Buckets: prometheus.ExponentialBuckets(100, 2, 10), // 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200
+			},
+			[]string{"endpoint"}, // endpoint: /silences|/silences/:id|/silences/check
+		),
+
+		SilenceRateLimitExceeded: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "business_silence",
+				Name:      "rate_limit_exceeded_total",
+				Help:      "Total number of rate limit exceeded events",
+			},
+			[]string{"endpoint"}, // endpoint: /silences/bulk/delete
+		),
 	}
 }
 
@@ -910,4 +1004,75 @@ func (m *BusinessMetrics) RecordInhibitionStateOperation(operation string, durat
 //   - operation: The operation that failed ("persist", "load", "delete")
 func (m *BusinessMetrics) RecordInhibitionStateRedisError(operation string) {
 	m.InhibitionStateRedisErrorsTotal.WithLabelValues(operation).Inc()
+}
+
+// ==================== Silence API Metrics (TN-135) ====================
+
+// RecordSilenceRequest records a silence API request.
+// Called by silence handlers to track all HTTP requests.
+//
+// Parameters:
+//   - method: The HTTP method (POST, GET, PUT, DELETE)
+//   - endpoint: The endpoint path (/silences, /silences/:id, /silences/check, /silences/bulk/delete)
+//   - status: The HTTP status code (200, 201, 204, 400, 404, 409, 500)
+//   - duration: The request duration
+func (m *BusinessMetrics) RecordSilenceRequest(method, endpoint, status string, duration time.Duration) {
+	m.SilenceRequestsTotal.WithLabelValues(method, endpoint, status).Inc()
+	m.SilenceRequestDuration.WithLabelValues(method, endpoint).Observe(duration.Seconds())
+}
+
+// RecordSilenceValidationError records a silence validation error.
+// Called when request validation fails.
+//
+// Parameters:
+//   - field: The field that failed validation (createdBy, comment, startsAt, endsAt, matchers)
+func (m *BusinessMetrics) RecordSilenceValidationError(field string) {
+	m.SilenceValidationErrors.WithLabelValues(field).Inc()
+}
+
+// RecordSilenceOperation records a silence operation.
+// Called after CRUD operations complete.
+//
+// Parameters:
+//   - operation: The operation type (create, update, delete, check, bulk_delete)
+//   - result: The operation result (success, error, silenced, not_silenced)
+func (m *BusinessMetrics) RecordSilenceOperation(operation, result string) {
+	m.SilenceOperationsTotal.WithLabelValues(operation, result).Inc()
+}
+
+// SetActiveSilences sets the current number of active silences.
+// Called periodically or after operations that change silence count.
+//
+// Parameters:
+//   - count: The current number of active silences
+func (m *BusinessMetrics) SetActiveSilences(count int) {
+	m.SilenceActiveSilences.Set(float64(count))
+}
+
+// RecordSilenceCacheHit records a cache hit in silence API.
+// Called when returning cached responses.
+//
+// Parameters:
+//   - endpoint: The endpoint that had a cache hit (/silences, /silences/:id)
+func (m *BusinessMetrics) RecordSilenceCacheHit(endpoint string) {
+	m.SilenceCacheHitsTotal.WithLabelValues(endpoint).Inc()
+}
+
+// RecordSilenceResponseSize records the size of a silence API response.
+// Called when sending responses to track payload sizes.
+//
+// Parameters:
+//   - endpoint: The endpoint (/silences, /silences/:id, /silences/check)
+//   - sizeBytes: The response size in bytes
+func (m *BusinessMetrics) RecordSilenceResponseSize(endpoint string, sizeBytes int) {
+	m.SilenceResponseSizeBytes.WithLabelValues(endpoint).Observe(float64(sizeBytes))
+}
+
+// RecordSilenceRateLimitExceeded records a rate limit exceeded event.
+// Called when request rate limiting is triggered.
+//
+// Parameters:
+//   - endpoint: The endpoint that exceeded rate limit (/silences/bulk/delete)
+func (m *BusinessMetrics) RecordSilenceRateLimitExceeded(endpoint string) {
+	m.SilenceRateLimitExceeded.WithLabelValues(endpoint).Inc()
 }
