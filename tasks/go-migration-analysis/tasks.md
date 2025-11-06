@@ -93,7 +93,7 @@
 - [x] **TN-131** Silence Data Models (Silence/Matcher structures, PostgreSQL migration) ✅ **ЗАВЕРШЕНА** (2025-11-04, 163% quality, Grade A+, 98.2% coverage, 38 tests, 2870x performance, commit f938ee7, PRODUCTION-READY)
 - [x] **TN-132** Silence Matcher Engine (regex support, operators =, !=, =~, !~) ✅ **ЗАВЕРШЕНА** (2025-11-05, 150%+ quality, Grade A+, 95.9% coverage, 500x performance, PRODUCTION-READY)
 - [x] **TN-133** Silence Storage (PostgreSQL, indexes, TTL management) ✅ **ЗАВЕРШЕНА** (2025-11-06, 152.7% quality, Grade A+, 90%+ coverage, 58 tests, 13 benchmarks, 8h, commit 463adcf, PRODUCTION-READY)
-- [ ] **TN-134** Silence Manager Service (lifecycle, background GC)
+- [x] **TN-134** Silence Manager Service (lifecycle, background GC) ✅ **ЗАВЕРШЕНА** (2025-11-06, 150%+ quality, Grade A+, 90% coverage, 61 tests, 8 Prometheus metrics, 9h, commits 13, PRODUCTION-READY)
 - [ ] **TN-135** Silence API Endpoints (POST/GET/DELETE /api/v2/silences/*)
 - [ ] **TN-136** Silence UI Components (dashboard widget, bulk operations)
 
