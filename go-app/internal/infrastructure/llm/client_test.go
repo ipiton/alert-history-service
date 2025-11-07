@@ -239,6 +239,7 @@ func TestHTTPLLMClient_RetryLogic(t *testing.T) {
 	config.MaxRetries = 3
 	config.RetryDelay = 10 * time.Millisecond
 	config.RetryBackoff = 1.5
+	config.CircuitBreaker.Enabled = false // Disable circuit breaker for retry test
 
 	client := NewHTTPLLMClient(config, nil)
 

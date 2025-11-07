@@ -267,4 +267,3 @@ func sanitizeRouteSources(route *Route) {
 		sanitizeRouteSources(nestedRoute)
 	}
 }
-

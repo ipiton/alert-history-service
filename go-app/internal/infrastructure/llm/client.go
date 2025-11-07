@@ -249,7 +249,10 @@ func (c *HTTPLLMClient) classifyAlertOnce(ctx context.Context, alert *core.Alert
 			"status", resp.StatusCode,
 			"body", string(body),
 		)
-		return nil, fmt.Errorf("LLM API error: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("LLM API error: status %d, body: %s", resp.StatusCode, string(body)),
+		}
 	}
 
 	// Parse response
