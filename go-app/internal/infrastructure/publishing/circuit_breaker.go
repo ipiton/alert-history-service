@@ -44,15 +44,31 @@ type CircuitBreaker struct {
 	failureCount     int
 	successCount     int
 	lastFailureTime  time.Time
+	targetName       string
+	metrics          *PublishingMetrics
 	mu               sync.RWMutex
 }
 
 // NewCircuitBreaker creates a new circuit breaker
 func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
-	return &CircuitBreaker{
-		config: config,
-		state:  StateClosed,
+	return NewCircuitBreakerWithMetrics(config, "", nil)
+}
+
+// NewCircuitBreakerWithMetrics creates a new circuit breaker with metrics
+func NewCircuitBreakerWithMetrics(config CircuitBreakerConfig, targetName string, metrics *PublishingMetrics) *CircuitBreaker {
+	cb := &CircuitBreaker{
+		config:     config,
+		state:      StateClosed,
+		targetName: targetName,
+		metrics:    metrics,
 	}
+
+	// Initialize metric
+	if cb.metrics != nil && cb.targetName != "" {
+		cb.metrics.RecordCircuitBreakerState(cb.targetName, StateClosed)
+	}
+
+	return cb
 }
 
 // CanAttempt checks if a request can be attempted
@@ -112,16 +128,26 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
+	oldState := cb.state
+
 	switch cb.state {
 	case StateClosed:
 		if cb.failureCount >= cb.config.FailureThreshold {
 			// Transition to open
 			cb.state = StateOpen
+			if cb.metrics != nil && cb.targetName != "" {
+				cb.metrics.RecordCircuitBreakerTrip(cb.targetName)
+			}
 		}
 	case StateHalfOpen:
 		// Go back to open on any failure in half-open
 		cb.state = StateOpen
 		cb.successCount = 0
+	}
+
+	// Update metric if state changed
+	if cb.metrics != nil && cb.targetName != "" && oldState != cb.state {
+		cb.metrics.RecordCircuitBreakerState(cb.targetName, cb.state)
 	}
 }
 
