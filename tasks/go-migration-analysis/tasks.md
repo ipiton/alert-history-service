@@ -98,7 +98,7 @@
 - [x] **TN-136** Silence UI Components (dashboard widget, bulk operations) ✅ **ЗАВЕРШЕНА** (2025-11-06, 150% quality, Grade A+, 11.6K LOC, 8 templates, WebSocket, PWA, WCAG 2.1 AA, 16h, commits 3, PRODUCTION-READY)
 
 ## 📝 ФАЗА 5: Publishing System (NEW)
-- [ ] **TN-46** Kubernetes client для secrets discovery
+- [x] **TN-46** Kubernetes client для secrets discovery ✅ **ЗАВЕРШЕНА** (2025-11-07, 150%+ quality, Grade A+, 72.8% coverage, 46 tests, 2032 LOC, 5h [69% faster], PRODUCTION-READY)
 - [ ] **TN-47** Target discovery manager с label selectors
 - [ ] **TN-48** Target refresh mechanism (periodic + manual)
 - [ ] **TN-49** Target health monitoring
