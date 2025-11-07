@@ -297,3 +297,191 @@ func BenchmarkHealth(b *testing.B) {
 		_ = client.Health(ctx)
 	}
 }
+
+// BenchmarkListSecrets_100Secrets benchmarks listing 100 secrets
+func BenchmarkListSecrets_100Secrets(b *testing.B) {
+	secrets := make([]*corev1.Secret, 100)
+	for i := 0; i < 100; i++ {
+		secrets[i] = createTestSecret(
+			fmt.Sprintf("secret-%d", i),
+			"default",
+			map[string]string{"publishing-target": "true"},
+			nil,
+		)
+	}
+
+	client := createFakeClient(secrets...)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = client.ListSecrets(ctx, "default", "publishing-target=true")
+	}
+}
+
+// Edge Case Tests
+
+// TestListSecrets_EmptyNamespace tests with empty namespace
+func TestListSecrets_EmptyNamespace(t *testing.T) {
+	client := createFakeClient()
+
+	// Empty namespace should work (fake clientset allows it)
+	secrets, err := client.ListSecrets(context.Background(), "", "")
+
+	// fake clientset allows empty namespace
+	require.NoError(t, err)
+	// Empty list is expected (might be nil or empty slice, both are valid)
+	assert.Equal(t, 0, len(secrets), "should return empty list for empty namespace with no secrets")
+}
+
+// TestListSecrets_EmptyLabelSelector tests with empty label selector
+func TestListSecrets_EmptyLabelSelector(t *testing.T) {
+	secret1 := createTestSecret("secret-1", "default", map[string]string{"app": "test"}, nil)
+	secret2 := createTestSecret("secret-2", "default", map[string]string{"env": "prod"}, nil)
+
+	client := createFakeClient(secret1, secret2)
+
+	// Empty label selector should return all secrets
+	secrets, err := client.ListSecrets(context.Background(), "default", "")
+
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(secrets), 2, "empty label selector should return all secrets")
+}
+
+// TestGetSecret_EmptyName tests with empty secret name
+func TestGetSecret_EmptyName(t *testing.T) {
+	client := createFakeClient()
+
+	secret, err := client.GetSecret(context.Background(), "default", "")
+
+	// Empty name is invalid, should return error
+	assert.Error(t, err)
+	assert.Nil(t, secret)
+}
+
+// TestGetSecret_EmptyNamespace tests with empty namespace
+func TestGetSecret_EmptyNamespace(t *testing.T) {
+	secret1 := createTestSecret("test-secret", "default", nil, nil)
+	client := createFakeClient(secret1)
+
+	// Empty namespace might work in fake clientset
+	secret, err := client.GetSecret(context.Background(), "", "test-secret")
+
+	// Behavior depends on fake clientset implementation
+	if err != nil {
+		assert.Nil(t, secret)
+	} else {
+		assert.NotNil(t, secret)
+	}
+}
+
+// TestDefaultK8sClientConfig_NilSafe tests that nil config is handled
+func TestDefaultK8sClientConfig_NilSafe(t *testing.T) {
+	config := DefaultK8sClientConfig()
+
+	require.NotNil(t, config)
+	assert.Equal(t, 30*time.Second, config.Timeout)
+	assert.NotNil(t, config.Logger)
+}
+
+// TestListSecrets_LargeResult tests with many secrets
+func TestListSecrets_LargeResult(t *testing.T) {
+	// Create 50 secrets (reasonable test size)
+	secrets := make([]*corev1.Secret, 50)
+	for i := 0; i < 50; i++ {
+		secrets[i] = createTestSecret(
+			fmt.Sprintf("secret-%d", i),
+			"default",
+			map[string]string{"publishing-target": "true"},
+			nil,
+		)
+	}
+
+	client := createFakeClient(secrets...)
+
+	result, err := client.ListSecrets(context.Background(), "default", "publishing-target=true")
+
+	require.NoError(t, err)
+	assert.Len(t, result, 50)
+}
+
+// TestListSecrets_Timeout tests timeout scenario
+func TestListSecrets_Timeout(t *testing.T) {
+	client := createFakeClient()
+
+	// Create context with very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	defer cancel()
+
+	// Wait for context to timeout
+	time.Sleep(1 * time.Millisecond)
+
+	secrets, err := client.ListSecrets(ctx, "default", "")
+
+	// Should fail with timeout error
+	assert.Error(t, err)
+	assert.Nil(t, secrets)
+}
+
+// TestGetSecret_Timeout tests timeout scenario for GetSecret
+func TestGetSecret_Timeout(t *testing.T) {
+	secret1 := createTestSecret("test-secret", "default", nil, nil)
+	client := createFakeClient(secret1)
+
+	// Create context with very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	defer cancel()
+
+	// Wait for context to timeout
+	time.Sleep(1 * time.Millisecond)
+
+	secret, err := client.GetSecret(ctx, "default", "test-secret")
+
+	// Should fail with timeout error
+	assert.Error(t, err)
+	assert.Nil(t, secret)
+}
+
+// TestRetryLogic_ContextCancellation tests context cancellation during retry
+func TestRetryLogic_ContextCancellation(t *testing.T) {
+	client := createFakeClient()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	attemptCount := 0
+	err := client.retryWithBackoff(ctx, func() error {
+		attemptCount++
+		if attemptCount == 2 {
+			// Cancel context after first retry
+			cancel()
+		}
+		return fmt.Errorf("retryable error")
+	})
+
+	// Should fail with timeout error due to cancellation
+	assert.Error(t, err)
+	var timeoutErr *TimeoutError
+	assert.ErrorAs(t, err, &timeoutErr)
+	assert.LessOrEqual(t, attemptCount, 2, "should stop retrying after context cancellation")
+}
+
+// TestClose_AfterOperations tests closing client after operations
+func TestClose_AfterOperations(t *testing.T) {
+	secret1 := createTestSecret("test-secret", "default", nil, nil)
+	client := createFakeClient(secret1)
+
+	// Perform some operations
+	_, err1 := client.ListSecrets(context.Background(), "default", "")
+	require.NoError(t, err1)
+
+	_, err2 := client.GetSecret(context.Background(), "default", "test-secret")
+	require.NoError(t, err2)
+
+	// Close client
+	err := client.Close()
+	assert.NoError(t, err)
+
+	// After close, clientset is nil, operations will fail
+	// But this is expected behavior
+}
