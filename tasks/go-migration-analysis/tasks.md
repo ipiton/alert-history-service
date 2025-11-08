@@ -99,7 +99,7 @@
 
 ## 📝 ФАЗА 5: Publishing System (NEW)
 - [x] **TN-46** Kubernetes client для secrets discovery ✅ **ЗАВЕРШЕНА** (2025-11-07, 150%+ quality, Grade A+, 72.8% coverage, 46 tests, 2032 LOC, 5h [69% faster], PRODUCTION-READY)
-- [ ] **TN-47** Target discovery manager с label selectors
+- [x] **TN-47** Target discovery manager с label selectors ✅ **ЗАВЕРШЕНА** (2025-11-08, 147% quality, Grade A+, 88.6% coverage, 65 tests, 3233 LOC, 7.6h [24% faster], PRODUCTION-READY 95%)
 - [ ] **TN-48** Target refresh mechanism (periodic + manual)
 - [ ] **TN-49** Target health monitoring
 - [ ] **TN-50** RBAC для доступа к secrets
