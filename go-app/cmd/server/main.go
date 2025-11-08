@@ -29,6 +29,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	businesssilencing "github.com/vitaliisemenov/alert-history/internal/business/silencing"
+	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
 	coresilencing "github.com/vitaliisemenov/alert-history/internal/core/silencing"
 	infrasilencing "github.com/vitaliisemenov/alert-history/internal/infrastructure/silencing"
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
@@ -795,6 +796,106 @@ func main() {
 		}
 	} else {
 		slog.Info("Silence API endpoints NOT available (database or metrics not available)")
+	}
+
+	// TN-046/047/048: Initialize Publishing System (Target Discovery + Refresh)
+	// This system discovers publishing targets from K8s Secrets and keeps them up-to-date
+	var refreshManager publishing.RefreshManager
+	_ = refreshManager // Suppress unused variable warning (used when K8s code uncommented)
+	if businessMetrics != nil {
+		slog.Info("Initializing Publishing System (TN-046, TN-047, TN-048)")
+
+		// TN-046: Create K8s Client for secrets discovery
+		// Note: Uncomment when K8s environment is available
+		// k8sClient, err := k8s.NewK8sClient(k8s.DefaultK8sClientConfig())
+		// if err != nil {
+		// 	slog.Warn("Failed to create K8s client, publishing system disabled", "error", err)
+		// } else {
+		// 	defer k8sClient.Close()
+		// 	slog.Info("✅ K8s Client initialized (TN-046)")
+		//
+		// 	// TN-047: Create Target Discovery Manager
+		// 	discoveryMgr, err := publishing.NewTargetDiscoveryManager(
+		// 		k8sClient,
+		// 		os.Getenv("K8S_NAMESPACE"),        // Default: "default"
+		// 		"publishing-target=true",           // Label selector
+		// 		appLogger,
+		// 		businessMetrics,
+		// 	)
+		// 	if err != nil {
+		// 		slog.Error("Failed to create discovery manager", "error", err)
+		// 	} else {
+		// 		slog.Info("✅ Target Discovery Manager initialized (TN-047)")
+		//
+		// 		// Initial discovery
+		// 		if err := discoveryMgr.DiscoverTargets(ctx); err != nil {
+		// 			slog.Warn("Initial target discovery failed", "error", err)
+		// 		} else {
+		// 			stats := discoveryMgr.GetStats()
+		// 			slog.Info("Initial targets discovered",
+		// 				"total", stats.TotalTargets,
+		// 				"valid", stats.ValidTargets,
+		// 				"invalid", stats.InvalidTargets)
+		// 		}
+		//
+		// 		// TN-048: Create Refresh Manager
+		// 		refreshConfig := publishing.DefaultRefreshConfig()
+		// 		// Override defaults from environment if set
+		// 		if interval := os.Getenv("TARGET_REFRESH_INTERVAL"); interval != "" {
+		// 			if d, err := time.ParseDuration(interval); err == nil {
+		// 				refreshConfig.Interval = d
+		// 			}
+		// 		}
+		//
+		// 		refreshManager, err = publishing.NewRefreshManager(
+		// 			discoveryMgr,
+		// 			refreshConfig,
+		// 			appLogger,
+		// 			businessMetrics,
+		// 		)
+		// 		if err != nil {
+		// 			slog.Error("Failed to create refresh manager", "error", err)
+		// 		} else {
+		// 			// Start background refresh worker
+		// 			if err := refreshManager.Start(); err != nil {
+		// 				slog.Error("Failed to start refresh manager", "error", err)
+		// 			} else {
+		// 				slog.Info("✅ Refresh Manager started (TN-048)",
+		// 					"features", []string{
+		// 						"Periodic refresh (5m interval)",
+		// 						"Manual refresh API",
+		// 						"Exponential backoff retry (30s → 5m)",
+		// 						"5 Prometheus metrics",
+		// 					})
+		//
+		// 				// Graceful shutdown on exit
+		// 				defer func() {
+		// 					if err := refreshManager.Stop(30 * time.Second); err != nil {
+		// 						slog.Warn("Refresh manager shutdown timeout", "error", err)
+		// 					} else {
+		// 						slog.Info("✅ Refresh Manager stopped gracefully")
+		// 					}
+		// 				}()
+		//
+		// 				// Register API endpoints
+		// 				mux.HandleFunc("POST /api/v2/publishing/targets/refresh",
+		// 					handlers.HandleRefreshTargets(refreshManager))
+		// 				mux.HandleFunc("GET /api/v2/publishing/targets/status",
+		// 					handlers.HandleRefreshStatus(refreshManager))
+		//
+		// 				slog.Info("✅ Publishing API endpoints registered (TN-048)",
+		// 					"endpoints", []string{
+		// 						"POST /api/v2/publishing/targets/refresh - Manual refresh (async)",
+		// 						"GET /api/v2/publishing/targets/status - Refresh status",
+		// 					})
+		// 			}
+		// 		}
+		// 	}
+		// }
+		slog.Info("⚠️ Publishing System initialization skipped (K8s client disabled for now)")
+		slog.Info("To enable: uncomment TN-046/047/048 section in main.go and ensure K8s access")
+	} else {
+		slog.Warn("⚠️ Publishing System NOT initialized (metrics not available)")
 	}
 
 	// Add Prometheus metrics endpoint if enabled
