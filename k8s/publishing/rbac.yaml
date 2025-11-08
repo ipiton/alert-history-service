@@ -1,0 +1,83 @@
+---
+# ServiceAccount for Alert History Publishing System
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alert-history-publisher
+  namespace: alert-history
+  labels:
+    app: alert-history
+    component: publisher
+
+---
+# ClusterRole with minimal required permissions for secrets discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alert-history-publisher-secrets-reader
+  labels:
+    app: alert-history
+    component: publisher
+rules:
+  # Read secrets for publishing target discovery
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+
+  # Optional: Read namespaces for cross-namespace discovery
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding to grant permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alert-history-publisher-secrets-reader
+  labels:
+    app: alert-history
+    component: publisher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alert-history-publisher-secrets-reader
+subjects:
+  - kind: ServiceAccount
+    name: alert-history-publisher
+    namespace: alert-history
+
+---
+# Alternative: Namespace-scoped Role for single-namespace deployment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alert-history-publisher-secrets-reader
+  namespace: alert-history
+  labels:
+    app: alert-history
+    component: publisher
+rules:
+  # Read secrets in this namespace only
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+
+---
+# Alternative: RoleBinding for namespace-scoped deployment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alert-history-publisher-secrets-reader
+  namespace: alert-history
+  labels:
+    app: alert-history
+    component: publisher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alert-history-publisher-secrets-reader
+subjects:
+  - kind: ServiceAccount
+    name: alert-history-publisher
+    namespace: alert-history

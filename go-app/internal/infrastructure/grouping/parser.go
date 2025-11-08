@@ -324,4 +324,3 @@ const (
 	// maxConfigSize is the maximum allowed size for config files (10MB)
 	maxConfigSize = 10 * 1024 * 1024
 )
-
