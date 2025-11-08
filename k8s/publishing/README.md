@@ -1,383 +1,234 @@
-# Publishing System RBAC & Kubernetes Manifests
+# K8s Publishing System Manifests
+
+**Purpose**: RBAC configuration for TN-046/047/048/049
+**Status**: 🚀 Ready for deployment
+
+---
 
 ## Overview
 
-This directory contains Kubernetes RBAC manifests for Alert History Publishing System that implements least-privilege access for secrets discovery.
+Эти манифесты создают минимальные RBAC permissions для Publishing System:
+- **ServiceAccount**: `alert-history-publishing`
+- **Role**: `alert-history-secrets-reader` (read-only access to secrets)
+- **RoleBinding**: Binds role to ServiceAccount
 
-## Architecture
+---
 
-```
-┌─────────────────────────────────────────────────────┐
-│            Alert History Pod                        │
-│                                                     │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  Publishing System                           │ │
-│  │                                              │ │
-│  │  ┌────────────────────────────────────────┐ │ │
-│  │  │  K8s Client (Secrets Discovery)        │ │ │
-│  │  │  - List/Get Secrets with label filters│ │ │
-│  │  │  - Watch for changes (optional)        │ │ │
-│  │  └────────────────────────────────────────┘ │ │
-│  │                     ↓                        │ │
-│  │  ┌────────────────────────────────────────┐ │ │
-│  │  │  Target Discovery Manager              │ │ │
-│  │  │  - Parse secret data → PublishingTarget│ │ │
-│  │  └────────────────────────────────────────┘ │ │
-│  │                     ↓                        │ │
-│  │  ┌────────────────────────────────────────┐ │ │
-│  │  │  Publishers (Rootly, PagerDuty, etc)   │ │ │
-│  │  └────────────────────────────────────────┘ │ │
-│  └──────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
-                    ↓ (uses ServiceAccount)
-┌─────────────────────────────────────────────────────┐
-│            Kubernetes API Server                    │
-│                                                     │
-│  RBAC: ServiceAccount → Role → Secrets             │
-└─────────────────────────────────────────────────────┘
-```
+## Quick Start
 
-## Files
-
-- `rbac.yaml` - Complete RBAC setup (ServiceAccount, Role, RoleBinding)
-- `secret-example.yaml` - Example publishing target secret
-- `README.md` - This documentation
-
-## RBAC Permissions
-
-### Required Permissions
-
-The publishing system requires **read-only** access to Kubernetes Secrets:
-
-```yaml
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
-```
-
-### Principle of Least Privilege
-
-1. **Read-Only Access**: No write/delete permissions on secrets
-2. **Resource-Specific**: Only secrets, no other resources
-3. **Namespace-Scoped**: Prefer namespace-scoped Role over ClusterRole
-4. **Label Filtering**: Application-level filtering via `publishing-target=true` label
-
-## Deployment Options
-
-### Option 1: Namespace-Scoped (Recommended)
-
-**Use Case**: Single-namespace deployment
+### 1. Customize Namespace
 
 ```bash
-# Deploy namespace-scoped RBAC
-kubectl apply -f rbac.yaml --namespace alert-history
+# Replace 'default' with your namespace in all files
+export TARGET_NAMESPACE="production"
+
+sed -i "s/namespace: default/namespace: $TARGET_NAMESPACE/g" *.yaml
 ```
 
-**Benefits**:
-- Minimal permissions (only one namespace)
-- Easier security auditing
-- Complies with zero-trust principles
-
-**Permissions**:
-- Read secrets in `alert-history` namespace only
-
-### Option 2: Cluster-Scoped
-
-**Use Case**: Multi-namespace target discovery
+### 2. Apply Manifests
 
 ```bash
-# Deploy cluster-scoped RBAC (requires cluster-admin)
-kubectl apply -f rbac.yaml
+# Apply in order
+kubectl apply -f serviceaccount.yaml
+kubectl apply -f role.yaml
+kubectl apply -f rolebinding.yaml
+
+# Verify
+kubectl get serviceaccount alert-history-publishing -n $TARGET_NAMESPACE
+kubectl get role alert-history-secrets-reader -n $TARGET_NAMESPACE
+kubectl get rolebinding alert-history-secrets-reader-binding -n $TARGET_NAMESPACE
 ```
 
-**Benefits**:
-- Discover targets across all namespaces
-- Centralized publishing configuration
+### 3. Test Permissions
 
-**Permissions**:
-- Read secrets cluster-wide
-- Read namespaces (for cross-namespace discovery)
+```bash
+# Test if ServiceAccount can list secrets
+kubectl auth can-i list secrets \
+  --as=system:serviceaccount:$TARGET_NAMESPACE:alert-history-publishing \
+  -n $TARGET_NAMESPACE
 
-**⚠️ Warning**: Requires cluster-admin to create ClusterRole
+# Should return: yes
 
-## Secret Format
+# Test if ServiceAccount can delete secrets (should be NO)
+kubectl auth can-i delete secrets \
+  --as=system:serviceaccount:$TARGET_NAMESPACE:alert-history-publishing \
+  -n $TARGET_NAMESPACE
 
-Publishing targets are stored as Kubernetes Secrets with specific labels and data format:
+# Should return: no
+```
+
+---
+
+## Security Considerations
+
+### ✅ What This Allows
+
+- **Read secrets** (`get`, `list`, `watch`)
+- **Read events** (`get`, `list`, `watch`) - for debugging only
+
+### ❌ What This Does NOT Allow
+
+- Create secrets
+- Update secrets
+- Delete secrets
+- Access other namespaces
+- Access pods, deployments, or other resources
+
+### 🔒 Best Practices
+
+1. **Use label selectors** in application code to filter secrets:
+   ```go
+   labelSelector := "publishing-target=true"
+   secretList, err := k8sClient.ListSecrets(ctx, namespace, labelSelector)
+   ```
+
+2. **Use separate namespaces** for different environments:
+   - `alert-history-dev` - Development
+   - `alert-history-staging` - Staging
+   - `alert-history-prod` - Production
+
+3. **Rotate ServiceAccount tokens** periodically (K8s does this automatically)
+
+4. **Audit secret access**:
+   ```bash
+   # Check audit logs for secret access
+   kubectl logs -n kube-system -l component=kube-apiserver | grep secrets
+   ```
+
+---
+
+## Example: Target Secret
+
+Create a secret that will be discovered by TN-047:
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: publishing-target-pagerduty
-  namespace: alert-history
+  name: rootly-prod
+  namespace: production
   labels:
-    publishing-target: "true"  # Required for discovery
-    target-type: "pagerduty"
+    publishing-target: "true"  # Required for discovery!
+    target-type: rootly
+    environment: production
 type: Opaque
 stringData:
-  type: "pagerduty"
-  url: "https://events.pagerduty.com/v2/enqueue"
-  enabled: "true"
-  format: "pagerduty"
-  # PagerDuty-specific
-  routing-key: "your-routing-key-here"
+  config: |
+    {
+      "name": "rootly-prod",
+      "type": "rootly",
+      "url": "https://api.rootly.com/v1",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer YOUR_ROOTLY_API_TOKEN"
+      },
+      "format": "rootly"
+    }
 ```
 
-See `secret-example.yaml` for complete examples.
-
-## Security Best Practices
-
-### 1. Namespace Isolation
-
+Apply:
 ```bash
-# Create dedicated namespace
-kubectl create namespace alert-history
-
-# Deploy with namespace isolation
-kubectl apply -f rbac.yaml -n alert-history
+kubectl apply -f rootly-target-secret.yaml
 ```
 
-### 2. Secret Labeling
-
-Use labels to restrict discovery scope:
-
-```yaml
-labels:
-  publishing-target: "true"  # Discovery filter
-  environment: "production"  # Additional filtering
-  managed-by: "alert-history"
-```
-
-### 3. Secret Encryption at Rest
-
-Ensure cluster has encryption at rest enabled:
-
+Verify discovery:
 ```bash
-# Check encryption
-kubectl get encryptionconfig -n kube-system
+kubectl get secrets -l publishing-target=true -n production
 ```
 
-### 4. Audit Logging
-
-Enable audit logging for secret access:
-
-```yaml
-# audit-policy.yaml
-apiVersion: audit.k8s.io/v1
-kind: Policy
-rules:
-  - level: Metadata
-    resources:
-      - group: ""
-        resources: ["secrets"]
-    namespaces: ["alert-history"]
-```
-
-### 5. Network Policies
-
-Restrict pod network access:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: alert-history-publisher-netpol
-spec:
-  podSelector:
-    matchLabels:
-      app: alert-history
-      component: publisher
-  policyTypes:
-    - Egress
-  egress:
-    # Allow K8s API
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - protocol: TCP
-          port: 443  # K8s API
-    # Allow external publishing endpoints
-    - to:
-        - podSelector: {}
-      ports:
-        - protocol: TCP
-          port: 443  # HTTPS
-```
-
-## Verification
-
-### 1. Check ServiceAccount Creation
-
-```bash
-kubectl get serviceaccount alert-history-publisher -n alert-history
-```
-
-Expected output:
-```
-NAME                       SECRETS   AGE
-alert-history-publisher    1         5m
-```
-
-### 2. Verify Role/ClusterRole
-
-```bash
-# For namespace-scoped
-kubectl get role alert-history-publisher-secrets-reader -n alert-history
-
-# For cluster-scoped
-kubectl get clusterrole alert-history-publisher-secrets-reader
-```
-
-### 3. Check RoleBinding/ClusterRoleBinding
-
-```bash
-# For namespace-scoped
-kubectl get rolebinding alert-history-publisher-secrets-reader -n alert-history
-
-# For cluster-scoped
-kubectl get clusterrolebinding alert-history-publisher-secrets-reader
-```
-
-### 4. Test Permissions
-
-```bash
-# Test secret access
-kubectl auth can-i list secrets \
-  --as=system:serviceaccount:alert-history:alert-history-publisher \
-  -n alert-history
-# Expected: yes
-
-# Test write permissions (should fail)
-kubectl auth can-i create secrets \
-  --as=system:serviceaccount:alert-history:alert-history-publisher \
-  -n alert-history
-# Expected: no
-```
-
-### 5. Validate Secret Discovery
-
-Deploy a test pod with the ServiceAccount:
-
-```bash
-kubectl run test-publisher \
-  --image=bitnami/kubectl:latest \
-  --serviceaccount=alert-history-publisher \
-  --namespace=alert-history \
-  --rm -it -- bash
-
-# Inside the pod
-kubectl get secrets -l publishing-target=true
-```
+---
 
 ## Troubleshooting
 
-### Issue: Permission Denied
+### Problem: "Forbidden" errors when listing secrets
 
-**Symptom**:
+**Symptoms**:
 ```
-Error: secrets is forbidden: User "system:serviceaccount:alert-history:alert-history-publisher"
-cannot list resource "secrets" in API group ""
+Error: secrets is forbidden: User "system:serviceaccount:default:alert-history-publishing"
+cannot list resource "secrets" in API group "" in the namespace "default"
 ```
 
 **Solution**:
 ```bash
-# Check RoleBinding
-kubectl describe rolebinding alert-history-publisher-secrets-reader -n alert-history
+# Check if RoleBinding exists
+kubectl get rolebinding alert-history-secrets-reader-binding
 
-# Verify ServiceAccount in pod spec
-kubectl get pod <pod-name> -n alert-history -o yaml | grep serviceAccount
+# Check if Role exists
+kubectl get role alert-history-secrets-reader
+
+# Check if ServiceAccount exists
+kubectl get serviceaccount alert-history-publishing
+
+# Re-apply manifests
+kubectl apply -f rolebinding.yaml
 ```
 
-### Issue: Secrets Not Discovered
+---
 
-**Symptom**: No targets found, logs show 0 secrets
+### Problem: Wrong namespace
+
+**Symptoms**:
+- Secrets not discovered
+- RBAC works in testing but not in production
 
 **Solution**:
 ```bash
-# Check label on secrets
-kubectl get secrets -n alert-history --show-labels
+# Check which namespace the pod is running in
+kubectl get pods -l app=alert-history -A
 
-# Verify label filter in code matches secret labels
-# Code expects: "publishing-target=true"
+# Update namespace in all manifests
+sed -i 's/namespace: default/namespace: production/g' *.yaml
+
+# Re-apply
+kubectl apply -f *.yaml
 ```
 
-### Issue: Cross-Namespace Access Denied
+---
 
-**Symptom**: Cannot access secrets in other namespaces
+### Problem: ServiceAccount token not mounted
+
+**Symptoms**:
+```
+Error: unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and
+KUBERNETES_SERVICE_PORT must be defined
+```
 
 **Solution**:
-```bash
-# Switch to ClusterRole instead of Role
-kubectl delete role alert-history-publisher-secrets-reader -n alert-history
-kubectl delete rolebinding alert-history-publisher-secrets-reader -n alert-history
-
-# Apply ClusterRole section from rbac.yaml
-kubectl apply -f rbac.yaml
+Add `serviceAccountName` to deployment:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      serviceAccountName: alert-history-publishing  # Add this line
+      containers:
+      - name: alert-history
+        ...
 ```
 
-## Migration Guide
+---
 
-### From Cluster-Scoped to Namespace-Scoped
+## Files
 
-```bash
-# 1. Delete cluster-scoped resources
-kubectl delete clusterrolebinding alert-history-publisher-secrets-reader
-kubectl delete clusterrole alert-history-publisher-secrets-reader
+| File | Description | Lines |
+|------|-------------|-------|
+| `serviceaccount.yaml` | ServiceAccount definition | 15 |
+| `role.yaml` | Role with secrets read access | 30 |
+| `rolebinding.yaml` | RoleBinding | 20 |
+| `README.md` | This file | 200+ |
 
-# 2. Apply namespace-scoped
-kubectl apply -f rbac.yaml -n alert-history
+---
 
-# 3. Update secret discovery config to single namespace
-# In application config:
-# secret_namespaces: ["alert-history"]  # Instead of ["*"]
-```
+## Related Documentation
 
-### From Namespace-Scoped to Cluster-Scoped
+- **TN-046**: [K8s Client README](../../../go-app/internal/infrastructure/k8s/README.md)
+- **TN-047**: [Target Discovery README](../../../go-app/internal/business/publishing/DISCOVERY_README.md)
+- **TN-049**: [Health Monitoring README](../../../go-app/internal/business/publishing/HEALTH_MONITORING_README.md)
+- **Integration Guide**: [TN-049 Integration Guide](../../../tasks/go-migration-analysis/TN-049-target-health-monitoring/INTEGRATION_GUIDE.md)
 
-```bash
-# 1. Ensure you have cluster-admin rights
-kubectl auth can-i create clusterroles
-# Should return: yes
+---
 
-# 2. Delete namespace-scoped
-kubectl delete rolebinding alert-history-publisher-secrets-reader -n alert-history
-kubectl delete role alert-history-publisher-secrets-reader -n alert-history
-
-# 3. Apply cluster-scoped
-kubectl apply -f rbac.yaml
-```
-
-## Monitoring & Auditing
-
-### Metrics to Track
-
-1. Secret access patterns
-2. Failed permission attempts
-3. Secret discovery latency
-4. Target refresh frequency
-
-### Audit Queries
-
-```bash
-# View recent secret access by ServiceAccount
-kubectl get events -n alert-history \
-  --field-selector involvedObject.kind=Secret
-
-# Check RBAC permissions history
-kubectl logs -n kube-system -l component=kube-apiserver \
-  | grep "alert-history-publisher"
-```
-
-## References
-
-- [Kubernetes RBAC Documentation](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
-- [Secrets Security Best Practices](https://kubernetes.io/docs/concepts/security/secrets-good-practices/)
-- [Principle of Least Privilege](https://kubernetes.io/docs/concepts/security/rbac-good-practices/)
-
-## Support
-
-For issues or questions:
-1. Check logs: `kubectl logs -n alert-history -l app=alert-history`
-2. Verify RBAC: `kubectl auth can-i list secrets --as=system:serviceaccount:alert-history:alert-history-publisher`
-3. Review audit logs for permission denials
+**Created by**: TN-049 Target Health Monitoring
+**Last Updated**: 2025-11-08
+**Status**: 🚀 READY FOR DEPLOYMENT
