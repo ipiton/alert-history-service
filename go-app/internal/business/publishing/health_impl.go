@@ -261,10 +261,10 @@ func (m *DefaultHealthMonitor) CheckNow(ctx context.Context, targetName string) 
 
 	m.logger.Info("Manual health check triggered", "target_name", targetName)
 
-	// Perform immediate health check
-	result := m.checkTarget(ctx, *target, CheckTypeManual)
+	// Perform immediate health check (with retry)
+	result := checkTargetWithRetry(ctx, target, CheckTypeManual, m.httpClient, m.config)
 
-	// Process result (bypass failure threshold for manual checks)
+	// Process result
 	processHealthCheckResult(m.statusCache, m.metrics, m.logger, m.config, result)
 
 	// Retrieve updated status
@@ -285,35 +285,6 @@ func (m *DefaultHealthMonitor) GetStats(ctx context.Context) (*HealthStats, erro
 	stats := calculateAggregateStats(allStatuses)
 
 	return stats, nil
-}
-
-// checkTarget performs health check for single target.
-//
-// This is internal method called by:
-//   - Background worker (periodic checks)
-//   - CheckNow (manual checks via API)
-//
-// Returns HealthCheckResult which is processed by processHealthCheckResult.
-func (m *DefaultHealthMonitor) checkTarget(
-	ctx context.Context,
-	target interface{}, // PublishingTarget
-	checkType CheckType,
-) HealthCheckResult {
-	// Type assertion to get PublishingTarget
-	// Note: We use interface{} here to avoid import cycle with core package
-	// In real implementation, we'll cast to core.PublishingTarget
-
-	// For now, create minimal result
-	// This will be completed in Phase 5 (health check logic)
-	result := HealthCheckResult{
-		TargetName: "", // Will be filled from target
-		TargetURL:  "", // Will be filled from target
-		Success:    false,
-		CheckedAt:  time.Now(),
-		CheckType:  checkType,
-	}
-
-	return result
 }
 
 // runHealthCheckWorker is background goroutine for periodic checks.
@@ -363,20 +334,4 @@ func (m *DefaultHealthMonitor) runHealthCheckWorker(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// checkAllTargets checks health of all enabled targets (parallel).
-//
-// This function:
-//   1. Gets all targets from TargetDiscoveryManager
-//   2. Filters enabled targets only
-//   3. Creates goroutine pool (max 10 concurrent)
-//   4. Performs health checks in parallel
-//   5. Processes results and updates cache
-//
-// Returns error if failed to list targets.
-func (m *DefaultHealthMonitor) checkAllTargets(ctx context.Context, checkType CheckType) error {
-	// This will be implemented in Phase 5
-	// For now, return nil (no-op)
-	return nil
 }
