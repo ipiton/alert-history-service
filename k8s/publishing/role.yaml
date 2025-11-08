@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alert-history-secrets-reader
+  namespace: default  # TODO: Change to your namespace
+  labels:
+    app: alert-history
+    component: publishing
+    managed-by: TN-049
+    version: v1.0.0
+  annotations:
+    description: "Read-only access to secrets for publishing target discovery"
+    owner: "platform-team"
+    created-by: "TN-049-integration"
+rules:
+# Read access to secrets (for TN-047 Target Discovery)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+  # Optional: Restrict to specific secrets with label selector
+  # This is more secure than allowing access to all secrets
+  # Example: Only secrets with label "publishing-target=true"
+  # Note: resourceNames cannot be used with "list" and "watch" verbs
+  # Use label selectors in application code instead
+
+# Optional: Read access to events (for debugging)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch"]
+  # This allows the app to read events related to secrets
+  # Useful for troubleshooting RBAC issues
