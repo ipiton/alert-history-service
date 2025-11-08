@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
 )
 
@@ -119,9 +118,8 @@ func (h *PublishingHealthHandler) GetHealth(w http.ResponseWriter, r *http.Reque
 func (h *PublishingHealthHandler) GetHealthByName(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Extract target name from URL
-	vars := mux.Vars(r)
-	targetName := vars["name"]
+	// Extract target name from URL path (Go 1.22+ pattern routing)
+	targetName := r.PathValue("name")
 
 	// Validate target name
 	if targetName == "" {
@@ -180,9 +178,8 @@ func (h *PublishingHealthHandler) GetHealthByName(w http.ResponseWriter, r *http
 func (h *PublishingHealthHandler) CheckHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Extract target name from URL
-	vars := mux.Vars(r)
-	targetName := vars["name"]
+	// Extract target name from URL path (Go 1.22+ pattern routing)
+	targetName := r.PathValue("name")
 
 	// Validate target name
 	if targetName == "" {

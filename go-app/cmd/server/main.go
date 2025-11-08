@@ -861,14 +861,10 @@ func main() {
 		// 				slog.Error("Failed to start refresh manager", "error", err)
 		// 			} else {
 		// 				slog.Info("✅ Refresh Manager started (TN-048)",
-		// 					"features", []string{
-		// 						"Periodic refresh (5m interval)",
-		// 						"Manual refresh API",
-		// 						"Exponential backoff retry (30s → 5m)",
-		// 						"5 Prometheus metrics",
-		// 					})
+		// 					"interval", refreshConfig.Interval,
+		// 					"retry_enabled", true)
 		//
-		// 				// Graceful shutdown on exit
+		// 				// Graceful shutdown
 		// 				defer func() {
 		// 					if err := refreshManager.Stop(30 * time.Second); err != nil {
 		// 						slog.Warn("Refresh manager shutdown timeout", "error", err)
@@ -876,18 +872,71 @@ func main() {
 		// 						slog.Info("✅ Refresh Manager stopped gracefully")
 		// 					}
 		// 				}()
+		// 			}
+		// 		}
 		//
-		// 				// Register API endpoints
-		// 				mux.HandleFunc("POST /api/v2/publishing/targets/refresh",
-		// 					handlers.HandleRefreshTargets(refreshManager))
-		// 				mux.HandleFunc("GET /api/v2/publishing/targets/status",
-		// 					handlers.HandleRefreshStatus(refreshManager))
+		// 		// TN-049: Create Health Monitor
+		// 		healthConfig := publishing.DefaultHealthConfig()
+		// 		// Override defaults from environment if set
+		// 		if interval := os.Getenv("TARGET_HEALTH_CHECK_INTERVAL"); interval != "" {
+		// 			if d, err := time.ParseDuration(interval); err == nil {
+		// 				healthConfig.CheckInterval = d
+		// 			}
+		// 		}
+		// 		if timeout := os.Getenv("TARGET_HEALTH_CHECK_TIMEOUT"); timeout != "" {
+		// 			if d, err := time.ParseDuration(timeout); err == nil {
+		// 				healthConfig.HTTPTimeout = d
+		// 			}
+		// 		}
 		//
-		// 				slog.Info("✅ Publishing API endpoints registered (TN-048)",
-		// 					"endpoints", []string{
-		// 						"POST /api/v2/publishing/targets/refresh - Manual refresh (async)",
-		// 						"GET /api/v2/publishing/targets/status - Refresh status",
-		// 					})
+		// 		healthMetrics, err := publishing.NewHealthMetrics()
+		// 		if err != nil {
+		// 			slog.Error("Failed to create health metrics", "error", err)
+		// 		} else {
+		// 			healthMonitor, err := publishing.NewHealthMonitor(
+		// 				discoveryMgr,
+		// 				healthConfig,
+		// 				appLogger,
+		// 				healthMetrics,
+		// 			)
+		// 			if err != nil {
+		// 				slog.Error("Failed to create health monitor", "error", err)
+		// 			} else {
+		// 				// Start background health check worker
+		// 				if err := healthMonitor.Start(); err != nil {
+		// 					slog.Error("Failed to start health monitor", "error", err)
+		// 				} else {
+		// 					slog.Info("✅ Health Monitor started (TN-049)",
+		// 						"check_interval", healthConfig.CheckInterval,
+		// 						"http_timeout", healthConfig.HTTPTimeout,
+		// 						"failure_threshold", healthConfig.FailureThreshold)
+		//
+		// 					// Graceful shutdown
+		// 					defer func() {
+		// 						if err := healthMonitor.Stop(10 * time.Second); err != nil {
+		// 							slog.Warn("Health monitor shutdown timeout", "error", err)
+		// 						} else {
+		// 							slog.Info("✅ Health Monitor stopped gracefully")
+		// 						}
+		// 					}()
+		//
+		// 					// Create Health Handler
+		// 					healthHandler := handlers.NewPublishingHealthHandler(healthMonitor)
+		//
+		// 					// Register API endpoints (Go 1.22+ pattern-based routing)
+		// 					mux.HandleFunc("GET /api/v2/publishing/targets/health/stats", healthHandler.GetHealthStats)
+		// 					mux.HandleFunc("GET /api/v2/publishing/targets/health/{name}", healthHandler.GetHealthByName)
+		// 					mux.HandleFunc("POST /api/v2/publishing/targets/health/{name}/check", healthHandler.CheckHealth)
+		// 					mux.HandleFunc("GET /api/v2/publishing/targets/health", healthHandler.GetHealth)
+		//
+		// 					slog.Info("✅ Health Monitor API endpoints registered (TN-049)",
+		// 						"endpoints", []string{
+		// 							"GET /api/v2/publishing/targets/health - All targets health",
+		// 							"GET /api/v2/publishing/targets/health/{name} - Single target health",
+		// 							"POST /api/v2/publishing/targets/health/{name}/check - Manual check",
+		// 							"GET /api/v2/publishing/targets/health/stats - Aggregate stats",
+		// 						})
+		// 				}
 		// 			}
 		// 		}
 		// 	}
