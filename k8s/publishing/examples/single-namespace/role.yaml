@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alert-history-secrets-reader
+  namespace: production  # TODO: Change to your namespace
+  labels:
+    app: alert-history
+    component: rbac
+    managed-by: TN-050
+  annotations:
+    description: "Read-only access to secrets for publishing target discovery"
+    compliance: "CIS-5.1.3,PCI-DSS-7.2,SOC2-CC6.1"
+rules:
+# Read secrets (publishing targets)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+  # Application filters by label: publishing-target=true
+
+# Optional: Read events for debugging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list"]

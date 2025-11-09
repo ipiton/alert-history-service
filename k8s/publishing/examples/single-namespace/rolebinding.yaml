@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alert-history-secrets-reader-binding
+  namespace: production  # TODO: Change to your namespace
+  labels:
+    app: alert-history
+    component: rbac
+    managed-by: TN-050
+  annotations:
+    description: "Binds secrets-reader role to alert-history-publishing ServiceAccount"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alert-history-secrets-reader
+subjects:
+- kind: ServiceAccount
+  name: alert-history-publishing
+  namespace: production  # Must match ServiceAccount namespace
