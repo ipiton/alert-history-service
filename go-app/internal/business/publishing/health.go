@@ -357,6 +357,26 @@ func (s HealthStatus) IsUnknown() bool {
 	return s == HealthStatusUnknown
 }
 
+// IsHealthy returns true if target health status is healthy.
+func (s *TargetHealthStatus) IsHealthy() bool {
+	return s.Status.IsHealthy()
+}
+
+// IsUnhealthy returns true if target health status is unhealthy.
+func (s *TargetHealthStatus) IsUnhealthy() bool {
+	return s.Status.IsUnhealthy()
+}
+
+// IsDegraded returns true if target health status is degraded.
+func (s *TargetHealthStatus) IsDegraded() bool {
+	return s.Status.IsDegraded()
+}
+
+// IsUnknown returns true if target health status is unknown.
+func (s *TargetHealthStatus) IsUnknown() bool {
+	return s.Status.IsUnknown()
+}
+
 // HealthCheckResult represents result of single health check.
 type HealthCheckResult struct {
 	// Target Info

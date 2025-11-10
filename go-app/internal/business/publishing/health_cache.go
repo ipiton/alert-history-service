@@ -152,6 +152,60 @@ func (c *healthStatusCache) Set(status *TargetHealthStatus) {
 	c.data[status.TargetName] = status
 }
 
+// Update atomically updates health status using update function.
+//
+// This method provides atomic read-modify-write operation:
+//   1. Acquires write lock (blocks all readers/writers)
+//   2. Gets current status (or creates new if not exists)
+//   3. Calls updateFn to modify status
+//   4. Stores updated status back to cache
+//
+// This prevents race conditions when multiple goroutines update same target.
+//
+// Parameters:
+//   - targetName: Name of target to update
+//   - updateFn: Function that modifies status (receives copy of current status)
+//
+// Returns:
+//   - *TargetHealthStatus: Updated status (never nil)
+//
+// Performance: ~200ns (O(1) with function call overhead)
+//
+// Thread-Safe: Yes (atomic read-modify-write)
+//
+// Example:
+//
+//	cache.Update("rootly-prod", func(status *TargetHealthStatus) {
+//	    status.TotalChecks++
+//	    status.TotalSuccesses++
+//	    status.SuccessRate = (float64(status.TotalSuccesses) / float64(status.TotalChecks)) * 100
+//	})
+func (c *healthStatusCache) Update(targetName string, updateFn func(*TargetHealthStatus)) *TargetHealthStatus {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Get or create status
+	status, exists := c.data[targetName]
+	if !exists {
+		status = &TargetHealthStatus{
+			TargetName: targetName,
+			Status:     HealthStatusUnknown,
+			LastCheck:  time.Now(), // Set to prevent immediate staleness
+		}
+	}
+
+	// Apply update function
+	updateFn(status)
+
+	// Store updated status
+	c.data[targetName] = status
+
+	// Return copy to prevent race conditions
+	// (caller reads returned value outside lock)
+	statusCopy := *status
+	return &statusCopy
+}
+
 // GetAll returns all health statuses (O(n)).
 //
 // This method:

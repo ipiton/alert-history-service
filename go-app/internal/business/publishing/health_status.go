@@ -39,81 +39,71 @@ func processHealthCheckResult(
 	config HealthConfig,
 	result HealthCheckResult,
 ) {
-	// Get current status from cache (if exists)
-	currentStatus, exists := cache.Get(result.TargetName)
+	// Atomic update to prevent race conditions
+	// Multiple concurrent calls for same target are now safe
+	updatedStatus := cache.Update(result.TargetName, func(status *TargetHealthStatus) {
+		// Update statistics
+		status.TotalChecks++
+		status.LastCheck = result.CheckedAt
 
-	// Initialize new status if not exists
-	if !exists {
-		currentStatus = &TargetHealthStatus{
-			TargetName: result.TargetName,
-			Status:     HealthStatusUnknown,
-		}
-	}
+		if result.Success {
+			// Success: Update success counters
+			status.TotalSuccesses++
+			status.LastSuccess = &result.CheckedAt
+			status.LatencyMs = result.LatencyMs
+			status.ErrorMessage = nil
 
-	// Update statistics
-	currentStatus.TotalChecks++
-	currentStatus.LastCheck = result.CheckedAt
+			// Check if degraded (latency >= 5s)
+			if result.LatencyMs != nil && time.Duration(*result.LatencyMs)*time.Millisecond >= config.DegradedThreshold {
+				// Degraded: Slow response
+				transitionStatus(status, HealthStatusDegraded, "latency >= 5s", logger)
+			} else {
+				// Healthy: Fast response
+				transitionStatus(status, HealthStatusHealthy, "check succeeded", logger)
+			}
 
-	if result.Success {
-		// Success: Update success counters
-		currentStatus.TotalSuccesses++
-		currentStatus.LastSuccess = &result.CheckedAt
-		currentStatus.LatencyMs = result.LatencyMs
-		currentStatus.ErrorMessage = nil
+			// Reset consecutive failures
+			status.ConsecutiveFailures = 0
 
-		// Check if degraded (latency >= 5s)
-		if result.LatencyMs != nil && time.Duration(*result.LatencyMs)*time.Millisecond >= config.DegradedThreshold {
-			// Degraded: Slow response
-			transitionStatus(currentStatus, HealthStatusDegraded, "latency >= 5s", logger)
 		} else {
-			// Healthy: Fast response
-			transitionStatus(currentStatus, HealthStatusHealthy, "check succeeded", logger)
+			// Failure: Update failure counters
+			status.TotalFailures++
+			status.LastFailure = &result.CheckedAt
+			status.LatencyMs = nil
+			status.ErrorMessage = result.ErrorMessage
+
+			// Increment consecutive failures
+			status.ConsecutiveFailures++
+
+			// Check failure threshold
+			if status.ConsecutiveFailures >= config.FailureThreshold {
+				// Unhealthy: Too many consecutive failures
+				transitionStatus(
+					status,
+					HealthStatusUnhealthy,
+					fmt.Sprintf("%d consecutive failures", status.ConsecutiveFailures),
+					logger,
+				)
+			} else {
+				// Still healthy (below threshold)
+				logger.Debug("Target failure (below threshold)",
+					"target_name", result.TargetName,
+					"consecutive_failures", status.ConsecutiveFailures,
+					"threshold", config.FailureThreshold,
+					"error", result.ErrorMessage)
+			}
 		}
 
-		// Reset consecutive failures
-		currentStatus.ConsecutiveFailures = 0
-
-	} else {
-		// Failure: Update failure counters
-		currentStatus.TotalFailures++
-		currentStatus.LastFailure = &result.CheckedAt
-		currentStatus.LatencyMs = nil
-		currentStatus.ErrorMessage = result.ErrorMessage
-
-		// Increment consecutive failures
-		currentStatus.ConsecutiveFailures++
-
-		// Check failure threshold
-		if currentStatus.ConsecutiveFailures >= config.FailureThreshold {
-			// Unhealthy: Too many consecutive failures
-			transitionStatus(
-				currentStatus,
-				HealthStatusUnhealthy,
-				fmt.Sprintf("%d consecutive failures", currentStatus.ConsecutiveFailures),
-				logger,
-			)
-		} else {
-			// Still healthy (below threshold)
-			logger.Debug("Target failure (below threshold)",
-				"target_name", result.TargetName,
-				"consecutive_failures", currentStatus.ConsecutiveFailures,
-				"threshold", config.FailureThreshold,
-				"error", result.ErrorMessage)
+		// Calculate success rate
+		if status.TotalChecks > 0 {
+			status.SuccessRate = (float64(status.TotalSuccesses) / float64(status.TotalChecks)) * 100
 		}
-	}
+	})
 
-	// Calculate success rate
-	if currentStatus.TotalChecks > 0 {
-		currentStatus.SuccessRate = (float64(currentStatus.TotalSuccesses) / float64(currentStatus.TotalChecks)) * 100
-	}
-
-	// Update cache
-	cache.Set(currentStatus)
-
-	// Update Prometheus metrics
-	metrics.SetTargetHealthStatus(result.TargetName, currentStatus.TargetType, currentStatus.Status)
-	metrics.SetConsecutiveFailures(result.TargetName, currentStatus.ConsecutiveFailures)
-	metrics.SetSuccessRate(result.TargetName, currentStatus.SuccessRate)
+	// Update Prometheus metrics (outside lock for better performance)
+	metrics.SetTargetHealthStatus(result.TargetName, updatedStatus.TargetType, updatedStatus.Status)
+	metrics.SetConsecutiveFailures(result.TargetName, updatedStatus.ConsecutiveFailures)
+	metrics.SetSuccessRate(result.TargetName, updatedStatus.SuccessRate)
 }
 
 // transitionStatus transitions health status with logging.
