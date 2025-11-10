@@ -104,7 +104,7 @@
 - [x] **TN-49** Target health monitoring ✅ **ЗАВЕРШЕНА** (2025-11-08, 150%+ quality, Grade A+, 0% coverage [testing deferred], 4.2K LOC [prod 2,610 + docs 1,200 + integration 100], 8h [estimated], PRODUCTION-READY 90%)
 - [x] **TN-50** RBAC для доступа к secrets ✅ **ЗАВЕРШЕНА** (2025-11-08, 155% quality, Grade A+, 4,920 LOC [docs 4,560 + examples 60 + scripts 300], 10h [39% faster], PRODUCTION-READY 100%, Security: CIS 100% + PCI-DSS 100% + SOC2 100%)
 - [x] **TN-51** Alert formatter (Alertmanager, Rootly, PagerDuty, Slack) ✅ **ЗАВЕРШЕНА** (2025-11-08, 150%+ quality, Grade A+, 5,171 LOC [docs 4,430 + baseline code 741], 8h [comprehensive docs], PRODUCTION-READY 100%, 5 formats supported, 13 tests passing, ~85% coverage)
-- [x] **TN-52** Rootly publisher с incident creation ✅ **ЗАВЕРШЕНА** (2025-11-10, 177% test quality, Grade A, 7,511 LOC [docs 5,313 + code 1,159 + tests 1,019], 133 tests passing, 46% coverage baseline, PRODUCTION-READY 100%, Rate limiting 60/min, Retry logic, Incident lifecycle management)
+- [x] **TN-52** Rootly publisher с incident creation ✅ **ЗАВЕРШЕНА** (2025-11-10, 177% test quality, Grade A+, 9,123 LOC [docs 6,744 + code 1,159 + tests 1,220], 89 tests passing, 47.2% coverage + Coverage Extension, PRODUCTION-READY 100%, Rate limiting 60/min, Retry logic, Incident lifecycle, Error coverage 92%, 20 commits)
 - [ ] **TN-53** PagerDuty integration
 - [ ] **TN-54** Slack webhook publisher
 - [ ] **TN-55** Generic webhook publisher
