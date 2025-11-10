@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -183,15 +184,21 @@ func (p *WebhookPublisher) Name() string {
 
 // PublisherFactory creates publishers based on target type
 type PublisherFactory struct {
-	formatter AlertFormatter
-	logger    *slog.Logger
+	formatter       AlertFormatter
+	logger          *slog.Logger
+	rootlyCache     IncidentIDCache   // Shared Rootly incident cache
+	rootlyMetrics   *RootlyMetrics    // Shared Rootly metrics
+	rootlyClientMap map[string]RootlyIncidentsClient // Cache of Rootly clients by API key
 }
 
 // NewPublisherFactory creates a new publisher factory
 func NewPublisherFactory(formatter AlertFormatter, logger *slog.Logger) *PublisherFactory {
 	return &PublisherFactory{
-		formatter: formatter,
-		logger:    logger,
+		formatter:       formatter,
+		logger:          logger,
+		rootlyCache:     NewIncidentIDCache(24 * time.Hour), // 24h TTL for incident tracking
+		rootlyMetrics:   NewRootlyMetrics(),
+		rootlyClientMap: make(map[string]RootlyIncidentsClient),
 	}
 }
 
@@ -209,4 +216,57 @@ func (f *PublisherFactory) CreatePublisher(targetType string) (AlertPublisher, e
 	default:
 		return NewWebhookPublisher(f.formatter, f.logger), nil // Default to webhook
 	}
+}
+
+// CreatePublisherForTarget creates a publisher for a specific target with full configuration
+func (f *PublisherFactory) CreatePublisherForTarget(target *core.PublishingTarget) (AlertPublisher, error) {
+	switch TargetType(target.Type) {
+	case TargetTypeRootly:
+		return f.createEnhancedRootlyPublisher(target)
+	case TargetTypePagerDuty:
+		return NewPagerDutyPublisher(f.formatter, f.logger), nil
+	case TargetTypeSlack:
+		return NewSlackPublisher(f.formatter, f.logger), nil
+	case TargetTypeWebhook, TargetTypeAlertmanager:
+		return NewWebhookPublisher(f.formatter, f.logger), nil
+	default:
+		return NewWebhookPublisher(f.formatter, f.logger), nil
+	}
+}
+
+// createEnhancedRootlyPublisher creates an EnhancedRootlyPublisher with full Rootly API integration
+func (f *PublisherFactory) createEnhancedRootlyPublisher(target *core.PublishingTarget) (AlertPublisher, error) {
+	// Extract API key from target headers
+	apiKey := ""
+	if auth, ok := target.Headers["Authorization"]; ok {
+		// Remove "Bearer " prefix if present
+		apiKey = strings.TrimPrefix(auth, "Bearer ")
+	}
+
+	if apiKey == "" {
+		f.logger.Warn("Rootly target missing API key, falling back to HTTP publisher", "target", target.Name)
+		return NewRootlyPublisher(f.formatter, f.logger), nil
+	}
+
+	// Get or create Rootly client for this API key
+	client, ok := f.rootlyClientMap[apiKey]
+	if !ok {
+		// Create new client with configuration
+		config := ClientConfig{
+			BaseURL: target.URL,
+			APIKey:  apiKey,
+			Timeout: 10 * time.Second,
+		}
+		client = NewRootlyIncidentsClient(config, f.logger)
+		f.rootlyClientMap[apiKey] = client
+	}
+
+	// Create EnhancedRootlyPublisher with shared cache and metrics
+	return NewEnhancedRootlyPublisher(
+		client,
+		f.rootlyCache,
+		f.rootlyMetrics,
+		f.formatter,
+		f.logger,
+	), nil
 }
