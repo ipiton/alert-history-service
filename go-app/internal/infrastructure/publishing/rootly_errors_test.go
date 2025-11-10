@@ -251,6 +251,210 @@ func BenchmarkRootlyAPIError_ErrorMethod(b *testing.B) {
 	}
 }
 
+func TestIsNotFoundError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "NotFound RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 404},
+			expected: true,
+		},
+		{
+			name:     "Other RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 500},
+			expected: false,
+		},
+		{
+			name:     "Generic error",
+			err:      errors.New("generic"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsNotFoundError(tt.err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsConflictError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "Conflict RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 409},
+			expected: true,
+		},
+		{
+			name:     "Other RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 400},
+			expected: false,
+		},
+		{
+			name:     "Generic error",
+			err:      errors.New("generic"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsConflictError(tt.err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsAuthError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "Auth RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 401},
+			expected: true,
+		},
+		{
+			name:     "Other RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 404},
+			expected: false,
+		},
+		{
+			name:     "Generic error",
+			err:      errors.New("generic"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsAuthError(tt.err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsRateLimitError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "RateLimit RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 429},
+			expected: true,
+		},
+		{
+			name:     "Other RootlyAPIError",
+			err:      &RootlyAPIError{StatusCode: 500},
+			expected: false,
+		},
+		{
+			name:     "Generic error",
+			err:      errors.New("generic"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsRateLimitError(tt.err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRootlyAPIError_IsForbidden(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		expected   bool
+	}{
+		{"Forbidden", http.StatusForbidden, true},
+		{"Unauthorized", http.StatusUnauthorized, false},
+		{"Not Found", http.StatusNotFound, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &RootlyAPIError{StatusCode: tt.statusCode}
+			assert.Equal(t, tt.expected, err.IsForbidden())
+		})
+	}
+}
+
+func TestRootlyAPIError_IsBadRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		expected   bool
+	}{
+		{"Bad Request", http.StatusBadRequest, true},
+		{"Unprocessable Entity", http.StatusUnprocessableEntity, false},
+		{"Internal Server Error", http.StatusInternalServerError, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &RootlyAPIError{StatusCode: tt.statusCode}
+			assert.Equal(t, tt.expected, err.IsBadRequest())
+		})
+	}
+}
+
+func TestRootlyAPIError_IsServerError(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		expected   bool
+	}{
+		{"Internal Server Error", http.StatusInternalServerError, true},
+		{"Bad Gateway", http.StatusBadGateway, true},
+		{"Service Unavailable", http.StatusServiceUnavailable, true},
+		{"Bad Request", http.StatusBadRequest, false},
+		{"Not Found", http.StatusNotFound, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &RootlyAPIError{StatusCode: tt.statusCode}
+			assert.Equal(t, tt.expected, err.IsServerError())
+		})
+	}
+}
+
+func TestRootlyAPIError_IsClientError(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		expected   bool
+	}{
+		{"Bad Request", http.StatusBadRequest, true},
+		{"Unauthorized", http.StatusUnauthorized, true},
+		{"Not Found", http.StatusNotFound, true},
+		{"Internal Server Error", http.StatusInternalServerError, false},
+		{"Success", http.StatusOK, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &RootlyAPIError{StatusCode: tt.statusCode}
+			assert.Equal(t, tt.expected, err.IsClientError())
+		})
+	}
+}
+
 func BenchmarkRootlyAPIError_IsRetryable(b *testing.B) {
 	err := &RootlyAPIError{
 		StatusCode: http.StatusTooManyRequests,
