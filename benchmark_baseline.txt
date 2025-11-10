@@ -1,0 +1,194 @@
+2025/11/10 22:36:08 INFO Manual refresh triggered
+2025/11/10 22:36:08 INFO Manual refresh completed target_count=3
+2025/11/10 22:36:08 INFO Manual refresh triggered
+2025/11/10 22:36:08 ERROR Manual refresh failed error="assert.AnError general error for testing"
+2025/11/10 22:36:08 INFO Refresh manager started interval=5m0s
+2025/11/10 22:36:08 INFO Refresh manager stopped
+2025/11/10 22:36:08 ERROR Initial target discovery failed error="assert.AnError general error for testing"
+2025/11/10 22:36:08 INFO Refresh manager started interval=100ms
+2025/11/10 22:36:08 INFO Periodic refresh completed target_count=2
+2025/11/10 22:36:08 INFO Periodic refresh completed target_count=2
+2025/11/10 22:36:08 INFO Refresh manager stopped
+2025/11/10 22:36:08 INFO Refresh manager started interval=50ms
+2025/11/10 22:36:08 INFO Periodic refresh completed target_count=1
+2025/11/10 22:36:08 INFO Periodic refresh completed target_count=1
+2025/11/10 22:36:08 INFO Refresh manager stopped
+2025/11/10 22:36:08 INFO Manual refresh triggered
+2025/11/10 22:36:08 INFO Manual refresh completed target_count=0
+2025/11/10 22:36:08 WARN Request failed, retrying attempt=1 max_retries=3 backoff=100ms error=<nil> status=429
+2025/11/10 22:36:08 WARN Request failed, retrying attempt=2 max_retries=3 backoff=200ms error=<nil> status=429
+2025/11/10 22:36:08 WARN Request failed, retrying attempt=3 max_retries=3 backoff=400ms error=<nil> status=429
+2025/11/10 22:36:09 WARN Request failed, retrying attempt=1 max_retries=3 backoff=10ms error=<nil> status=500
+2025/11/10 22:36:09 WARN Request failed, retrying attempt=2 max_retries=3 backoff=20ms error=<nil> status=500
+goos: darwin
+goarch: arm64
+pkg: github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing
+cpu: Apple M1 Pro
+BenchmarkFormatAlertmanager-8                   	 2698142	      1369 ns/op	    1465 B/op	      21 allocs/op
+BenchmarkFormatRootly-8                         	  407662	      8603 ns/op	   14574 B/op	     112 allocs/op
+BenchmarkFormatPagerDuty-8                      	 2542533	      1416 ns/op	    1769 B/op	      30 allocs/op
+BenchmarkFormatSlack-8                          	  809050	      4578 ns/op	    7087 B/op	      81 allocs/op
+BenchmarkFormatWebhook-8                        	  616936	      6010 ns/op	    3207 B/op	      50 allocs/op
+BenchmarkFormatAlert_AllFormats-8               	  154551	     23444 ns/op	   28164 B/op	     294 allocs/op
+BenchmarkFormatAlert_WithoutClassification-8    	 3389930	       991.1 ns/op	    1289 B/op	      18 allocs/op
+BenchmarkFormatAlert_WithLongClassification-8   	  240882	     15574 ns/op	   52110 B/op	     112 allocs/op
+BenchmarkFormatAlert_Parallel-8                 	fatal error: concurrent map writes
+
+goroutine 617 [running]:
+internal/runtime/maps.fatal({0x105909c5c?, 0x104bb96dc?})
+	/opt/homebrew/opt/go/libexec/src/runtime/panic.go:1058 +0x20
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*DefaultAlertFormatter).formatAlertmanager(0x140004c9e98?, 0x140000ca040)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter.go:88 +0x428
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*DefaultAlertFormatter).FormatAlert(0x1400041c010, {0x140003f6000?, 0x140004c9f28?}, 0x140000ca040, {0x1058fddb1?, 0x105ce3800?})
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter.go:55 +0x78
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.BenchmarkFormatAlert_Parallel.func1(0x140003f6000)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter_bench_test.go:170 +0x108
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:962 +0xb8
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 1 [chan receive]:
+testing.(*B).doBench(0x1400021a008)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:297 +0x78
+testing.(*benchState).processBench(0x14000530390, 0x105da3020?)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:747 +0x2c8
+testing.(*B).run(0x1400021a008?)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:288 +0x64
+testing.(*B).Run(0x1400024b608, {0x105912fc6?, 0x140001a7ae8?}, 0x105deded8)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:848 +0x3fc
+testing.runBenchmarks.func1(0x1400024b608)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:708 +0x40
+testing.(*B).runN(0x1400024b608, 0x1)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:219 +0x1a4
+testing.runBenchmarks({0x10595bed8, 0x4a}, 0x0?, {0x1068b8c20, 0x15, 0x7?})
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:717 +0x51c
+testing.(*M).Run(0x14000440e60)
+	/opt/homebrew/opt/go/libexec/src/testing/testing.go:2158 +0x86c
+main.main()
+	_testmain.go:263 +0x90
+
+goroutine 293 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140002cd4a0)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 292
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 46 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140004505a0)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 45
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 272 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140003c7180)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 271
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 209 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140002cd360)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 208
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 291 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140002cd400)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 290
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 270 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140003c70e0)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 269
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 274 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140003c7220)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 273
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 276 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140003c7310)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 275
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 495 [select]:
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*inMemoryIncidentCache).cleanup(0x140002cd540)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:245 +0x94
+created by github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.NewIncidentIDCache in goroutine 494
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/rootly_metrics.go:196 +0xd0
+
+goroutine 587 [sync.WaitGroup.Wait]:
+sync.runtime_SemacquireWaitGroup(0x140004f08c0?)
+	/opt/homebrew/opt/go/libexec/src/runtime/sema.go:110 +0x2c
+sync.(*WaitGroup).Wait(0x1400051e010)
+	/opt/homebrew/opt/go/libexec/src/sync/waitgroup.go:118 +0x70
+testing.(*B).RunParallel(0x1400021a008, 0x14000446000)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:965 +0x18c
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.BenchmarkFormatAlert_Parallel(0x1400021a008)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter_bench_test.go:168 +0x3c4
+testing.(*B).runN(0x1400021a008, 0x64)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:219 +0x1a4
+testing.(*B).launch(0x1400021a008)
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:354 +0x178
+created by testing.(*B).doBench in goroutine 1
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:296 +0x68
+
+goroutine 610 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 611 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 612 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 613 [runnable]:
+internal/runtime/maps.newTable(0x105c59040, 0xb, 0x0, 0x0)
+	/opt/homebrew/opt/go/libexec/src/internal/runtime/maps/table.go:74 +0xc0
+internal/runtime/maps.NewMap(0x105c59040, 0xa, 0x140005740a0?, 0x1000000000000)
+	/opt/homebrew/opt/go/libexec/src/internal/runtime/maps/map.go:313 +0x1cc
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*DefaultAlertFormatter).formatAlertmanager(0x14000460e98?, 0x140000ca040)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter.go:103 +0x5dc
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.(*DefaultAlertFormatter).FormatAlert(0x1400041c010, {0x14000438000?, 0x14000460f28?}, 0x140000ca040, {0x1058fddb1?, 0x105ce3800?})
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter.go:55 +0x78
+github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing.BenchmarkFormatAlert_Parallel.func1(0x14000438000)
+	/Users/vitaliisemenov/Documents/Helpfull/AlertHistory/go-app/internal/infrastructure/publishing/formatter_bench_test.go:170 +0x108
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:962 +0xb8
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 614 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 615 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+
+goroutine 616 [runnable]:
+testing.(*B).RunParallel.func1()
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955
+created by testing.(*B).RunParallel in goroutine 587
+	/opt/homebrew/opt/go/libexec/src/testing/benchmark.go:955 +0x104
+exit status 2
+FAIL	github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing	35.414s
+FAIL

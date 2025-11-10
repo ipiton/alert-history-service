@@ -77,11 +77,14 @@ func (f *DefaultAlertFormatter) formatAlertmanager(enrichedAlert *core.EnrichedA
 	}
 
 	// Add LLM classification data as annotations
+	// IMPORTANT: Create a NEW map to avoid race conditions on shared alert.Annotations
 	if enrichedAlert.Classification != nil {
 		classification := enrichedAlert.Classification
-		annotations := alert.Annotations
-		if annotations == nil {
-			annotations = make(map[string]string)
+
+		// Copy original annotations to avoid modifying shared state
+		annotations := make(map[string]string, len(alert.Annotations)+4)
+		for k, v := range alert.Annotations {
+			annotations[k] = v
 		}
 
 		annotations["llm_severity"] = string(classification.Severity)
