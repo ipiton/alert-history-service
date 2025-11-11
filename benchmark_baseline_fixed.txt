@@ -1,0 +1,11 @@
+goos: darwin
+pkg: github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing
+BenchmarkFormatAlertmanager-8                   	 2436450	      1774 ns/op	    1801 B/op	      23 allocs/op
+BenchmarkFormatRootly-8                         	  443155	      8517 ns/op	   14573 B/op	     112 allocs/op
+BenchmarkFormatPagerDuty-8                      	 2542868	      1459 ns/op	    1769 B/op	      30 allocs/op
+BenchmarkFormatSlack-8                          	  738118	      4415 ns/op	    7087 B/op	      81 allocs/op
+BenchmarkFormatWebhook-8                        	  620454	      5807 ns/op	    3207 B/op	      50 allocs/op
+BenchmarkFormatAlert_AllFormats-8               	  155394	     23482 ns/op	   28499 B/op	     296 allocs/op
+BenchmarkFormatAlert_WithoutClassification-8    	 4006917	       904.7 ns/op	    1289 B/op	      18 allocs/op
+BenchmarkFormatAlert_WithLongClassification-8   	  249974	     15457 ns/op	   52103 B/op	     112 allocs/op
+BenchmarkFormatAlert_Parallel-8                 	 4641319	       805.6 ns/op	    1801 B/op	      23 allocs/op

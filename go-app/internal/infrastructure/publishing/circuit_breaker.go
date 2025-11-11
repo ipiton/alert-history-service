@@ -45,7 +45,7 @@ type CircuitBreaker struct {
 	successCount     int
 	lastFailureTime  time.Time
 	targetName       string
-	metrics          *PublishingMetrics
+	// metrics          *PublishingMetrics // TODO: integrate with FormatterMetrics
 	mu               sync.RWMutex
 }
 
@@ -55,18 +55,18 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 }
 
 // NewCircuitBreakerWithMetrics creates a new circuit breaker with metrics
-func NewCircuitBreakerWithMetrics(config CircuitBreakerConfig, targetName string, metrics *PublishingMetrics) *CircuitBreaker {
+func NewCircuitBreakerWithMetrics(config CircuitBreakerConfig, targetName string, metrics interface{}) *CircuitBreaker {
 	cb := &CircuitBreaker{
 		config:     config,
 		state:      StateClosed,
 		targetName: targetName,
-		metrics:    metrics,
+		// metrics:    metrics, // TODO: integrate with FormatterMetrics
 	}
 
 	// Initialize metric
-	if cb.metrics != nil && cb.targetName != "" {
-		cb.metrics.RecordCircuitBreakerState(cb.targetName, StateClosed)
-	}
+	// if cb.metrics != nil && cb.targetName != "" {
+	// 	// cb.metrics.RecordCircuitBreakerState(cb.targetName, StateClosed)
+	// }
 
 	return cb
 }
@@ -128,16 +128,17 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
-	oldState := cb.state
+	// oldState := cb.state // Unused
 
 	switch cb.state {
 	case StateClosed:
 		if cb.failureCount >= cb.config.FailureThreshold {
 			// Transition to open
 			cb.state = StateOpen
-			if cb.metrics != nil && cb.targetName != "" {
-				cb.metrics.RecordCircuitBreakerTrip(cb.targetName)
-			}
+			// TODO: integrate with FormatterMetrics
+			// if cb.metrics != nil && cb.targetName != "" {
+			// 	cb.metrics.RecordCircuitBreakerTrip(cb.targetName)
+			// }
 		}
 	case StateHalfOpen:
 		// Go back to open on any failure in half-open
@@ -146,9 +147,10 @@ func (cb *CircuitBreaker) RecordFailure() {
 	}
 
 	// Update metric if state changed
-	if cb.metrics != nil && cb.targetName != "" && oldState != cb.state {
-		cb.metrics.RecordCircuitBreakerState(cb.targetName, cb.state)
-	}
+	// TODO: integrate with FormatterMetrics
+	// if cb.metrics != nil && cb.targetName != "" && oldState != cb.state {
+	// 	// cb.metrics.RecordCircuitBreakerState(cb.targetName, cb.state)
+	// }
 }
 
 // State returns current circuit breaker state

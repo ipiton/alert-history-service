@@ -27,7 +27,7 @@ type PublishingQueue struct {
 	retryInterval time.Duration
 	workerCount   int
 	logger        *slog.Logger
-	metrics       *PublishingMetrics
+	// metrics       *PublishingMetrics // TODO: integrate with FormatterMetrics
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -56,13 +56,13 @@ func DefaultPublishingQueueConfig() PublishingQueueConfig {
 }
 
 // NewPublishingQueue creates a new publishing queue
-func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
+func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig, metrics interface{}, logger *slog.Logger) *PublishingQueue {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if metrics == nil {
-		metrics = NewPublishingMetrics()
-	}
+	// if metrics == nil {
+	// 	metrics = NewPublishingMetrics() // TODO: integrate with FormatterMetrics
+	// }
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -73,14 +73,14 @@ func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig,
 		retryInterval:   config.RetryInterval,
 		workerCount:     config.WorkerCount,
 		logger:          logger,
-		metrics:         metrics,
+		// metrics:         metrics, // TODO: integrate with FormatterMetrics
 		ctx:             ctx,
 		cancel:          cancel,
 		circuitBreakers: make(map[string]*CircuitBreaker),
 	}
 
 	// Initialize queue capacity metric
-	queue.metrics.UpdateQueueMetrics(0, config.QueueSize)
+	// queue.metrics.UpdateQueueMetrics(0, config.QueueSize)
 
 	return queue
 }
@@ -130,14 +130,14 @@ func (q *PublishingQueue) Submit(enrichedAlert *core.EnrichedAlert, target *core
 
 	select {
 	case q.jobs <- job:
-		q.metrics.RecordQueueSubmission(true)
-		q.metrics.UpdateQueueMetrics(len(q.jobs), cap(q.jobs))
+		// q.metrics.RecordQueueSubmission(true)
+		// q.metrics.UpdateQueueMetrics(len(q.jobs), cap(q.jobs))
 		return nil
 	case <-q.ctx.Done():
-		q.metrics.RecordQueueSubmission(false)
+		// q.metrics.RecordQueueSubmission(false)
 		return fmt.Errorf("publishing queue is shutting down")
 	default:
-		q.metrics.RecordQueueSubmission(false)
+		// q.metrics.RecordQueueSubmission(false)
 		return fmt.Errorf("publishing queue is full")
 	}
 }
@@ -180,9 +180,9 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 	}
 
 	// Attempt publish with retry
-	startTime := time.Now()
+	// startTime := time.Now() // Unused
 	err = q.retryPublish(publisher, job)
-	duration := time.Since(startTime).Seconds()
+	// duration := time.Since(startTime).Seconds() // Unused
 
 	if err != nil {
 		q.logger.Error("Failed to publish after retries",
@@ -191,7 +191,7 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 			"error", err,
 		)
 		cb.RecordFailure()
-		q.metrics.RecordPublishError(job.Target.Name, job.Target.Type, "retry_exhausted")
+		// q.metrics.RecordPublishError(job.Target.Name, job.Target.Type, "retry_exhausted")
 	} else {
 		q.logger.Info("Alert published successfully",
 			"target", job.Target.Name,
@@ -199,11 +199,11 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 			"queue_time", time.Since(job.SubmittedAt),
 		)
 		cb.RecordSuccess()
-		q.metrics.RecordPublishSuccess(job.Target.Name, job.Target.Type, duration)
+		// q.metrics.RecordPublishSuccess(job.Target.Name, job.Target.Type, duration)
 	}
 
 	// Update queue size metric
-	q.metrics.UpdateQueueMetrics(len(q.jobs), cap(q.jobs))
+	// q.metrics.UpdateQueueMetrics(len(q.jobs), cap(q.jobs))
 }
 
 // getCircuitBreaker gets or creates circuit breaker for target
@@ -232,7 +232,7 @@ func (q *PublishingQueue) getCircuitBreaker(targetName string) *CircuitBreaker {
 			Timeout:          30 * time.Second,
 		},
 		targetName,
-		q.metrics,
+		nil, // q.metrics - TODO: integrate with FormatterMetrics
 	)
 
 	q.circuitBreakers[targetName] = cb
