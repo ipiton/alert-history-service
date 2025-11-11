@@ -192,10 +192,18 @@ type PublisherFactory struct {
 	pagerDutyCache      EventKeyCache                    // Shared PagerDuty event key cache
 	pagerDutyMetrics    *PagerDutyMetrics                // Shared PagerDuty metrics
 	pagerDutyClientMap  map[string]PagerDutyEventsClient // Cache of PagerDuty clients by routing key
+	slackCache          MessageIDCache                   // Shared Slack message cache (for threading)
+	slackMetrics        *SlackMetrics                    // Shared Slack metrics
+	slackClientMap      map[string]SlackWebhookClient    // Cache of Slack clients by webhook URL
+	slackCleanupWorker  func()                           // Slack cache cleanup worker cancel function
 }
 
 // NewPublisherFactory creates a new publisher factory
 func NewPublisherFactory(formatter AlertFormatter, logger *slog.Logger) *PublisherFactory {
+	// Create Slack cache and start background cleanup worker
+	slackCache := NewMessageCache()
+	slackCleanupWorker := StartCleanupWorker(slackCache, 5*time.Minute, 24*time.Hour)
+
 	return &PublisherFactory{
 		formatter:          formatter,
 		logger:             logger,
@@ -205,6 +213,10 @@ func NewPublisherFactory(formatter AlertFormatter, logger *slog.Logger) *Publish
 		pagerDutyCache:     NewEventKeyCache(24 * time.Hour),          // 24h TTL for PagerDuty event tracking
 		pagerDutyMetrics:   NewPagerDutyMetrics(),
 		pagerDutyClientMap: make(map[string]PagerDutyEventsClient),
+		slackCache:         slackCache,                                // Slack message cache for threading
+		slackMetrics:       NewSlackMetrics(),
+		slackClientMap:     make(map[string]SlackWebhookClient),
+		slackCleanupWorker: slackCleanupWorker,
 	}
 }
 
@@ -232,7 +244,7 @@ func (f *PublisherFactory) CreatePublisherForTarget(target *core.PublishingTarge
 	case TargetTypePagerDuty:
 		return f.createEnhancedPagerDutyPublisher(target)
 	case TargetTypeSlack:
-		return NewSlackPublisher(f.formatter, f.logger), nil
+		return f.createEnhancedSlackPublisher(target)
 	case TargetTypeWebhook, TargetTypeAlertmanager:
 		return NewWebhookPublisher(f.formatter, f.logger), nil
 	default:
@@ -326,4 +338,40 @@ func (f *PublisherFactory) createEnhancedPagerDutyPublisher(target *core.Publish
 		f.formatter,
 		f.logger,
 	), nil
+}
+
+// createEnhancedSlackPublisher creates an EnhancedSlackPublisher with full Slack Webhook API integration
+func (f *PublisherFactory) createEnhancedSlackPublisher(target *core.PublishingTarget) (AlertPublisher, error) {
+	// Use target.URL as webhook URL
+	webhookURL := target.URL
+	if webhookURL == "" {
+		f.logger.Warn("Slack target missing webhook URL, falling back to HTTP publisher", "target", target.Name)
+		return NewSlackPublisher(f.formatter, f.logger), nil
+	}
+
+	// Get or create Slack client for this webhook URL
+	client, ok := f.slackClientMap[webhookURL]
+	if !ok {
+		// Create new Slack webhook client
+		client = NewHTTPSlackWebhookClient(webhookURL, f.logger)
+		f.slackClientMap[webhookURL] = client
+	}
+
+	// Create EnhancedSlackPublisher with shared cache and metrics
+	return NewEnhancedSlackPublisher(
+		client,
+		f.slackCache,
+		f.slackMetrics,
+		f.formatter,
+		f.logger,
+	), nil
+}
+
+// Shutdown stops all background workers
+func (f *PublisherFactory) Shutdown() {
+	// Stop Slack cache cleanup worker
+	if f.slackCleanupWorker != nil {
+		f.slackCleanupWorker()
+		f.logger.Info("Stopped Slack cache cleanup worker")
+	}
 }
