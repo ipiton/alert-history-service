@@ -9,6 +9,12 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
+// Type aliases for compatibility with middleware.go
+type (
+	Middleware = FormatterMiddleware
+	Formatter  = formatFunc
+)
+
 // FormatterMetrics holds all Prometheus metrics for alert formatting
 type FormatterMetrics struct {
 	// FormatDuration tracks formatting duration by format type
