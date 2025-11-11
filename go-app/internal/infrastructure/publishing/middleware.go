@@ -348,9 +348,10 @@ func isRetryableError(err error) bool {
 
 // ValidationError indicates alert validation failure
 type ValidationError struct {
-	Field   string // Field that failed validation
-	Message string // Error message
-	Value   string // Invalid value (optional)
+	Field      string // Field that failed validation
+	Message    string // Error message
+	Value      string // Invalid value (optional)
+	Suggestion string // Fix suggestion (optional)
 }
 
 func (e *ValidationError) Error() string {
