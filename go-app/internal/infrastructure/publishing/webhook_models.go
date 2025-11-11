@@ -47,7 +47,7 @@ type WebhookConfig struct {
 	Timeout time.Duration `json:"timeout,omitempty"`
 
 	// RetryConfig is the retry configuration
-	RetryConfig *RetryConfig `json:"retry,omitempty"`
+	RetryConfig *WebhookRetryConfig `json:"retry,omitempty"`
 
 	// AuthConfig is the authentication configuration
 	AuthConfig *AuthConfig `json:"auth,omitempty"`
@@ -56,8 +56,8 @@ type WebhookConfig struct {
 	MaxPayloadSize int64 `json:"max_payload_size,omitempty"`
 }
 
-// RetryConfig defines retry behavior for webhook requests
-type RetryConfig struct {
+// WebhookRetryConfig defines retry behavior for webhook requests
+type WebhookRetryConfig struct {
 	// MaxRetries is the maximum number of retry attempts (default: 3, range: 0-5)
 	MaxRetries int `json:"max_retries"`
 
@@ -71,8 +71,8 @@ type RetryConfig struct {
 	Multiplier float64 `json:"multiplier"`
 }
 
-// DefaultRetryConfig is the default retry configuration
-var DefaultRetryConfig = RetryConfig{
+// DefaultWebhookRetryConfig is the default retry configuration
+var DefaultWebhookRetryConfig = WebhookRetryConfig{
 	MaxRetries:  3,
 	BaseBackoff: 100 * time.Millisecond,
 	MaxBackoff:  5 * time.Second,

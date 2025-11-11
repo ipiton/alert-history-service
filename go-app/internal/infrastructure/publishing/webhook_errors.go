@@ -106,8 +106,8 @@ var (
 	ErrNoCustomHeaders             = errors.New("no custom headers provided")
 )
 
-// IsRetryableError checks if an error should be retried
-func IsRetryableError(err error) bool {
+// IsWebhookRetryableError checks if a webhook error should be retried
+func IsWebhookRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -135,9 +135,9 @@ func IsRetryableError(err error) bool {
 	return false
 }
 
-// IsPermanentError checks if an error is permanent (not retryable)
-func IsPermanentError(err error) bool {
-	return !IsRetryableError(err)
+// IsWebhookPermanentError checks if an error is permanent (not retryable)
+func IsWebhookPermanentError(err error) bool {
+	return !IsWebhookRetryableError(err)
 }
 
 // classifyHTTPError classifies HTTP status code to error category

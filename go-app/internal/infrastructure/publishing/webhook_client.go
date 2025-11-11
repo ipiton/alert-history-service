@@ -17,13 +17,13 @@ import (
 // WebhookHTTPClient handles HTTP requests to webhook endpoints with retry logic
 type WebhookHTTPClient struct {
 	httpClient  *http.Client
-	retryConfig RetryConfig
+	retryConfig WebhookRetryConfig
 	authManager *AuthManager
 	logger      *slog.Logger
 }
 
 // NewWebhookHTTPClient creates a new webhook HTTP client
-func NewWebhookHTTPClient(retryConfig RetryConfig, logger *slog.Logger) *WebhookHTTPClient {
+func NewWebhookHTTPClient(retryConfig WebhookRetryConfig, logger *slog.Logger) *WebhookHTTPClient {
 	// Create HTTP client with optimized settings
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second, // Default timeout
@@ -172,7 +172,7 @@ func (c *WebhookHTTPClient) doRequestWithRetry(ctx context.Context, req *http.Re
 				slog.String("error", err.Error()))
 
 			// Retry network errors if retryable
-			if IsRetryableError(lastErr) && attempt < c.retryConfig.MaxRetries {
+			if IsWebhookRetryableError(lastErr) && attempt < c.retryConfig.MaxRetries {
 				backoff = c.calculateBackoff(backoff)
 				continue
 			}
