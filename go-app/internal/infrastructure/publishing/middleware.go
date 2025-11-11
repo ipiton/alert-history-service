@@ -139,53 +139,7 @@ func ValidationMiddleware() FormatterMiddleware {
 	}
 }
 
-// MetricsMiddleware records formatting metrics.
-//
-// Metrics recorded:
-//   - Format duration (histogram)
-//   - Format success/failure (counter)
-//
-// Does not affect result, only observability.
-type MetricsMiddleware struct {
-	recordDuration func(duration time.Duration)
-	recordSuccess  func()
-	recordFailure  func(err error)
-}
-
-// NewMetricsMiddleware creates middleware with custom metric recorders.
-func NewMetricsMiddleware(
-	recordDuration func(time.Duration),
-	recordSuccess func(),
-	recordFailure func(error),
-) FormatterMiddleware {
-	return func(next formatFunc) formatFunc {
-		return func(alert *core.EnrichedAlert) (map[string]any, error) {
-			start := time.Now()
-
-			// Call next formatter
-			result, err := next(alert)
-
-			// Record duration
-			duration := time.Since(start)
-			if recordDuration != nil {
-				recordDuration(duration)
-			}
-
-			// Record success/failure
-			if err != nil {
-				if recordFailure != nil {
-					recordFailure(err)
-				}
-			} else {
-				if recordSuccess != nil {
-					recordSuccess()
-				}
-			}
-
-			return result, err
-		}
-	}
-}
+// NOTE: For comprehensive Prometheus metrics, see metrics.go (FormatterMetrics + MetricsMiddleware)
 
 // RateLimitMiddleware limits formatting rate per format.
 //
