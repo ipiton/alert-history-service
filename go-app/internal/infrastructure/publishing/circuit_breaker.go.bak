@@ -65,7 +65,7 @@ func NewCircuitBreakerWithMetrics(config CircuitBreakerConfig, targetName string
 
 	// Initialize metric
 	// if cb.metrics != nil && cb.targetName != "" {
-	// 	// cb.metrics.RecordCircuitBreakerState(cb.targetName, StateClosed)
+	// 	cb.metrics.RecordCircuitBreakerState(cb.targetName, StateClosed)
 	// }
 
 	return cb
@@ -128,17 +128,16 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
-	// oldState := cb.state // Unused
+	oldState := cb.state
 
 	switch cb.state {
 	case StateClosed:
 		if cb.failureCount >= cb.config.FailureThreshold {
 			// Transition to open
 			cb.state = StateOpen
-			// TODO: integrate with FormatterMetrics
-			// if cb.metrics != nil && cb.targetName != "" {
-			// 	cb.metrics.RecordCircuitBreakerTrip(cb.targetName)
-			// }
+			if cb.metrics != nil && cb.targetName != "" {
+				cb.metrics.RecordCircuitBreakerTrip(cb.targetName)
+			}
 		}
 	case StateHalfOpen:
 		// Go back to open on any failure in half-open
@@ -149,7 +148,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 	// Update metric if state changed
 	// TODO: integrate with FormatterMetrics
 	// if cb.metrics != nil && cb.targetName != "" && oldState != cb.state {
-	// 	// cb.metrics.RecordCircuitBreakerState(cb.targetName, cb.state)
+	// 	cb.metrics.RecordCircuitBreakerState(cb.targetName, cb.state)
 	// }
 }
 

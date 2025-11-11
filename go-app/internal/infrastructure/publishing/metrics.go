@@ -9,12 +9,6 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
-// Type aliases for compatibility with middleware.go
-type (
-	Middleware = FormatterMiddleware
-	Formatter  = formatFunc
-)
-
 // FormatterMetrics holds all Prometheus metrics for alert formatting
 type FormatterMetrics struct {
 	// FormatDuration tracks formatting duration by format type
@@ -163,18 +157,16 @@ func (m *FormatterMetrics) RecordFormatBytes(format string, bytes int) {
 	m.FormatBytes.WithLabelValues(format).Observe(float64(bytes))
 }
 
-// MetricsMiddleware creates middleware that records Prometheus metrics
-func MetricsMiddleware(metrics *FormatterMetrics) Middleware {
-	return func(next Formatter) Formatter {
-		return &metricsFormatterMiddleware{
-			next:    next,
-			metrics: metrics,
-		}
+// MetricsMiddleware wraps an AlertFormatter to record Prometheus metrics
+func MetricsMiddleware(next AlertFormatter, metrics *FormatterMetrics) AlertFormatter {
+	return &metricsFormatterMiddleware{
+		next:    next,
+		metrics: metrics,
 	}
 }
 
 type metricsFormatterMiddleware struct {
-	next    Formatter
+	next    AlertFormatter
 	metrics *FormatterMetrics
 }
 

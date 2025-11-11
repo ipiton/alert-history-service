@@ -263,7 +263,8 @@ func (r *GeneratorURLFormatRule) Validate(alert *core.EnrichedAlert) *Validation
 		return nil // Empty is OK (optional)
 	}
 
-	if _, err := url.Parse(urlStr); err != nil {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
 		return &ValidationError{
 			Field:      "alert.GeneratorURL",
 			Message:    fmt.Sprintf("generator URL is invalid: %v", err),
@@ -271,6 +272,17 @@ func (r *GeneratorURLFormatRule) Validate(alert *core.EnrichedAlert) *Validation
 			Suggestion: "Provide valid URL (e.g., 'http://prometheus:9090/graph')",
 		}
 	}
+
+	// Require scheme (http/https)
+	if parsedURL.Scheme == "" {
+		return &ValidationError{
+			Field:      "alert.GeneratorURL",
+			Message:    "generator URL must include scheme (http:// or https://)",
+			Value:      urlStr,
+			Suggestion: "Provide valid URL (e.g., 'http://prometheus:9090/graph')",
+		}
+	}
+
 	return nil
 }
 

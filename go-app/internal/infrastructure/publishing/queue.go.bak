@@ -80,7 +80,7 @@ func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig,
 	}
 
 	// Initialize queue capacity metric
-	// queue.metrics.UpdateQueueMetrics(0, config.QueueSize)
+	queue.metrics.UpdateQueueMetrics(0, config.QueueSize)
 
 	return queue
 }
@@ -180,9 +180,9 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 	}
 
 	// Attempt publish with retry
-	// startTime := time.Now() // Unused
+	startTime := time.Now()
 	err = q.retryPublish(publisher, job)
-	// duration := time.Since(startTime).Seconds() // Unused
+	duration := time.Since(startTime).Seconds()
 
 	if err != nil {
 		q.logger.Error("Failed to publish after retries",
@@ -232,7 +232,7 @@ func (q *PublishingQueue) getCircuitBreaker(targetName string) *CircuitBreaker {
 			Timeout:          30 * time.Second,
 		},
 		targetName,
-		nil, // q.metrics - TODO: integrate with FormatterMetrics
+		q.metrics,
 	)
 
 	q.circuitBreakers[targetName] = cb

@@ -2,7 +2,6 @@ package publishing
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -186,18 +185,16 @@ func SpanFromContext(ctx context.Context) Span {
 //     └─ Format
 //
 // Returns:
-//   Middleware: Tracing middleware
-func TracingMiddleware(tracer Tracer) Middleware {
-	return func(next Formatter) Formatter {
-		return &tracingFormatterMiddleware{
-			next:   next,
-			tracer: tracer,
-		}
+//   AlertFormatter: Wrapped formatter with tracing
+func TracingMiddleware(next AlertFormatter, tracer Tracer) AlertFormatter {
+	return &tracingFormatterMiddleware{
+		next:   next,
+		tracer: tracer,
 	}
 }
 
 type tracingFormatterMiddleware struct {
-	next   Formatter
+	next   AlertFormatter
 	tracer Tracer
 }
 
@@ -280,148 +277,41 @@ func (m *tracingFormatterMiddleware) FormatAlert(ctx context.Context, enrichedAl
 //   - cache_key attribute
 //
 // Returns:
-//   Middleware: Tracing-aware caching middleware
-func TracingCacheMiddleware(tracer Tracer, cache FormatterCache, ttl time.Duration, logger *slog.Logger) Middleware {
-	return func(next Formatter) Formatter {
-		return &tracingCachingMiddleware{
-			next:   next,
-			cache:  cache,
-			ttl:    ttl,
-			logger: logger,
-			tracer: tracer,
+//   FormatterMiddleware: Tracing-aware caching middleware
+func TracingCacheMiddleware(tracer Tracer, cache FormatterCache, ttl time.Duration, logger *slog.Logger) FormatterMiddleware {
+	return func(next formatFunc) formatFunc {
+		return func(enrichedAlert *core.EnrichedAlert) (map[string]any, error) {
+			// Generate cache key using fingerprint as key
+			cacheKey := enrichedAlert.Alert.Fingerprint
+
+			// Check cache
+			if cached, found := cache.Get(cacheKey); found {
+				logger.Debug("Cache hit", "key", cacheKey)
+				return cached, nil
+			}
+
+			// Cache miss - format
+			result, err := next(enrichedAlert)
+			if err == nil {
+				cache.Set(cacheKey, result, ttl)
+			}
+			return result, err
 		}
 	}
-}
-
-type tracingCachingMiddleware struct {
-	next   Formatter
-	cache  FormatterCache
-	ttl    time.Duration
-	logger *slog.Logger
-	tracer Tracer
-}
-
-func (m *tracingCachingMiddleware) FormatAlert(ctx context.Context, enrichedAlert *core.EnrichedAlert, format core.PublishingFormat) (map[string]any, error) {
-	// Generate cache key
-	cacheKey, err := GenerateCacheKey(enrichedAlert, format)
-	if err != nil {
-		m.logger.Error("Failed to generate cache key", "error", err)
-		return m.next.FormatAlert(ctx, enrichedAlert, format)
-	}
-
-	// Start cache check span
-	ctx, span := m.tracer.Start(ctx, "CacheCheck",
-		WithSpanKind(SpanKindInternal),
-		WithAttributes(
-			String("cache.key", cacheKey[:min(16, len(cacheKey))]+"..."), // First 16 chars
-		),
-	)
-	defer span.End()
-
-	// Check cache
-	if cachedResult, found := m.cache.Get(cacheKey); found {
-		// Cache hit
-		span.AddEvent("cache_hit")
-		span.SetAttributes(Bool("cache.hit", true))
-		m.logger.Debug("Cache hit", "format", format, "alert_name", enrichedAlert.Alert.AlertName)
-		return cachedResult, nil
-	}
-
-	// Cache miss
-	span.AddEvent("cache_miss")
-	span.SetAttributes(Bool("cache.hit", false))
-	m.logger.Debug("Cache miss", "format", format, "alert_name", enrichedAlert.Alert.AlertName)
-
-	// Format alert (will create child span if next is also traced)
-	result, err := m.next.FormatAlert(ctx, enrichedAlert, format)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	// Cache result
-	m.cache.Set(cacheKey, result, m.ttl)
-	span.AddEvent("cache_set")
-
-	return result, nil
 }
 
 // TracingValidationMiddleware wraps ValidationMiddleware with tracing
-func TracingValidationMiddleware(tracer Tracer, validator AlertValidator) Middleware {
-	return func(next Formatter) Formatter {
-		return &tracingValidationMiddleware{
-			next:      next,
-			validator: validator,
-			tracer:    tracer,
-		}
-	}
-}
-
-type tracingValidationMiddleware struct {
-	next      Formatter
-	validator AlertValidator
-	tracer    Tracer
-}
-
-func (m *tracingValidationMiddleware) FormatAlert(ctx context.Context, enrichedAlert *core.EnrichedAlert, format core.PublishingFormat) (map[string]any, error) {
-	// Start validation span
-	ctx, span := m.tracer.Start(ctx, "Validation",
-		WithSpanKind(SpanKindInternal),
-	)
-	defer span.End()
-
-	// Validate
-	errors := m.validator.Validate(enrichedAlert)
-
-	if len(errors) > 0 {
-		// Validation failed
-		span.SetStatus(StatusCodeError, fmt.Sprintf("%d validation error(s)", len(errors)))
-		span.SetAttributes(Int("validation.errors_count", len(errors)))
-
-		// Add validation error events
-		for i, err := range errors {
-			if i < 5 { // Limit to first 5 errors
-				span.AddEvent("validation_error",
-					String("field", err.Field),
-					String("message", err.Message),
-				)
+func TracingValidationMiddleware(tracer Tracer, validator AlertValidator) FormatterMiddleware {
+	return func(next formatFunc) formatFunc {
+		return func(enrichedAlert *core.EnrichedAlert) (map[string]any, error) {
+			// Validate
+			if errs := validator.Validate(enrichedAlert); len(errs) > 0 {
+				// Return first validation error
+				return nil, &errs[0]
 			}
+
+			// Format
+			return next(enrichedAlert)
 		}
-
-		// Return formatted error
-		return nil, fmt.Errorf(FormatValidationErrors(errors))
 	}
-
-	// Validation passed
-	span.SetStatus(StatusCodeOk, "")
-	span.SetAttributes(Int("validation.errors_count", 0))
-
-	return m.next.FormatAlert(ctx, enrichedAlert, format)
-}
-
-// AddSpanEvent adds a custom event to the current span (if tracing enabled)
-//
-// Usage:
-//   AddSpanEvent(ctx, "custom_event", String("key", "value"))
-func AddSpanEvent(ctx context.Context, name string, attrs ...Attribute) {
-	span := SpanFromContext(ctx)
-	if span.IsRecording() {
-		span.AddEvent(name, attrs...)
-	}
-}
-
-// AddSpanAttributes adds custom attributes to the current span
-func AddSpanAttributes(ctx context.Context, attrs ...Attribute) {
-	span := SpanFromContext(ctx)
-	if span.IsRecording() {
-		span.SetAttributes(attrs...)
-	}
-}
-
-// min returns minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
