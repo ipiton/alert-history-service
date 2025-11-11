@@ -272,7 +272,6 @@ func (p *EnhancedSlackPublisher) buildAttachment(attachMap map[string]interface{
 
 // classifySlackError classifies error for metrics labeling
 func classifySlackError(err error) string {
-	var apiErr *SlackAPIError
 	if err == nil {
 		return "unknown"
 	}
