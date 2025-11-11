@@ -184,21 +184,27 @@ func (p *WebhookPublisher) Name() string {
 
 // PublisherFactory creates publishers based on target type
 type PublisherFactory struct {
-	formatter       AlertFormatter
-	logger          *slog.Logger
-	rootlyCache     IncidentIDCache   // Shared Rootly incident cache
-	rootlyMetrics   *RootlyMetrics    // Shared Rootly metrics
-	rootlyClientMap map[string]RootlyIncidentsClient // Cache of Rootly clients by API key
+	formatter           AlertFormatter
+	logger              *slog.Logger
+	rootlyCache         IncidentIDCache                  // Shared Rootly incident cache
+	rootlyMetrics       *RootlyMetrics                   // Shared Rootly metrics
+	rootlyClientMap     map[string]RootlyIncidentsClient // Cache of Rootly clients by API key
+	pagerDutyCache      EventKeyCache                    // Shared PagerDuty event key cache
+	pagerDutyMetrics    *PagerDutyMetrics                // Shared PagerDuty metrics
+	pagerDutyClientMap  map[string]PagerDutyEventsClient // Cache of PagerDuty clients by routing key
 }
 
 // NewPublisherFactory creates a new publisher factory
 func NewPublisherFactory(formatter AlertFormatter, logger *slog.Logger) *PublisherFactory {
 	return &PublisherFactory{
-		formatter:       formatter,
-		logger:          logger,
-		rootlyCache:     NewIncidentIDCache(24 * time.Hour), // 24h TTL for incident tracking
-		rootlyMetrics:   NewRootlyMetrics(),
-		rootlyClientMap: make(map[string]RootlyIncidentsClient),
+		formatter:          formatter,
+		logger:             logger,
+		rootlyCache:        NewIncidentIDCache(24 * time.Hour),        // 24h TTL for Rootly incident tracking
+		rootlyMetrics:      NewRootlyMetrics(),
+		rootlyClientMap:    make(map[string]RootlyIncidentsClient),
+		pagerDutyCache:     NewEventKeyCache(24 * time.Hour),          // 24h TTL for PagerDuty event tracking
+		pagerDutyMetrics:   NewPagerDutyMetrics(),
+		pagerDutyClientMap: make(map[string]PagerDutyEventsClient),
 	}
 }
 
@@ -224,7 +230,7 @@ func (f *PublisherFactory) CreatePublisherForTarget(target *core.PublishingTarge
 	case TargetTypeRootly:
 		return f.createEnhancedRootlyPublisher(target)
 	case TargetTypePagerDuty:
-		return NewPagerDutyPublisher(f.formatter, f.logger), nil
+		return f.createEnhancedPagerDutyPublisher(target)
 	case TargetTypeSlack:
 		return NewSlackPublisher(f.formatter, f.logger), nil
 	case TargetTypeWebhook, TargetTypeAlertmanager:
@@ -266,6 +272,57 @@ func (f *PublisherFactory) createEnhancedRootlyPublisher(target *core.Publishing
 		client,
 		f.rootlyCache,
 		f.rootlyMetrics,
+		f.formatter,
+		f.logger,
+	), nil
+}
+
+// createEnhancedPagerDutyPublisher creates an EnhancedPagerDutyPublisher with full PagerDuty Events API v2 integration
+func (f *PublisherFactory) createEnhancedPagerDutyPublisher(target *core.PublishingTarget) (AlertPublisher, error) {
+	// Extract routing key from target headers
+	routingKey := ""
+	if rk, ok := target.Headers["routing_key"]; ok {
+		routingKey = rk
+	}
+
+	// Check for Authorization header (Bearer token format)
+	if auth, ok := target.Headers["Authorization"]; ok {
+		// Remove "Bearer " prefix if present
+		const bearerPrefix = "Bearer "
+		if len(auth) > len(bearerPrefix) && auth[:len(bearerPrefix)] == bearerPrefix {
+			routingKey = auth[len(bearerPrefix):]
+		} else {
+			routingKey = auth
+		}
+	}
+
+	if routingKey == "" {
+		f.logger.Warn("PagerDuty target missing routing_key, falling back to HTTP publisher", "target", target.Name)
+		return NewPagerDutyPublisher(f.formatter, f.logger), nil
+	}
+
+	// Get or create PagerDuty client for this routing key
+	client, ok := f.pagerDutyClientMap[routingKey]
+	if !ok {
+		// Create new client with configuration
+		config := PagerDutyClientConfig{
+			BaseURL:    target.URL,
+			Timeout:    10 * time.Second,
+			MaxRetries: 3,
+			RateLimit:  120.0, // 120 req/min
+		}
+		if config.BaseURL == "" {
+			config.BaseURL = "https://events.pagerduty.com"
+		}
+		client = NewPagerDutyEventsClient(config, f.logger)
+		f.pagerDutyClientMap[routingKey] = client
+	}
+
+	// Create EnhancedPagerDutyPublisher with shared cache and metrics
+	return NewEnhancedPagerDutyPublisher(
+		client,
+		f.pagerDutyCache,
+		f.pagerDutyMetrics,
 		f.formatter,
 		f.logger,
 	), nil
