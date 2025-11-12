@@ -13,7 +13,7 @@ func TestDeterminePriority_CriticalFiring(t *testing.T) {
 			Labels: map[string]string{
 				"severity": "critical",
 			},
-			Status: core.AlertStatusFiring,
+			Status: core.StatusFiring,
 		},
 	}
 
@@ -31,7 +31,7 @@ func TestDeterminePriority_CriticalResolved(t *testing.T) {
 			Labels: map[string]string{
 				"severity": "critical",
 			},
-			Status: core.AlertStatusResolved,
+			Status: core.StatusResolved,
 		},
 	}
 
@@ -46,11 +46,13 @@ func TestDeterminePriority_CriticalResolved(t *testing.T) {
 func TestDeterminePriority_LLMCritical(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "warning",
-			Status:   "firing",
+			Labels: map[string]string{
+				"severity": "warning",
+			},
+			Status: core.StatusFiring,
 		},
 		Classification: &core.ClassificationResult{
-			Severity: "critical",
+			Severity: core.SeverityCritical,
 		},
 	}
 
@@ -65,8 +67,10 @@ func TestDeterminePriority_LLMCritical(t *testing.T) {
 func TestDeterminePriority_ResolvedAlert(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "warning",
-			Status:   "resolved",
+			Labels: map[string]string{
+				"severity": "warning",
+			},
+			Status: core.StatusResolved,
 		},
 	}
 
@@ -81,8 +85,10 @@ func TestDeterminePriority_ResolvedAlert(t *testing.T) {
 func TestDeterminePriority_InfoSeverity(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "info",
-			Status:   "firing",
+			Labels: map[string]string{
+				"severity": "info",
+			},
+			Status: core.StatusFiring,
 		},
 	}
 
@@ -97,8 +103,10 @@ func TestDeterminePriority_InfoSeverity(t *testing.T) {
 func TestDeterminePriority_WarningFiring(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "warning",
-			Status:   "firing",
+			Labels: map[string]string{
+				"severity": "warning",
+			},
+			Status: core.StatusFiring,
 		},
 	}
 
@@ -135,8 +143,10 @@ func TestDeterminePriority_NilAlert(t *testing.T) {
 func TestDeterminePriority_NilClassification(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "warning",
-			Status:   "firing",
+			Labels: map[string]string{
+				"severity": "warning",
+			},
+			Status: core.StatusFiring,
 		},
 		Classification: nil,
 	}
@@ -152,8 +162,10 @@ func TestDeterminePriority_NilClassification(t *testing.T) {
 func TestDeterminePriority_UnknownSeverity(t *testing.T) {
 	enrichedAlert := &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Severity: "unknown",
-			Status:   "firing",
+			Labels: map[string]string{
+				"severity": "unknown",
+			},
+			Status: core.StatusFiring,
 		},
 	}
 

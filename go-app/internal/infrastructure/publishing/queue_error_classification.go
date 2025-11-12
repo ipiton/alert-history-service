@@ -52,13 +52,13 @@ func classifyPublishingError(err error) QueueErrorType {
 	// HTTP response errors
 	var httpErr interface{ StatusCode() int }
 	if errors.As(err, &httpErr) {
-		return classifyHTTPError(httpErr.StatusCode())
+		return classifyQueueHTTPError(httpErr.StatusCode())
 	}
 
 	// String-based HTTP error parsing (fallback)
 	errMsg := err.Error()
 	if strings.Contains(errMsg, "status code:") || strings.Contains(errMsg, "HTTP ") {
-		return classifyHTTPErrorString(errMsg)
+		return classifyQueueHTTPErrorString(errMsg)
 	}
 
 	// Network errors (transient)
@@ -97,8 +97,8 @@ func classifyPublishingError(err error) QueueErrorType {
 	return QueueErrorTypeUnknown
 }
 
-// classifyHTTPError classifies errors based on HTTP status code
-func classifyHTTPError(statusCode int) QueueErrorType {
+// classifyQueueHTTPError classifies errors based on HTTP status code
+func classifyQueueHTTPError(statusCode int) QueueErrorType {
 	switch statusCode {
 	// TRANSIENT - retry
 	case http.StatusRequestTimeout: // 408
@@ -140,8 +140,8 @@ func classifyHTTPError(statusCode int) QueueErrorType {
 	}
 }
 
-// classifyHTTPErrorString parses error message for HTTP status codes
-func classifyHTTPErrorString(errMsg string) QueueErrorType {
+// classifyQueueHTTPErrorString parses error message for HTTP status codes
+func classifyQueueHTTPErrorString(errMsg string) QueueErrorType {
 	// Extract status code from error message
 	// Common formats:
 	// - "HTTP 404 Not Found"

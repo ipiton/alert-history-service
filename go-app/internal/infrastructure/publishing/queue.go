@@ -545,8 +545,9 @@ func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *Publishing
 		}
 
 		// Record retry attempt in metrics
+		willRetry := errorType != QueueErrorTypePermanent && attempt < q.maxRetries
 		if q.metrics != nil {
-			q.metrics.RecordRetryAttempt(job.Target.Name, errorType.String())
+			q.metrics.RecordRetryAttempt(job.Target.Name, errorType.String(), willRetry)
 		}
 
 		q.logger.Warn("Publish failed",
