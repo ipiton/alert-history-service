@@ -518,6 +518,44 @@ func (q *PublishingQueue) GetQueueSizeByPriority(priority Priority) int {
 	}
 }
 
+// QueueStats represents queue statistics
+type QueueStats struct {
+	TotalSize      int
+	HighPriority   int
+	MedPriority    int
+	LowPriority    int
+	Capacity       int
+	WorkerCount    int
+	ActiveJobs     int
+	TotalSubmitted int64
+	TotalCompleted int64
+	TotalFailed    int64
+}
+
+// GetStats returns detailed queue statistics
+func (q *PublishingQueue) GetStats() QueueStats {
+	stats := QueueStats{
+		TotalSize:    q.GetQueueSize(),
+		HighPriority: q.GetQueueSizeByPriority(PriorityHigh),
+		MedPriority:  q.GetQueueSizeByPriority(PriorityMedium),
+		LowPriority:  q.GetQueueSizeByPriority(PriorityLow),
+		Capacity:     q.GetQueueCapacity(),
+		WorkerCount:  q.workerCount,
+		ActiveJobs:   0, // TODO: track active jobs in progress
+	}
+
+	// Get metrics if available
+	if q.metrics != nil {
+		// Prometheus metrics can't be read directly, so we return 0s
+		// These would need to be tracked separately if needed
+		stats.TotalSubmitted = 0
+		stats.TotalCompleted = 0
+		stats.TotalFailed = 0
+	}
+
+	return stats
+}
+
 // retryPublish attempts to publish with exponential backoff retry and error classification
 func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *PublishingJob) error {
 	var lastErr error
