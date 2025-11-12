@@ -111,17 +111,18 @@ type PublishingQueue struct {
 	mediumPriorityJobs chan *PublishingJob
 	lowPriorityJobs    chan *PublishingJob
 
-	factory       *PublisherFactory
-	maxRetries    int
-	retryInterval time.Duration
-	workerCount   int
-	logger        *slog.Logger
-	metrics       *PublishingMetrics
-	wg            sync.WaitGroup
-	ctx           context.Context
-	cancel        context.CancelFunc
+	factory         *PublisherFactory
+	dlqRepository   DLQRepository // Dead Letter Queue for failed jobs
+	maxRetries      int
+	retryInterval   time.Duration
+	workerCount     int
+	logger          *slog.Logger
+	metrics         *PublishingMetrics
+	wg              sync.WaitGroup
+	ctx             context.Context
+	cancel          context.CancelFunc
 	circuitBreakers map[string]*CircuitBreaker
-	mu            sync.RWMutex
+	mu              sync.RWMutex
 }
 
 // PublishingQueueConfig holds configuration for publishing queue
@@ -149,7 +150,7 @@ func DefaultPublishingQueueConfig() PublishingQueueConfig {
 }
 
 // NewPublishingQueue creates a new publishing queue
-func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
+func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -161,6 +162,7 @@ func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig,
 		mediumPriorityJobs: make(chan *PublishingJob, config.MediumPriorityQueueSize),
 		lowPriorityJobs:    make(chan *PublishingJob, config.LowPriorityQueueSize),
 		factory:            factory,
+		dlqRepository:      dlqRepository,
 		maxRetries:         config.MaxRetries,
 		retryInterval:      config.RetryInterval,
 		workerCount:        config.WorkerCount,
@@ -394,6 +396,25 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 		cb.RecordFailure()
 		if q.metrics != nil {
 			q.metrics.RecordJobFailure(job.Target.Name, job.Priority.String(), "retry_exhausted")
+		}
+
+		// Send to Dead Letter Queue
+		if q.dlqRepository != nil {
+			job.State = JobStateDLQ
+			dlqErr := q.dlqRepository.Write(q.ctx, job)
+			if dlqErr != nil {
+				q.logger.Error("Failed to write to DLQ",
+					"job_id", job.ID,
+					"target", job.Target.Name,
+					"error", dlqErr,
+				)
+			} else {
+				q.logger.Info("Job sent to DLQ",
+					"job_id", job.ID,
+					"target", job.Target.Name,
+					"error_type", job.ErrorType,
+				)
+			}
 		}
 	} else {
 		q.logger.Info("Alert published successfully",
