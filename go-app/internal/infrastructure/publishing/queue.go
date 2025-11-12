@@ -111,18 +111,19 @@ type PublishingQueue struct {
 	mediumPriorityJobs chan *PublishingJob
 	lowPriorityJobs    chan *PublishingJob
 
-	factory         *PublisherFactory
-	dlqRepository   DLQRepository // Dead Letter Queue for failed jobs
-	maxRetries      int
-	retryInterval   time.Duration
-	workerCount     int
-	logger          *slog.Logger
-	metrics         *PublishingMetrics
-	wg              sync.WaitGroup
-	ctx             context.Context
-	cancel          context.CancelFunc
-	circuitBreakers map[string]*CircuitBreaker
-	mu              sync.RWMutex
+	factory           *PublisherFactory
+	dlqRepository     DLQRepository     // Dead Letter Queue for failed jobs
+	jobTrackingStore  JobTrackingStore  // LRU cache for job status tracking
+	maxRetries        int
+	retryInterval     time.Duration
+	workerCount       int
+	logger            *slog.Logger
+	metrics           *PublishingMetrics
+	wg                sync.WaitGroup
+	ctx               context.Context
+	cancel            context.CancelFunc
+	circuitBreakers   map[string]*CircuitBreaker
+	mu                sync.RWMutex
 }
 
 // PublishingQueueConfig holds configuration for publishing queue
@@ -150,7 +151,7 @@ func DefaultPublishingQueueConfig() PublishingQueueConfig {
 }
 
 // NewPublishingQueue creates a new publishing queue
-func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
+func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, jobTrackingStore JobTrackingStore, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -163,6 +164,7 @@ func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, 
 		lowPriorityJobs:    make(chan *PublishingJob, config.LowPriorityQueueSize),
 		factory:            factory,
 		dlqRepository:      dlqRepository,
+		jobTrackingStore:   jobTrackingStore,
 		maxRetries:         config.MaxRetries,
 		retryInterval:      config.RetryInterval,
 		workerCount:        config.WorkerCount,
@@ -255,10 +257,17 @@ func (q *PublishingQueue) Submit(enrichedAlert *core.EnrichedAlert, target *core
 	// Submit to queue
 	select {
 	case targetQueue <- job:
+		// Update metrics
 		if q.metrics != nil {
 			q.metrics.RecordQueueSubmission(priority.String(), true)
 			q.metrics.UpdateQueueSize(priority.String(), len(targetQueue), cap(targetQueue))
 		}
+
+		// Track job
+		if q.jobTrackingStore != nil {
+			q.jobTrackingStore.Add(job)
+		}
+
 		q.logger.Debug("Job submitted",
 			"job_id", jobID,
 			"priority", priority,
@@ -359,6 +368,16 @@ func (q *PublishingQueue) worker(id int) {
 
 // processJob processes a single publishing job with retry logic
 func (q *PublishingQueue) processJob(job *PublishingJob) {
+	// Update job state to Processing
+	job.State = JobStateProcessing
+	now := time.Now()
+	job.StartedAt = &now
+
+	// Track job state change
+	if q.jobTrackingStore != nil {
+		q.jobTrackingStore.Add(job)
+	}
+
 	// Check circuit breaker
 	cb := q.getCircuitBreaker(job.Target.Name)
 	if !cb.CanAttempt() {
@@ -415,6 +434,11 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 					"error_type", job.ErrorType,
 				)
 			}
+
+			// Track DLQ state
+			if q.jobTrackingStore != nil {
+				q.jobTrackingStore.Add(job)
+			}
 		}
 	} else {
 		q.logger.Info("Alert published successfully",
@@ -426,6 +450,11 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 		cb.RecordSuccess()
 		if q.metrics != nil {
 			q.metrics.RecordJobSuccess(job.Target.Name, job.Priority.String(), duration)
+		}
+
+		// Track success state (updated in retryPublish)
+		if q.jobTrackingStore != nil {
+			q.jobTrackingStore.Add(job)
 		}
 	}
 }
