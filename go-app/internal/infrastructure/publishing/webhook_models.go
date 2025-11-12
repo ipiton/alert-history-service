@@ -79,6 +79,33 @@ var DefaultWebhookRetryConfig = WebhookRetryConfig{
 	Multiplier:  2.0,
 }
 
+// CalculateBackoff calculates exponential backoff duration for a given attempt
+func (c *WebhookRetryConfig) CalculateBackoff(attempt int) time.Duration {
+	if attempt < 0 {
+		return c.BaseBackoff
+	}
+
+	// Calculate exponential backoff: BaseBackoff * (Multiplier ^ attempt)
+	multiplier := c.Multiplier
+	if multiplier <= 0 {
+		multiplier = 1.0
+	}
+
+	backoff := float64(c.BaseBackoff)
+	for i := 0; i < attempt; i++ {
+		backoff *= multiplier
+	}
+
+	duration := time.Duration(backoff)
+
+	// Cap at MaxBackoff
+	if duration > c.MaxBackoff {
+		return c.MaxBackoff
+	}
+
+	return duration
+}
+
 // AuthType represents authentication type
 type AuthType string
 
