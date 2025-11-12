@@ -9,13 +9,13 @@ import (
 
 func TestBearerAuthStrategy_Apply(t *testing.T) {
 	strategy := &BearerAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:  AuthTypeBearer,
 		Token: "test_bearer_token_123",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -30,13 +30,13 @@ func TestBearerAuthStrategy_Apply(t *testing.T) {
 
 func TestBearerAuthStrategy_Apply_MissingToken(t *testing.T) {
 	strategy := &BearerAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:  AuthTypeBearer,
 		Token: "",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err == nil {
 		t.Error("Expected error for missing token, got nil")
@@ -47,14 +47,14 @@ func TestBearerAuthStrategy_Apply_MissingToken(t *testing.T) {
 
 func TestBasicAuthStrategy_Apply(t *testing.T) {
 	strategy := &BasicAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:     AuthTypeBasic,
 		Username: "admin",
 		Password: "secret123",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -64,21 +64,21 @@ func TestBasicAuthStrategy_Apply(t *testing.T) {
 	if authHeader == "" {
 		t.Error("Expected Authorization header, got empty")
 	}
-	if !contains(authHeader, "Basic ") {
+	if !containsPrefix(authHeader, "Basic ") {
 		t.Errorf("Expected Basic auth header, got %s", authHeader)
 	}
 }
 
 func TestBasicAuthStrategy_Apply_MissingCredentials(t *testing.T) {
 	strategy := &BasicAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:     AuthTypeBasic,
 		Username: "",
 		Password: "",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err == nil {
 		t.Error("Expected error for missing credentials, got nil")
@@ -89,14 +89,14 @@ func TestBasicAuthStrategy_Apply_MissingCredentials(t *testing.T) {
 
 func TestAPIKeyAuthStrategy_Apply(t *testing.T) {
 	strategy := &APIKeyAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:         AuthTypeAPIKey,
 		APIKey:       "api_key_xyz",
 		APIKeyHeader: "X-API-Key",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -110,14 +110,14 @@ func TestAPIKeyAuthStrategy_Apply(t *testing.T) {
 
 func TestAPIKeyAuthStrategy_Apply_DefaultHeader(t *testing.T) {
 	strategy := &APIKeyAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:         AuthTypeAPIKey,
 		APIKey:       "api_key_xyz",
 		APIKeyHeader: "", // Should default to "X-API-Key"
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -132,25 +132,25 @@ func TestAPIKeyAuthStrategy_Apply_DefaultHeader(t *testing.T) {
 
 func TestAPIKeyAuthStrategy_Apply_MissingAPIKey(t *testing.T) {
 	strategy := &APIKeyAuthStrategy{}
-	config := &AuthConfig{
+	config := AuthConfig{
 		Type:         AuthTypeAPIKey,
 		APIKey:       "",
 		APIKeyHeader: "X-API-Key",
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err == nil {
 		t.Error("Expected error for missing API key, got nil")
 	}
 }
 
-// ==================== CustomHeadersAuthStrategy Tests ====================
+// ==================== CustomAuthStrategy Tests ====================
 
-func TestCustomHeadersAuthStrategy_Apply(t *testing.T) {
-	strategy := &CustomHeadersAuthStrategy{}
-	config := &AuthConfig{
+func TestCustomAuthStrategy_Apply(t *testing.T) {
+	strategy := &CustomAuthStrategy{}
+	config := AuthConfig{
 		Type: AuthTypeCustom,
 		CustomHeaders: map[string]string{
 			"X-Custom-Auth": "custom_value",
@@ -159,7 +159,7 @@ func TestCustomHeadersAuthStrategy_Apply(t *testing.T) {
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -176,15 +176,15 @@ func TestCustomHeadersAuthStrategy_Apply(t *testing.T) {
 	}
 }
 
-func TestCustomHeadersAuthStrategy_Apply_NoHeaders(t *testing.T) {
-	strategy := &CustomHeadersAuthStrategy{}
-	config := &AuthConfig{
+func TestCustomAuthStrategy_Apply_NoHeaders(t *testing.T) {
+	strategy := &CustomAuthStrategy{}
+	config := AuthConfig{
 		Type:          AuthTypeCustom,
 		CustomHeaders: nil,
 	}
 
 	req, _ := http.NewRequest("POST", "https://api.example.com/webhook", nil)
-	err := strategy.Apply(req, config)
+	err := strategy.ApplyAuth(req, config)
 
 	if err == nil {
 		t.Error("Expected error for missing custom headers, got nil")
@@ -193,6 +193,6 @@ func TestCustomHeadersAuthStrategy_Apply_NoHeaders(t *testing.T) {
 
 // ==================== Helper Functions ====================
 
-func contains(s, substr string) bool {
+func containsPrefix(s, substr string) bool {
 	return len(s) >= len(substr) && s[:len(substr)] == substr
 }
