@@ -33,24 +33,25 @@ func determinePriority(enrichedAlert *core.EnrichedAlert) Priority {
 	alert := enrichedAlert.Alert
 
 	// HIGH priority: Critical firing alerts
-	if alert.Severity == "critical" && alert.Status == "firing" {
+	severity := alert.Severity()
+	if severity != nil && *severity == "critical" && alert.Status == core.AlertStatusFiring {
 		return PriorityHigh
 	}
 
 	// HIGH priority: LLM confidence = critical
 	if enrichedAlert.Classification != nil {
-		if enrichedAlert.Classification.Severity == "critical" {
+		if enrichedAlert.Classification.Severity == core.AlertSeverityCritical {
 			return PriorityHigh
 		}
 	}
 
 	// LOW priority: Resolved alerts
-	if alert.Status == "resolved" {
+	if alert.Status == core.AlertStatusResolved {
 		return PriorityLow
 	}
 
 	// LOW priority: Info severity
-	if alert.Severity == "info" {
+	if severity != nil && *severity == "info" {
 		return PriorityLow
 	}
 

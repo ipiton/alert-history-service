@@ -66,20 +66,20 @@ func (s JobState) String() string {
 	}
 }
 
-// ErrorType classifies errors for retry logic
-type ErrorType int
+// QueueErrorType classifies errors for retry logic
+type QueueErrorType int
 
 const (
-	ErrorTypeUnknown    ErrorType = iota // Default, retry with caution
-	ErrorTypeTransient                    // Network timeout, rate limit, 502/503/504 → RETRY
-	ErrorTypePermanent                    // 400 bad request, 401 unauthorized, 404 → NO RETRY
+	QueueErrorTypeUnknown    QueueErrorType = iota // Default, retry with caution
+	QueueErrorTypeTransient                        // Network timeout, rate limit, 502/503/504 → RETRY
+	QueueErrorTypePermanent                        // 400 bad request, 401 unauthorized, 404 → NO RETRY
 )
 
-func (e ErrorType) String() string {
+func (e QueueErrorType) String() string {
 	switch e {
-	case ErrorTypeTransient:
+	case QueueErrorTypeTransient:
 		return "transient"
-	case ErrorTypePermanent:
+	case QueueErrorTypePermanent:
 		return "permanent"
 	default:
 		return "unknown"
@@ -95,13 +95,13 @@ type PublishingJob struct {
 	SubmittedAt   time.Time
 
 	// Extended fields for 150% quality
-	ID          string     // UUID v4
-	Priority    Priority   // HIGH/MEDIUM/LOW
-	State       JobState   // queued/processing/retrying/succeeded/failed/dlq
-	StartedAt   *time.Time // When processing began
-	CompletedAt *time.Time // When processing completed
-	LastError   error      // Most recent error
-	ErrorType   ErrorType  // transient/permanent/unknown
+	ID          string         // UUID v4
+	Priority    Priority       // HIGH/MEDIUM/LOW
+	State       JobState       // queued/processing/retrying/succeeded/failed/dlq
+	StartedAt   *time.Time     // When processing began
+	CompletedAt *time.Time     // When processing completed
+	LastError   error          // Most recent error
+	ErrorType   QueueErrorType // transient/permanent/unknown
 }
 
 // PublishingQueue manages async publishing with worker pool and retry logic
@@ -534,7 +534,7 @@ func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *Publishing
 		}
 
 		// Classify error
-		errorType := classifyError(err)
+		errorType := classifyPublishingError(err)
 		lastErr = err
 		job.LastError = err
 		job.ErrorType = errorType
@@ -559,7 +559,7 @@ func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *Publishing
 		)
 
 		// Check if error is permanent (no retry)
-		if errorType == ErrorTypePermanent {
+		if errorType == QueueErrorTypePermanent {
 			job.State = JobStateFailed
 			q.logger.Error("Permanent error detected, skipping retries",
 				"job_id", job.ID,

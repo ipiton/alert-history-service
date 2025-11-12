@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// classifyError determines whether an error should be retried (transient) or not (permanent).
+// classifyPublishingError determines whether an error should be retried (transient) or not (permanent).
 //
 // Error Classification Rules:
 //
@@ -36,17 +36,17 @@ import (
 //   - err: The error to classify
 //
 // Returns:
-//   - ErrorType: ErrorTypeTransient, ErrorTypePermanent, or ErrorTypeUnknown
+//   - QueueErrorType: QueueErrorTypeTransient, QueueErrorTypePermanent, or QueueErrorTypeUnknown
 //
 // Example:
 //
-//	errType := classifyError(err)
-//	if errType == ErrorTypePermanent {
+//	errType := classifyPublishingError(err)
+//	if errType == QueueErrorTypePermanent {
 //	    // Send to DLQ
 //	}
-func classifyError(err error) ErrorType {
+func classifyPublishingError(err error) QueueErrorType {
 	if err == nil {
-		return ErrorTypeUnknown
+		return QueueErrorTypeUnknown
 	}
 
 	// HTTP response errors
@@ -65,23 +65,23 @@ func classifyError(err error) ErrorType {
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		if netErr.Timeout() {
-			return ErrorTypeTransient // Network timeout
+			return QueueErrorTypeTransient // Network timeout
 		}
 		if netErr.Temporary() {
-			return ErrorTypeTransient // Temporary network error
+			return QueueErrorTypeTransient // Temporary network error
 		}
 	}
 
 	// DNS errors (transient)
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	}
 
 	// Connection refused (transient)
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	}
 
 	// Syscall errors
@@ -89,59 +89,59 @@ func classifyError(err error) ErrorType {
 	if errors.As(err, &syscallErr) {
 		switch syscallErr {
 		case syscall.ECONNREFUSED, syscall.ECONNRESET, syscall.ETIMEDOUT:
-			return ErrorTypeTransient
+			return QueueErrorTypeTransient
 		}
 	}
 
 	// Default: UNKNOWN (retry with caution)
-	return ErrorTypeUnknown
+	return QueueErrorTypeUnknown
 }
 
 // classifyHTTPError classifies errors based on HTTP status code
-func classifyHTTPError(statusCode int) ErrorType {
+func classifyHTTPError(statusCode int) QueueErrorType {
 	switch statusCode {
 	// TRANSIENT - retry
 	case http.StatusRequestTimeout: // 408
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	case http.StatusTooManyRequests: // 429
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	case http.StatusBadGateway: // 502
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	case http.StatusServiceUnavailable: // 503
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 	case http.StatusGatewayTimeout: // 504
-		return ErrorTypeTransient
+		return QueueErrorTypeTransient
 
 	// PERMANENT - do NOT retry
 	case http.StatusBadRequest: // 400
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusUnauthorized: // 401
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusForbidden: // 403
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusNotFound: // 404
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusMethodNotAllowed: // 405
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusConflict: // 409
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusGone: // 410
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 	case http.StatusUnprocessableEntity: // 422
-		return ErrorTypePermanent
+		return QueueErrorTypePermanent
 
 	// 5xx errors (except 502/503/504) - permanent
 	default:
 		if statusCode >= 500 && statusCode < 600 {
 			// Unknown 5xx - permanent
-			return ErrorTypePermanent
+			return QueueErrorTypePermanent
 		}
-		return ErrorTypeUnknown
+		return QueueErrorTypeUnknown
 	}
 }
 
 // classifyHTTPErrorString parses error message for HTTP status codes
-func classifyHTTPErrorString(errMsg string) ErrorType {
+func classifyHTTPErrorString(errMsg string) QueueErrorType {
 	// Extract status code from error message
 	// Common formats:
 	// - "HTTP 404 Not Found"
@@ -153,16 +153,16 @@ func classifyHTTPErrorString(errMsg string) ErrorType {
 
 	for _, code := range transientCodes {
 		if strings.Contains(errMsg, code) {
-			return ErrorTypeTransient
+			return QueueErrorTypeTransient
 		}
 	}
 
 	for _, code := range permanentCodes {
 		if strings.Contains(errMsg, code) {
-			return ErrorTypePermanent
+			return QueueErrorTypePermanent
 		}
 	}
 
 	// Unknown HTTP error
-	return ErrorTypeUnknown
+	return QueueErrorTypeUnknown
 }

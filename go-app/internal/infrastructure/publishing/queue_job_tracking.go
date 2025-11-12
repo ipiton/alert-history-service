@@ -56,8 +56,8 @@ type LRUJobTrackingStore struct {
 	mu       sync.RWMutex
 }
 
-// lruEntry wraps JobSnapshot for LRU list
-type lruEntry struct {
+// jobTrackingEntry wraps JobSnapshot for LRU list
+type jobTrackingEntry struct {
 	key   string
 	value *JobSnapshot
 }
@@ -100,7 +100,7 @@ func (s *LRUJobTrackingStore) Add(job *PublishingJob) {
 		snapshot.CompletedAt = &ts
 	}
 
-	if job.ErrorType != ErrorTypeUnknown {
+	if job.ErrorType != QueueErrorTypeUnknown {
 		snapshot.ErrorType = job.ErrorType.String()
 	}
 
@@ -108,13 +108,13 @@ func (s *LRUJobTrackingStore) Add(job *PublishingJob) {
 	if elem, ok := s.store[job.ID]; ok {
 		// Update existing entry and move to front
 		s.lruList.MoveToFront(elem)
-		entry := elem.Value.(*lruEntry)
+		entry := elem.Value.(*jobTrackingEntry)
 		entry.value = snapshot
 		return
 	}
 
 	// Add new entry
-	entry := &lruEntry{key: job.ID, value: snapshot}
+	entry := &jobTrackingEntry{key: job.ID, value: snapshot}
 	elem := s.lruList.PushFront(entry)
 	s.store[job.ID] = elem
 
@@ -132,7 +132,7 @@ func (s *LRUJobTrackingStore) Get(id string) *JobSnapshot {
 	if elem, ok := s.store[id]; ok {
 		// Move to front (most recently used)
 		s.lruList.MoveToFront(elem)
-		entry := elem.Value.(*lruEntry)
+		entry := elem.Value.(*jobTrackingEntry)
 		return entry.value
 	}
 
@@ -157,7 +157,7 @@ func (s *LRUJobTrackingStore) List(filters JobFilters) []*JobSnapshot {
 			break
 		}
 
-		entry := elem.Value.(*lruEntry)
+		entry := elem.Value.(*jobTrackingEntry)
 		snapshot := entry.value
 
 		// Apply filters
@@ -215,6 +215,6 @@ func (s *LRUJobTrackingStore) evictLRU() {
 	}
 
 	s.lruList.Remove(elem)
-	entry := elem.Value.(*lruEntry)
+	entry := elem.Value.(*jobTrackingEntry)
 	delete(s.store, entry.key)
 }
