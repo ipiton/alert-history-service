@@ -196,6 +196,7 @@ type PublisherFactory struct {
 	slackMetrics        *SlackMetrics                    // Shared Slack metrics
 	slackClientMap      map[string]SlackWebhookClient    // Cache of Slack clients by webhook URL
 	slackCleanupWorker  func()                           // Slack cache cleanup worker cancel function
+	webhookMetrics      *WebhookMetrics                  // Shared Webhook metrics
 }
 
 // NewPublisherFactory creates a new publisher factory
@@ -217,6 +218,7 @@ func NewPublisherFactory(formatter AlertFormatter, logger *slog.Logger) *Publish
 		slackMetrics:       NewSlackMetrics(),
 		slackClientMap:     make(map[string]SlackWebhookClient),
 		slackCleanupWorker: slackCleanupWorker,
+		webhookMetrics:     NewWebhookMetrics(nil),                    // Webhook metrics (no registry, will use default)
 	}
 }
 
@@ -246,9 +248,9 @@ func (f *PublisherFactory) CreatePublisherForTarget(target *core.PublishingTarge
 	case TargetTypeSlack:
 		return f.createEnhancedSlackPublisher(target)
 	case TargetTypeWebhook, TargetTypeAlertmanager:
-		return NewWebhookPublisher(f.formatter, f.logger), nil
+		return f.createEnhancedWebhookPublisher(target)
 	default:
-		return NewWebhookPublisher(f.formatter, f.logger), nil
+		return f.createEnhancedWebhookPublisher(target) // Default to enhanced webhook
 	}
 }
 
@@ -365,6 +367,34 @@ func (f *PublisherFactory) createEnhancedSlackPublisher(target *core.PublishingT
 		f.formatter,
 		f.logger,
 	), nil
+}
+
+// createEnhancedWebhookPublisher creates an EnhancedWebhookPublisher with full validation and metrics
+func (f *PublisherFactory) createEnhancedWebhookPublisher(target *core.PublishingTarget) (AlertPublisher, error) {
+	f.logger.Info("Creating enhanced webhook publisher",
+		"target", target.Name,
+		"url", target.URL)
+
+	// Create HTTP client with default retry config
+	client := NewWebhookHTTPClient(DefaultWebhookRetryConfig, f.logger)
+
+	// Create validator with default config
+	validator := NewWebhookValidator(f.logger)
+
+	// Create enhanced webhook publisher with shared metrics
+	publisher := NewEnhancedWebhookPublisher(
+		client,
+		validator,
+		f.formatter,
+		f.webhookMetrics, // Shared metrics instance
+		f.logger,
+	)
+
+	f.logger.Info("Enhanced webhook publisher created successfully",
+		"target", target.Name,
+		"features", "4 auth strategies, 6 validation rules, exponential backoff retry")
+
+	return publisher, nil
 }
 
 // Shutdown stops all background workers
