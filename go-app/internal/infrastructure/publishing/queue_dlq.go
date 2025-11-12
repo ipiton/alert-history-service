@@ -2,13 +2,13 @@ package publishing
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -76,14 +76,15 @@ type DLQRepository interface {
 
 // PostgreSQLDLQRepository implements DLQRepository using PostgreSQL
 type PostgreSQLDLQRepository struct {
-	db      *sql.DB
+	db      *pgxpool.Pool
 	queue   *PublishingQueue
 	logger  *slog.Logger
 	metrics *PublishingMetrics
 }
 
 // NewPostgreSQLDLQRepository creates a new PostgreSQL DLQ repository
-func NewPostgreSQLDLQRepository(db *sql.DB, queue *PublishingQueue, metrics *PublishingMetrics, logger *slog.Logger) *PostgreSQLDLQRepository {
+// Note: queue can be nil initially and set later via SetQueue() to avoid circular dependency
+func NewPostgreSQLDLQRepository(db *pgxpool.Pool, queue *PublishingQueue, metrics *PublishingMetrics, logger *slog.Logger) *PostgreSQLDLQRepository {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -93,6 +94,11 @@ func NewPostgreSQLDLQRepository(db *sql.DB, queue *PublishingQueue, metrics *Pub
 		logger:  logger,
 		metrics: metrics,
 	}
+}
+
+// SetQueue sets the publishing queue (used to resolve circular dependency during initialization)
+func (r *PostgreSQLDLQRepository) SetQueue(queue *PublishingQueue) {
+	r.queue = queue
 }
 
 // Write adds a failed job to the DLQ
@@ -132,7 +138,7 @@ func (r *PostgreSQLDLQRepository) Write(ctx context.Context, job *PublishingJob)
 	`
 
 	var dlqID uuid.UUID
-	err = r.db.QueryRowContext(
+	err = r.db.QueryRow(
 		ctx,
 		query,
 		job.ID,
@@ -236,7 +242,7 @@ func (r *PostgreSQLDLQRepository) Read(ctx context.Context, filters DLQFilters) 
 	}
 
 	// Execute query
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query DLQ: %w", err)
 	}
@@ -323,7 +329,7 @@ func (r *PostgreSQLDLQRepository) Replay(ctx context.Context, id uuid.UUID) erro
 		WHERE id = $2
 	`
 
-	_, updateErr := r.db.ExecContext(ctx, updateQuery, replayResult, id)
+	_, updateErr := r.db.Exec(ctx, updateQuery, replayResult, id)
 	if updateErr != nil {
 		r.logger.Error("Failed to update DLQ replay status", "error", updateErr)
 	}
@@ -351,15 +357,12 @@ func (r *PostgreSQLDLQRepository) Purge(ctx context.Context, olderThan time.Dura
 		WHERE failed_at < $1
 	`
 
-	result, err := r.db.ExecContext(ctx, query, cutoffTime)
+	result, err := r.db.Exec(ctx, query, cutoffTime)
 	if err != nil {
 		return 0, fmt.Errorf("failed to purge DLQ: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get rows affected: %w", err)
-	}
+	rowsAffected := result.RowsAffected()
 
 	r.logger.Info("DLQ purged",
 		"rows_deleted", rowsAffected,
@@ -379,13 +382,13 @@ func (r *PostgreSQLDLQRepository) GetStats(ctx context.Context) (*DLQStats, erro
 	}
 
 	// Total entries
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM publishing_dlq").Scan(&stats.TotalEntries)
+	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM publishing_dlq").Scan(&stats.TotalEntries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total entries: %w", err)
 	}
 
 	// By error type
-	rows, err := r.db.QueryContext(ctx, "SELECT error_type, COUNT(*) FROM publishing_dlq GROUP BY error_type")
+	rows, err := r.db.Query(ctx, "SELECT error_type, COUNT(*) FROM publishing_dlq GROUP BY error_type")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entries by error type: %w", err)
 	}
@@ -401,7 +404,7 @@ func (r *PostgreSQLDLQRepository) GetStats(ctx context.Context) (*DLQStats, erro
 	}
 
 	// By target
-	rows, err = r.db.QueryContext(ctx, "SELECT target_name, COUNT(*) FROM publishing_dlq GROUP BY target_name")
+	rows, err = r.db.Query(ctx, "SELECT target_name, COUNT(*) FROM publishing_dlq GROUP BY target_name")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entries by target: %w", err)
 	}
@@ -417,7 +420,7 @@ func (r *PostgreSQLDLQRepository) GetStats(ctx context.Context) (*DLQStats, erro
 	}
 
 	// By priority
-	rows, err = r.db.QueryContext(ctx, "SELECT priority, COUNT(*) FROM publishing_dlq GROUP BY priority")
+	rows, err = r.db.Query(ctx, "SELECT priority, COUNT(*) FROM publishing_dlq GROUP BY priority")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entries by priority: %w", err)
 	}
@@ -433,10 +436,10 @@ func (r *PostgreSQLDLQRepository) GetStats(ctx context.Context) (*DLQStats, erro
 	}
 
 	// Oldest/newest entries
-	r.db.QueryRowContext(ctx, "SELECT MIN(failed_at), MAX(failed_at) FROM publishing_dlq").Scan(&stats.OldestEntry, &stats.NewestEntry)
+	r.db.QueryRow(ctx, "SELECT MIN(failed_at), MAX(failed_at) FROM publishing_dlq").Scan(&stats.OldestEntry, &stats.NewestEntry)
 
 	// Replayed count
-	r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM publishing_dlq WHERE replayed = TRUE").Scan(&stats.ReplayedCount)
+	r.db.QueryRow(ctx, "SELECT COUNT(*) FROM publishing_dlq WHERE replayed = TRUE").Scan(&stats.ReplayedCount)
 
 	return stats, nil
 }
