@@ -103,4 +103,3 @@ func BenchmarkPathNormalizer_NormalizePath_Static(b *testing.B) {
 		_ = normalizer.NormalizePath(path)
 	}
 }
-
