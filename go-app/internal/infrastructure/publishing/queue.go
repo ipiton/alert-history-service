@@ -468,7 +468,7 @@ func (q *PublishingQueue) GetQueueSizeByPriority(priority Priority) int {
 	}
 }
 
-// retryPublish attempts to publish with exponential backoff retry
+// retryPublish attempts to publish with exponential backoff retry and error classification
 func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *PublishingJob) error {
 	var lastErr error
 
@@ -476,23 +476,67 @@ func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *Publishing
 		// Try publish
 		err := publisher.Publish(q.ctx, job.EnrichedAlert, job.Target)
 		if err == nil {
-			return nil // Success
+			// Success
+			job.State = JobStateSucceeded
+			now := time.Now()
+			job.CompletedAt = &now
+			return nil
 		}
 
+		// Classify error
+		errorType := classifyError(err)
 		lastErr = err
+		job.LastError = err
+		job.ErrorType = errorType
+
+		// Update job state
+		if attempt < q.maxRetries {
+			job.State = JobStateRetrying
+		}
+
+		// Record retry attempt in metrics
+		if q.metrics != nil {
+			q.metrics.RecordRetryAttempt(job.Target.Name, errorType.String())
+		}
+
+		q.logger.Warn("Publish failed",
+			"job_id", job.ID,
+			"attempt", attempt+1,
+			"max_retries", q.maxRetries,
+			"error", err,
+			"error_type", errorType,
+			"target", job.Target.Name,
+		)
+
+		// Check if error is permanent (no retry)
+		if errorType == ErrorTypePermanent {
+			job.State = JobStateFailed
+			q.logger.Error("Permanent error detected, skipping retries",
+				"job_id", job.ID,
+				"target", job.Target.Name,
+				"error", err,
+			)
+			return fmt.Errorf("permanent error (no retry): %w", err)
+		}
 
 		// Don't sleep after last attempt
 		if attempt < q.maxRetries {
-			// Exponential backoff: interval * 2^attempt
-			backoff := time.Duration(math.Pow(2, float64(attempt))) * q.retryInterval
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
+			// Exponential backoff with jitter: interval * 2^attempt + random(0-1s)
+			baseBackoff := time.Duration(math.Pow(2, float64(attempt))) * q.retryInterval
+			if baseBackoff > 30*time.Second {
+				baseBackoff = 30 * time.Second
 			}
 
+			// Add jitter (0-1000ms) to prevent thundering herd
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			backoff := baseBackoff + jitter
+
 			q.logger.Debug("Retrying publish",
+				"job_id", job.ID,
 				"attempt", attempt+1,
 				"max_retries", q.maxRetries,
 				"backoff", backoff,
+				"error_type", errorType,
 			)
 
 			select {
@@ -504,5 +548,10 @@ func (q *PublishingQueue) retryPublish(publisher AlertPublisher, job *Publishing
 		}
 	}
 
-	return fmt.Errorf("failed after %d retries: %w", q.maxRetries, lastErr)
+	// Max retries exhausted
+	job.State = JobStateFailed
+	now := time.Now()
+	job.CompletedAt = &now
+
+	return fmt.Errorf("failed after %d retries (error_type=%s): %w", q.maxRetries, job.ErrorType, lastErr)
 }
