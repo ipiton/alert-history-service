@@ -75,7 +75,10 @@ func (c *HealthMetricsCollector) Collect(ctx context.Context) (map[string]float6
 	}
 
 	// Get health status for all targets
-	healthStatuses := c.monitor.GetHealth()
+	healthStatuses, err := c.monitor.GetHealth(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get health status: %w", err)
+	}
 
 	// Convert to metric map
 	metrics := make(map[string]float64, len(healthStatuses)*3) // 3 metrics per target

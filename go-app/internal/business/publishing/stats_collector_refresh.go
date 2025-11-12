@@ -77,24 +77,34 @@ func (c *RefreshMetricsCollector) Collect(ctx context.Context) (map[string]float
 	status := c.manager.GetStatus()
 
 	// Convert to metric map
-	metrics := make(map[string]float64, 3)
+	metrics := make(map[string]float64, 5)
 
 	// Last success timestamp (Unix timestamp)
-	if !status.LastRefreshTime.IsZero() {
-		metrics["refresh_last_success_timestamp"] = float64(status.LastRefreshTime.Unix())
+	if !status.LastRefresh.IsZero() {
+		metrics["refresh_last_success_timestamp"] = float64(status.LastRefresh.Unix())
 	} else {
 		metrics["refresh_last_success_timestamp"] = 0.0 // Never refreshed
 	}
 
+	// Next refresh timestamp
+	if !status.NextRefresh.IsZero() {
+		metrics["refresh_next_refresh_timestamp"] = float64(status.NextRefresh.Unix())
+	} else {
+		metrics["refresh_next_refresh_timestamp"] = 0.0
+	}
+
 	// In progress flag (1.0 = running, 0.0 = idle)
-	if status.InProgress {
+	if status.State == RefreshStateInProgress {
 		metrics["refresh_in_progress"] = 1.0
 	} else {
 		metrics["refresh_in_progress"] = 0.0
 	}
 
-	// Refresh interval (in seconds)
-	metrics["refresh_interval_seconds"] = status.RefreshInterval.Seconds()
+	// Last refresh duration (in seconds)
+	metrics["refresh_duration_seconds"] = status.RefreshDuration.Seconds()
+
+	// Targets discovered
+	metrics["refresh_targets_discovered"] = float64(status.TargetsDiscovered)
 
 	// Note: RefreshManager also tracks errors, but those are in RefreshMetrics (Prometheus)
 	// For simplicity, we only expose the essential state here
