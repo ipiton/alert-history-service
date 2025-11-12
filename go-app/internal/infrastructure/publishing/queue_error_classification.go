@@ -56,9 +56,10 @@ func classifyPublishingError(err error) QueueErrorType {
 	}
 
 	// String-based HTTP error parsing (fallback)
+	// Try parsing error message for HTTP status codes (more aggressive)
 	errMsg := err.Error()
-	if strings.Contains(errMsg, "status code:") || strings.Contains(errMsg, "HTTP ") {
-		return classifyQueueHTTPErrorString(errMsg)
+	if errType := classifyQueueHTTPErrorString(errMsg); errType != QueueErrorTypeUnknown {
+		return errType
 	}
 
 	// Network errors (transient)
