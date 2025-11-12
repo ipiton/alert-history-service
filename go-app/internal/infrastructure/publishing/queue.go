@@ -5,23 +5,112 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
+// Priority levels for job processing order
+type Priority int
+
+const (
+	PriorityHigh   Priority = 0 // Critical alerts (severity=critical)
+	PriorityMedium Priority = 1 // Warning alerts (default)
+	PriorityLow    Priority = 2 // Info alerts, resolved alerts
+)
+
+func (p Priority) String() string {
+	switch p {
+	case PriorityHigh:
+		return "high"
+	case PriorityMedium:
+		return "medium"
+	case PriorityLow:
+		return "low"
+	default:
+		return "unknown"
+	}
+}
+
+// JobState represents the current state of a job
+type JobState int
+
+const (
+	JobStateQueued     JobState = iota // Job submitted to queue
+	JobStateProcessing                  // Worker picked up job
+	JobStateRetrying                    // Job failed, retrying
+	JobStateSucceeded                   // Job completed successfully
+	JobStateFailed                      // Job failed (permanent error)
+	JobStateDLQ                         // Job sent to DLQ after max retries
+)
+
+func (s JobState) String() string {
+	switch s {
+	case JobStateQueued:
+		return "queued"
+	case JobStateProcessing:
+		return "processing"
+	case JobStateRetrying:
+		return "retrying"
+	case JobStateSucceeded:
+		return "succeeded"
+	case JobStateFailed:
+		return "failed"
+	case JobStateDLQ:
+		return "dlq"
+	default:
+		return "unknown"
+	}
+}
+
+// ErrorType classifies errors for retry logic
+type ErrorType int
+
+const (
+	ErrorTypeUnknown    ErrorType = iota // Default, retry with caution
+	ErrorTypeTransient                    // Network timeout, rate limit, 502/503/504 → RETRY
+	ErrorTypePermanent                    // 400 bad request, 401 unauthorized, 404 → NO RETRY
+)
+
+func (e ErrorType) String() string {
+	switch e {
+	case ErrorTypeTransient:
+		return "transient"
+	case ErrorTypePermanent:
+		return "permanent"
+	default:
+		return "unknown"
+	}
+}
+
 // PublishingJob represents a single publishing task
 type PublishingJob struct {
+	// Core fields
 	EnrichedAlert *core.EnrichedAlert
 	Target        *core.PublishingTarget
 	RetryCount    int
 	SubmittedAt   time.Time
+
+	// Extended fields for 150% quality
+	ID          string     // UUID v4
+	Priority    Priority   // HIGH/MEDIUM/LOW
+	State       JobState   // queued/processing/retrying/succeeded/failed/dlq
+	StartedAt   *time.Time // When processing began
+	CompletedAt *time.Time // When processing completed
+	LastError   error      // Most recent error
+	ErrorType   ErrorType  // transient/permanent/unknown
 }
 
 // PublishingQueue manages async publishing with worker pool and retry logic
 type PublishingQueue struct {
-	jobs          chan *PublishingJob
+	// Priority queues (3 tiers)
+	highPriorityJobs   chan *PublishingJob
+	mediumPriorityJobs chan *PublishingJob
+	lowPriorityJobs    chan *PublishingJob
+
 	factory       *PublisherFactory
 	maxRetries    int
 	retryInterval time.Duration
@@ -37,21 +126,25 @@ type PublishingQueue struct {
 
 // PublishingQueueConfig holds configuration for publishing queue
 type PublishingQueueConfig struct {
-	WorkerCount    int
-	QueueSize      int
-	MaxRetries     int
-	RetryInterval  time.Duration
-	CircuitTimeout time.Duration
+	WorkerCount             int
+	HighPriorityQueueSize   int
+	MediumPriorityQueueSize int
+	LowPriorityQueueSize    int
+	MaxRetries              int
+	RetryInterval           time.Duration
+	CircuitTimeout          time.Duration
 }
 
 // DefaultPublishingQueueConfig returns default configuration
 func DefaultPublishingQueueConfig() PublishingQueueConfig {
 	return PublishingQueueConfig{
-		WorkerCount:    10,
-		QueueSize:      1000,
-		MaxRetries:     3,
-		RetryInterval:  2 * time.Second,
-		CircuitTimeout: 30 * time.Second,
+		WorkerCount:             10,
+		HighPriorityQueueSize:   500,
+		MediumPriorityQueueSize: 1000,
+		LowPriorityQueueSize:    500,
+		MaxRetries:              3,
+		RetryInterval:           2 * time.Second,
+		CircuitTimeout:          30 * time.Second,
 	}
 }
 
@@ -64,22 +157,26 @@ func NewPublishingQueue(factory *PublisherFactory, config PublishingQueueConfig,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	queue := &PublishingQueue{
-		jobs:            make(chan *PublishingJob, config.QueueSize),
-		factory:         factory,
-		maxRetries:      config.MaxRetries,
-		retryInterval:   config.RetryInterval,
-		workerCount:     config.WorkerCount,
-		logger:          logger,
-		metrics:         metrics,
-		ctx:             ctx,
-		cancel:          cancel,
-		circuitBreakers: make(map[string]*CircuitBreaker),
+		highPriorityJobs:   make(chan *PublishingJob, config.HighPriorityQueueSize),
+		mediumPriorityJobs: make(chan *PublishingJob, config.MediumPriorityQueueSize),
+		lowPriorityJobs:    make(chan *PublishingJob, config.LowPriorityQueueSize),
+		factory:            factory,
+		maxRetries:         config.MaxRetries,
+		retryInterval:      config.RetryInterval,
+		workerCount:        config.WorkerCount,
+		logger:             logger,
+		metrics:            metrics,
+		ctx:                ctx,
+		cancel:             cancel,
+		circuitBreakers:    make(map[string]*CircuitBreaker),
 	}
 
 	// Initialize worker metrics
 	if metrics != nil {
 		metrics.InitializeWorkerMetrics(config.WorkerCount)
-		metrics.UpdateQueueSize("medium", 0, config.QueueSize)
+		metrics.UpdateQueueSize("high", 0, config.HighPriorityQueueSize)
+		metrics.UpdateQueueSize("medium", 0, config.MediumPriorityQueueSize)
+		metrics.UpdateQueueSize("low", 0, config.LowPriorityQueueSize)
 	}
 
 	return queue
@@ -99,8 +196,10 @@ func (q *PublishingQueue) Start() {
 func (q *PublishingQueue) Stop(timeout time.Duration) error {
 	q.logger.Info("Stopping publishing queue", "timeout", timeout)
 
-	// Close job channel to signal workers
-	close(q.jobs)
+	// Close all priority job channels to signal workers
+	close(q.highPriorityJobs)
+	close(q.mediumPriorityJobs)
+	close(q.lowPriorityJobs)
 
 	// Wait for workers with timeout
 	done := make(chan struct{})
@@ -121,44 +220,139 @@ func (q *PublishingQueue) Stop(timeout time.Duration) error {
 
 // Submit submits a job to the publishing queue
 func (q *PublishingQueue) Submit(enrichedAlert *core.EnrichedAlert, target *core.PublishingTarget) error {
+	// Generate job ID
+	jobID := uuid.NewString()
+
+	// Determine priority
+	priority := determinePriority(enrichedAlert)
+
+	// Create job
 	job := &PublishingJob{
 		EnrichedAlert: enrichedAlert,
 		Target:        target,
 		RetryCount:    0,
 		SubmittedAt:   time.Now(),
+		ID:            jobID,
+		Priority:      priority,
+		State:         JobStateQueued,
 	}
 
+	// Select appropriate queue
+	var targetQueue chan *PublishingJob
+	switch priority {
+	case PriorityHigh:
+		targetQueue = q.highPriorityJobs
+	case PriorityMedium:
+		targetQueue = q.mediumPriorityJobs
+	case PriorityLow:
+		targetQueue = q.lowPriorityJobs
+	default:
+		targetQueue = q.mediumPriorityJobs
+	}
+
+	// Submit to queue
 	select {
-	case q.jobs <- job:
+	case targetQueue <- job:
 		if q.metrics != nil {
-			q.metrics.RecordQueueSubmission("medium", true)
-			q.metrics.UpdateQueueSize("medium", len(q.jobs), cap(q.jobs))
+			q.metrics.RecordQueueSubmission(priority.String(), true)
+			q.metrics.UpdateQueueSize(priority.String(), len(targetQueue), cap(targetQueue))
 		}
+		q.logger.Debug("Job submitted",
+			"job_id", jobID,
+			"priority", priority,
+			"target", target.Name,
+			"fingerprint", enrichedAlert.Alert.Fingerprint,
+		)
 		return nil
 	case <-q.ctx.Done():
 		if q.metrics != nil {
-			q.metrics.RecordQueueSubmission("medium", false)
+			q.metrics.RecordQueueSubmission(priority.String(), false)
 		}
 		return fmt.Errorf("publishing queue is shutting down")
 	default:
 		if q.metrics != nil {
-			q.metrics.RecordQueueSubmission("medium", false)
+			q.metrics.RecordQueueSubmission(priority.String(), false)
 		}
-		return fmt.Errorf("publishing queue is full")
+		return fmt.Errorf("queue full (priority=%s, capacity=%d)", priority, cap(targetQueue))
 	}
 }
 
-// worker processes jobs from the queue
+// worker processes jobs from the queue with priority-based selection
 func (q *PublishingQueue) worker(id int) {
 	defer q.wg.Done()
 
 	q.logger.Debug("Worker started", "worker_id", id)
 
-	for job := range q.jobs {
-		q.processJob(job)
-	}
+	for {
+		var job *PublishingJob
+		var priority Priority
 
-	q.logger.Debug("Worker stopped", "worker_id", id)
+		// Priority-based select (HIGH > MEDIUM > LOW)
+		select {
+		case job = <-q.highPriorityJobs:
+			if job == nil {
+				// High priority channel closed
+				return
+			}
+			priority = PriorityHigh
+		case <-q.ctx.Done():
+			return
+		default:
+			// Check medium, then low
+			select {
+			case job = <-q.mediumPriorityJobs:
+				if job == nil {
+					// Medium priority channel closed
+					return
+				}
+				priority = PriorityMedium
+			case <-q.ctx.Done():
+				return
+			default:
+				// Check low
+				select {
+				case job = <-q.lowPriorityJobs:
+					if job == nil {
+						// Low priority channel closed
+						return
+					}
+					priority = PriorityLow
+				case <-q.ctx.Done():
+					return
+				case <-time.After(100 * time.Millisecond):
+					// Idle timeout, loop back to check high priority
+					continue
+				}
+			}
+		}
+
+		if job != nil {
+			// Update worker metrics
+			if q.metrics != nil {
+				q.metrics.RecordWorkerActive(id, true)
+			}
+
+			// Process job
+			q.processJob(job)
+
+			// Update worker metrics
+			if q.metrics != nil {
+				q.metrics.RecordWorkerActive(id, false)
+			}
+
+			// Update queue size metric
+			if q.metrics != nil {
+				switch priority {
+				case PriorityHigh:
+					q.metrics.UpdateQueueSize("high", len(q.highPriorityJobs), cap(q.highPriorityJobs))
+				case PriorityMedium:
+					q.metrics.UpdateQueueSize("medium", len(q.mediumPriorityJobs), cap(q.mediumPriorityJobs))
+				case PriorityLow:
+					q.metrics.UpdateQueueSize("low", len(q.lowPriorityJobs), cap(q.lowPriorityJobs))
+				}
+			}
+		}
+	}
 }
 
 // processJob processes a single publishing job with retry logic
@@ -192,29 +386,26 @@ func (q *PublishingQueue) processJob(job *PublishingJob) {
 
 	if err != nil {
 		q.logger.Error("Failed to publish after retries",
+			"job_id", job.ID,
 			"target", job.Target.Name,
 			"fingerprint", job.EnrichedAlert.Alert.Fingerprint,
 			"error", err,
 		)
 		cb.RecordFailure()
 		if q.metrics != nil {
-			q.metrics.RecordJobFailure(job.Target.Name, "medium", "retry_exhausted")
+			q.metrics.RecordJobFailure(job.Target.Name, job.Priority.String(), "retry_exhausted")
 		}
 	} else {
 		q.logger.Info("Alert published successfully",
+			"job_id", job.ID,
 			"target", job.Target.Name,
 			"fingerprint", job.EnrichedAlert.Alert.Fingerprint,
 			"queue_time", time.Since(job.SubmittedAt),
 		)
 		cb.RecordSuccess()
 		if q.metrics != nil {
-			q.metrics.RecordJobSuccess(job.Target.Name, "medium", duration)
+			q.metrics.RecordJobSuccess(job.Target.Name, job.Priority.String(), duration)
 		}
-	}
-
-	// Update queue size metric
-	if q.metrics != nil {
-		q.metrics.UpdateQueueSize("medium", len(q.jobs), cap(q.jobs))
 	}
 }
 
@@ -253,14 +444,28 @@ func (q *PublishingQueue) getCircuitBreaker(targetName string) *CircuitBreaker {
 	return cb
 }
 
-// GetQueueSize returns current queue size
+// GetQueueSize returns total current queue size (all priorities)
 func (q *PublishingQueue) GetQueueSize() int {
-	return len(q.jobs)
+	return len(q.highPriorityJobs) + len(q.mediumPriorityJobs) + len(q.lowPriorityJobs)
 }
 
-// GetQueueCapacity returns queue capacity
+// GetQueueCapacity returns total queue capacity (all priorities)
 func (q *PublishingQueue) GetQueueCapacity() int {
-	return cap(q.jobs)
+	return cap(q.highPriorityJobs) + cap(q.mediumPriorityJobs) + cap(q.lowPriorityJobs)
+}
+
+// GetQueueSizeByPriority returns queue size for specific priority
+func (q *PublishingQueue) GetQueueSizeByPriority(priority Priority) int {
+	switch priority {
+	case PriorityHigh:
+		return len(q.highPriorityJobs)
+	case PriorityMedium:
+		return len(q.mediumPriorityJobs)
+	case PriorityLow:
+		return len(q.lowPriorityJobs)
+	default:
+		return 0
+	}
 }
 
 // retryPublish attempts to publish with exponential backoff retry
