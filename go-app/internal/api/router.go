@@ -117,7 +117,10 @@ func setupAPIv2Routes(router *mux.Router, config RouterConfig) {
 	setupPublishingRoutes(v2, config)
 
 	// Classification routes (Phase 4)
-	// setupClassificationRoutes(v2, config)
+	setupClassificationRoutes(v2, config)
+
+	// History routes (Phase 4)
+	setupHistoryRoutes(v2, config)
 
 	// Enrichment routes (existing)
 	// setupEnrichmentRoutes(v2, config)
@@ -295,6 +298,46 @@ func HealthCheckHandler(logger *slog.Logger) http.HandlerFunc {
 			logger.Error("Failed to encode health response", "error", err)
 		}
 	}
+}
+
+// setupClassificationRoutes configures /api/v2/classification/* routes
+func setupClassificationRoutes(router *mux.Router, config RouterConfig) {
+	class := router.PathPrefix("/classification").Subrouter()
+
+	// TODO: Initialize classification handlers with actual classifier
+	// For now, use placeholder
+	_ = class
+	_ = config
+
+	// Public endpoints (no auth required)
+	class.HandleFunc("/models", PlaceholderHandler("ListClassificationModels")).Methods("GET")
+	class.HandleFunc("/stats", PlaceholderHandler("GetClassificationStats")).Methods("GET")
+
+	// Protected endpoints (require auth)
+	classProtected := class.PathPrefix("").Subrouter()
+	if config.EnableAuth {
+		classProtected.Use(middleware.AuthMiddleware(config.AuthConfig))
+	}
+	if config.EnableRateLimit {
+		classProtected.Use(middleware.RateLimitMiddleware(config.RateLimitPerMinute, config.RateLimitBurst))
+	}
+
+	classProtected.HandleFunc("/classify", PlaceholderHandler("ClassifyAlert")).Methods("POST")
+}
+
+// setupHistoryRoutes configures /api/v2/history/* routes
+func setupHistoryRoutes(router *mux.Router, config RouterConfig) {
+	hist := router.PathPrefix("/history").Subrouter()
+
+	// TODO: Initialize history handlers with actual repository
+	// For now, use placeholder
+	_ = hist
+	_ = config
+
+	// Public endpoints (no auth required)
+	hist.HandleFunc("/top", PlaceholderHandler("GetTopAlerts")).Methods("GET")
+	hist.HandleFunc("/flapping", PlaceholderHandler("GetFlappingAlerts")).Methods("GET")
+	hist.HandleFunc("/recent", PlaceholderHandler("GetRecentAlerts")).Methods("GET")
 }
 
 // PlaceholderHandler returns a placeholder handler for routes not yet implemented
