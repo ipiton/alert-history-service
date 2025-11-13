@@ -11,12 +11,17 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
 )
 
+// MetricsCollectorInterface abstracts metrics collector for testing.
+type MetricsCollectorInterface interface {
+	CollectAll(ctx context.Context) *publishing.MetricsSnapshot
+}
+
 // PublishingStatsHandler handles HTTP requests for publishing metrics & stats.
 //
 // This handler provides 5 REST endpoints:
 //   1. GET  /api/v2/publishing/metrics       - Raw metrics snapshot
 //   2. GET  /api/v2/publishing/stats         - Aggregated statistics
-//   3. GET  /api/v2/publishing/stats/{target} - Per-target statistics (TODO)
+//   3. GET  /api/v2/publishing/stats/{target} - Per-target statistics
 //   4. GET  /api/v2/publishing/health        - System health summary
 //   5. GET  /api/v2/publishing/trends        - Trend analysis (TODO: Phase 5)
 //
@@ -24,7 +29,7 @@ import (
 //
 // Thread-Safe: Yes (PublishingMetricsCollector is thread-safe)
 type PublishingStatsHandler struct {
-	collector *publishing.PublishingMetricsCollector
+	collector MetricsCollectorInterface
 	logger    *slog.Logger
 }
 
@@ -314,6 +319,138 @@ func (h *PublishingStatsHandler) GetHealth(w http.ResponseWriter, r *http.Reques
 	h.logger.Debug("Health endpoint called",
 		"status", status,
 		"unhealthy_targets", unhealthyCount,
+	)
+}
+
+// ============================================================================
+// Endpoint 4: GET /api/v2/publishing/stats/{target} (Per-Target Stats)
+// ============================================================================
+
+// TargetStatsResponse represents per-target statistics.
+type TargetStatsResponse struct {
+	TargetName string             `json:"target_name"`
+	Timestamp  time.Time          `json:"timestamp"`
+	Health     TargetHealthInfo   `json:"health"`
+	Jobs       TargetJobInfo      `json:"jobs"`
+	Metrics    map[string]float64 `json:"metrics"`
+}
+
+// TargetHealthInfo represents target health information.
+type TargetHealthInfo struct {
+	Status              string  `json:"status"` // "healthy", "degraded", "unhealthy"
+	SuccessRate         float64 `json:"success_rate_percent"`
+	ConsecutiveFailures int     `json:"consecutive_failures"`
+	LastCheck           string  `json:"last_check,omitempty"`
+}
+
+// TargetJobInfo represents target job processing information.
+type TargetJobInfo struct {
+	TotalProcessed int     `json:"total_processed"`
+	Succeeded      int     `json:"succeeded"`
+	Failed         int     `json:"failed"`
+	SuccessRate    float64 `json:"success_rate_percent"`
+}
+
+// GetTargetStats handles GET /api/v2/publishing/stats/{target}
+//
+// This endpoint returns statistics for a specific target.
+//
+// URL Parameters:
+//   - target: Target name (e.g., "rootly-prod")
+//
+// Response Example:
+//
+//	{
+//	  "target_name": "rootly-prod",
+//	  "timestamp": "2025-11-12T10:30:00Z",
+//	  "health": {
+//	    "status": "healthy",
+//	    "success_rate_percent": 99.5,
+//	    "consecutive_failures": 0
+//	  },
+//	  "jobs": {
+//	    "total_processed": 1000,
+//	    "succeeded": 995,
+//	    "failed": 5,
+//	    "success_rate_percent": 99.5
+//	  },
+//	  "metrics": {...}
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Target found
+//   - 404: Target not found
+func (h *PublishingStatsHandler) GetTargetStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract target name from URL path
+	// Expected format: /api/v2/publishing/stats/{target}
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v2/publishing/stats/"), "/")
+	if len(pathParts) == 0 || pathParts[0] == "" {
+		http.Error(w, "Target name required", http.StatusBadRequest)
+		return
+	}
+	targetName := pathParts[0]
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Collect all metrics
+	snapshot := h.collector.CollectAll(ctx)
+
+	// Filter metrics for this target
+	targetMetrics := make(map[string]float64)
+	hasMetrics := false
+
+	for key, value := range snapshot.Metrics {
+		if strings.Contains(key, targetName) {
+			targetMetrics[key] = value
+			hasMetrics = true
+		}
+	}
+
+	// Check if target exists
+	if !hasMetrics {
+		http.Error(w, "Target not found: "+targetName, http.StatusNotFound)
+		return
+	}
+
+	// Extract health information
+	healthStatus := extractTargetHealthStatus(snapshot.Metrics, targetName)
+	healthInfo := TargetHealthInfo{
+		Status:              healthStatus,
+		SuccessRate:         extractTargetSuccessRate(snapshot.Metrics, targetName),
+		ConsecutiveFailures: extractConsecutiveFailures(snapshot.Metrics, targetName),
+	}
+
+	// Extract job information
+	jobInfo := TargetJobInfo{
+		TotalProcessed: extractJobsProcessed(snapshot.Metrics, targetName),
+		Succeeded:      extractJobsSucceeded(snapshot.Metrics, targetName),
+		Failed:         extractJobsFailed(snapshot.Metrics, targetName),
+		SuccessRate:    calculateTargetJobSuccessRate(snapshot.Metrics, targetName),
+	}
+
+	response := TargetStatsResponse{
+		TargetName: targetName,
+		Timestamp:  time.Now(),
+		Health:     healthInfo,
+		Jobs:       jobInfo,
+		Metrics:    targetMetrics,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Failed to encode target stats response", "error", err)
+	}
+
+	h.logger.Debug("Target stats endpoint called",
+		"target", targetName,
+		"metrics_count", len(targetMetrics),
 	)
 }
 

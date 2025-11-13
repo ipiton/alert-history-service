@@ -76,3 +76,95 @@ func generateHealthMessage(status string, unhealthyCount int, totalTargets int) 
 		return "Unknown status"
 	}
 }
+
+// ============================================================================
+// Per-Target Metric Extraction
+// ============================================================================
+
+// extractTargetHealthStatus extracts health status for specific target.
+func extractTargetHealthStatus(metrics map[string]float64, targetName string) string {
+	searchKey := fmt.Sprintf("health_status{target=%q", targetName)
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) {
+			switch value {
+			case 1.0:
+				return "healthy"
+			case 2.0:
+				return "degraded"
+			case 3.0:
+				return "unhealthy"
+			default:
+				return "unknown"
+			}
+		}
+	}
+	return "unknown"
+}
+
+// extractTargetSuccessRate extracts success rate for specific target.
+func extractTargetSuccessRate(metrics map[string]float64, targetName string) float64 {
+	searchKey := fmt.Sprintf("success_rate{target=%q", targetName)
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) {
+			return value
+		}
+	}
+	return 0.0
+}
+
+// extractConsecutiveFailures extracts consecutive failures for specific target.
+func extractConsecutiveFailures(metrics map[string]float64, targetName string) int {
+	searchKey := fmt.Sprintf("consecutive_failures{target=%q", targetName)
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) {
+			return int(value)
+		}
+	}
+	return 0
+}
+
+// extractJobsProcessed extracts total jobs processed for target.
+func extractJobsProcessed(metrics map[string]float64, targetName string) int {
+	searchKey := fmt.Sprintf("jobs_processed_total{target=%q", targetName)
+	total := 0
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) {
+			total += int(value)
+		}
+	}
+	return total
+}
+
+// extractJobsSucceeded extracts succeeded jobs for target.
+func extractJobsSucceeded(metrics map[string]float64, targetName string) int {
+	searchKey := fmt.Sprintf("jobs_processed_total{target=%q", targetName)
+	searchSucceeded := ",state=\"succeeded\"}"
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) && strings.Contains(key, searchSucceeded) {
+			return int(value)
+		}
+	}
+	return 0
+}
+
+// extractJobsFailed extracts failed jobs for target.
+func extractJobsFailed(metrics map[string]float64, targetName string) int {
+	searchKey := fmt.Sprintf("jobs_processed_total{target=%q", targetName)
+	searchFailed := ",state=\"failed\"}"
+	for key, value := range metrics {
+		if strings.Contains(key, searchKey) && strings.Contains(key, searchFailed) {
+			return int(value)
+		}
+	}
+	return 0
+}
+
+// calculateTargetJobSuccessRate calculates job success rate for target.
+func calculateTargetJobSuccessRate(metrics map[string]float64, targetName string) float64 {
+	succeeded := extractJobsSucceeded(metrics, targetName)
+	total := extractJobsProcessed(metrics, targetName)
+	if total == 0 {
+		return 100.0 // No jobs = 100% success (neutral)
+	}
+	return (float64(succeeded) / float64(total)) * 100.0
+}
