@@ -315,6 +315,49 @@ func TestGetTargetStats(t *testing.T) {
 	})
 }
 
+// TestGetTrends tests GET /api/v2/publishing/trends endpoint.
+func TestGetTrends(t *testing.T) {
+	t.Run("Returns trends analysis successfully", func(t *testing.T) {
+		handler := createTestHandler(nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/publishing/trends", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetTrends(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var response TrendsResponse
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		// Should have trends data
+		if response.Trends.Timestamp.IsZero() {
+			t.Error("Expected non-zero timestamp")
+		}
+
+		// Should have summary
+		if response.Summary == "" {
+			t.Error("Expected non-empty summary")
+		}
+	})
+
+	t.Run("Rejects non-GET requests", func(t *testing.T) {
+		handler := createTestHandler(nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/publishing/trends", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetTrends(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected status 405, got %d", w.Code)
+		}
+	})
+}
+
 // TestHelperFunctions tests helper functions.
 func TestHelperFunctions(t *testing.T) {
 	t.Run("countHealthyTargets", func(t *testing.T) {
