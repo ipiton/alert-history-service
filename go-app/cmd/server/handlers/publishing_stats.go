@@ -71,9 +71,11 @@ func (m *MockCollectorForHandler) CollectAll(ctx context.Context) *publishing.Me
 		return m.CollectAllFunc(ctx)
 	}
 	return &publishing.MetricsSnapshot{
-		Timestamp:      time.Now(),
-		Metrics:        make(map[string]float64),
-		CollectorCount: 0,
+		Timestamp:           time.Now(),
+		Metrics:             make(map[string]float64),
+		CollectionDuration:  0,
+		AvailableCollectors: []string{},
+		Errors:              make(map[string]error),
 	}
 }
 
