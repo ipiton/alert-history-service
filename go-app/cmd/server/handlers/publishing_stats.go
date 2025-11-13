@@ -23,24 +23,27 @@ type MetricsCollectorInterface interface {
 //   2. GET  /api/v2/publishing/stats         - Aggregated statistics
 //   3. GET  /api/v2/publishing/stats/{target} - Per-target statistics
 //   4. GET  /api/v2/publishing/health        - System health summary
-//   5. GET  /api/v2/publishing/trends        - Trend analysis (TODO: Phase 5)
+//   5. GET  /api/v2/publishing/trends        - Trend analysis
 //
 // Performance Target: <10ms total response time
 //
 // Thread-Safe: Yes (PublishingMetricsCollector is thread-safe)
 type PublishingStatsHandler struct {
-	collector MetricsCollectorInterface
-	logger    *slog.Logger
+	collector      MetricsCollectorInterface
+	trendDetector  *publishing.TrendDetector
+	logger         *slog.Logger
 }
 
 // NewPublishingStatsHandler creates a new handler.
 func NewPublishingStatsHandler(
 	collector *publishing.PublishingMetricsCollector,
+	trendDetector *publishing.TrendDetector,
 	logger *slog.Logger,
 ) *PublishingStatsHandler {
 	return &PublishingStatsHandler{
-		collector: collector,
-		logger:    logger,
+		collector:     collector,
+		trendDetector: trendDetector,
+		logger:        logger,
 	}
 }
 
@@ -451,6 +454,75 @@ func (h *PublishingStatsHandler) GetTargetStats(w http.ResponseWriter, r *http.R
 	h.logger.Debug("Target stats endpoint called",
 		"target", targetName,
 		"metrics_count", len(targetMetrics),
+	)
+}
+
+// ============================================================================
+// Endpoint 5: GET /api/v2/publishing/trends (Trend Analysis)
+// ============================================================================
+
+// TrendsResponse represents trend analysis response.
+type TrendsResponse struct {
+	Timestamp time.Time                  `json:"timestamp"`
+	Trends    publishing.TrendAnalysis   `json:"trends"`
+	Summary   string                     `json:"summary"`
+}
+
+// GetTrends handles GET /api/v2/publishing/trends
+//
+// This endpoint returns historical trend analysis including:
+//   - Success rate trends (increasing/stable/decreasing)
+//   - Latency trends (improving/stable/degrading)
+//   - Error spike detection (>3σ anomaly)
+//   - Queue growth rate
+//
+// Response Example:
+//
+//	{
+//	  "timestamp": "2025-11-13T10:30:00Z",
+//	  "trends": {
+//	    "success_rate_trend": "stable",
+//	    "success_rate_change": 0.5,
+//	    "latency_trend": "improving",
+//	    "latency_change": -15.3,
+//	    "error_spike_detected": false,
+//	    "queue_growth_rate": 2.5,
+//	    "queue_growth_trend": "growing"
+//	  },
+//	  "summary": "System stable. Latency improving. Queue growing slowly."
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Trends available
+//   - 503: Not enough historical data (< 10 snapshots)
+func (h *PublishingStatsHandler) GetTrends(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Analyze trends
+	trends := h.trendDetector.Analyze()
+
+	// Generate human-readable summary
+	summary := generateTrendsSummary(trends)
+
+	response := TrendsResponse{
+		Timestamp: time.Now(),
+		Trends:    trends,
+		Summary:   summary,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Failed to encode trends response", "error", err)
+	}
+
+	h.logger.Debug("Trends endpoint called",
+		"success_rate_trend", trends.SuccessRateTrend,
+		"latency_trend", trends.LatencyTrend,
+		"error_spike", trends.ErrorSpikeDetected,
 	)
 }
 

@@ -3,6 +3,8 @@ package handlers
 import (
 	"fmt"
 	"strings"
+
+	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
 )
 
 // ============================================================================
@@ -167,4 +169,64 @@ func calculateTargetJobSuccessRate(metrics map[string]float64, targetName string
 		return 100.0 // No jobs = 100% success (neutral)
 	}
 	return (float64(succeeded) / float64(total)) * 100.0
+}
+
+// ============================================================================
+// Trends Summary Generation
+// ============================================================================
+
+// generateTrendsSummary creates human-readable summary from trend analysis.
+func generateTrendsSummary(trends publishing.TrendAnalysis) string {
+	parts := make([]string, 0, 4)
+
+	// Success rate summary
+	switch trends.SuccessRateTrend {
+	case "increasing":
+		parts = append(parts, fmt.Sprintf("Success rate improving (+%.1f%%)", trends.SuccessRateChange))
+	case "decreasing":
+		parts = append(parts, fmt.Sprintf("Success rate declining (%.1f%%)", trends.SuccessRateChange))
+	default:
+		parts = append(parts, "Success rate stable")
+	}
+
+	// Latency summary
+	switch trends.LatencyTrend {
+	case "improving":
+		parts = append(parts, fmt.Sprintf("Latency improving (%.1fms faster)", -trends.LatencyChange))
+	case "degrading":
+		parts = append(parts, fmt.Sprintf("Latency degrading (+%.1fms)", trends.LatencyChange))
+	default:
+		parts = append(parts, "Latency stable")
+	}
+
+	// Error spike detection
+	if trends.ErrorSpikeDetected {
+		parts = append(parts, fmt.Sprintf("⚠️ Error spike detected (%.2f%% vs %.2f%% baseline)",
+			trends.ErrorRateCurrent, trends.ErrorRateBaseline))
+	}
+
+	// Queue growth summary
+	switch trends.QueueGrowthTrend {
+	case "growing":
+		if trends.QueueGrowthRate > 10 {
+			parts = append(parts, fmt.Sprintf("⚠️ Queue growing rapidly (+%.1f jobs/min)", trends.QueueGrowthRate))
+		} else {
+			parts = append(parts, fmt.Sprintf("Queue growing slowly (+%.1f jobs/min)", trends.QueueGrowthRate))
+		}
+	case "shrinking":
+		parts = append(parts, "Queue draining")
+	default:
+		parts = append(parts, "Queue stable")
+	}
+
+	// Join all parts with ". "
+	summary := ""
+	for i, part := range parts {
+		if i > 0 {
+			summary += ". "
+		}
+		summary += part
+	}
+
+	return summary + "."
 }

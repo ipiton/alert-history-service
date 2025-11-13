@@ -47,9 +47,11 @@ func (m *MockCollector) CollectorCount() int {
 // createTestHandler creates handler with mock collector.
 func createTestHandler(snapshot *publishing.MetricsSnapshot) *PublishingStatsHandler {
 	mockCollector := &MockCollector{snapshot: snapshot}
+	trendDetector := publishing.NewTrendDetector() // Add trend detector
 	return &PublishingStatsHandler{
-		collector: mockCollector,
-		logger:    slog.Default(),
+		collector:     mockCollector,
+		trendDetector: trendDetector,
+		logger:        slog.Default(),
 	}
 }
 
