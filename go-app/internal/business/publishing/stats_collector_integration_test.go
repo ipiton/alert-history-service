@@ -171,9 +171,14 @@ func TestIntegration_CollectorFailureHandling(t *testing.T) {
 		t.Errorf("Expected working_metric=100.0, got %v", snapshot.Metrics["working_metric"])
 	}
 
-	// Should have 1 available collector (only working one)
-	if len(snapshot.AvailableCollectors) != 1 {
-		t.Errorf("Expected 1 available collector, got %d", len(snapshot.AvailableCollectors))
+	// Both collectors are "available" (IsAvailable()=true), but one failed
+	if len(snapshot.AvailableCollectors) != 2 {
+		t.Errorf("Expected 2 available collectors (1 working, 1 failing), got %d", len(snapshot.AvailableCollectors))
+	}
+
+	// Should have 1 error recorded
+	if len(snapshot.Errors) != 1 {
+		t.Errorf("Expected 1 error from failing collector, got %d", len(snapshot.Errors))
 	}
 }
 

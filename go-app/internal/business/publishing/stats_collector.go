@@ -190,7 +190,7 @@ func (c *PublishingMetricsCollector) CollectAll(ctx context.Context) *MetricsSna
 	c.mu.RUnlock()
 
 	var (
-		mu sync.Mutex     // Protects snapshot.Metrics map
+		mu sync.Mutex     // Protects ALL snapshot fields (thread-safe)
 		wg sync.WaitGroup // Waits for all collectors
 	)
 
@@ -199,8 +199,6 @@ func (c *PublishingMetricsCollector) CollectAll(ctx context.Context) *MetricsSna
 			continue // Skip uninitialized subsystems
 		}
 
-		snapshot.AvailableCollectors = append(snapshot.AvailableCollectors, collector.Name())
-
 		wg.Add(1)
 		go func(coll MetricsCollector) {
 			defer wg.Done()
@@ -208,15 +206,19 @@ func (c *PublishingMetricsCollector) CollectAll(ctx context.Context) *MetricsSna
 			// Collect metrics from this collector
 			metrics, err := coll.Collect(ctx)
 
+			// CRITICAL: Lock BEFORE any writes to snapshot
 			mu.Lock()
 			defer mu.Unlock()
+
+			// Register collector as available (inside lock!)
+			snapshot.AvailableCollectors = append(snapshot.AvailableCollectors, coll.Name())
 
 			if err != nil {
 				snapshot.Errors[coll.Name()] = err
 				return
 			}
 
-			// Merge metrics into snapshot
+			// Merge metrics into snapshot (inside lock)
 			for name, value := range metrics {
 				snapshot.Metrics[name] = value
 			}
@@ -235,7 +237,10 @@ func (c *PublishingMetricsCollector) CollectAll(ctx context.Context) *MetricsSna
 		// All collectors finished
 	case <-ctx.Done():
 		// Timeout reached (should be rare)
+		// CRITICAL: Protect timeout error write with mutex
+		mu.Lock()
 		snapshot.Errors["timeout"] = fmt.Errorf("collection timeout after 5s")
+		mu.Unlock()
 	}
 
 	// Record duration
