@@ -86,10 +86,9 @@ func (h *ClassificationHandlers) ClassifyAlert(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Validate using validator
-	if err := middleware.ValidateStruct(req); err != nil {
-		apiErr := apierrors.ValidationError("Validation failed").
-			WithDetails(middleware.FormatValidationErrors(err)).
+	// Basic validation
+	if req.Alert == nil {
+		apiErr := apierrors.ValidationError("Alert is required").
 			WithRequestID(middleware.GetRequestID(r.Context()))
 		apierrors.WriteError(w, apiErr)
 		return
