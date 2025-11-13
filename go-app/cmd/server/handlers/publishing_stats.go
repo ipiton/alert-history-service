@@ -47,6 +47,36 @@ func NewPublishingStatsHandler(
 	}
 }
 
+// NewPublishingStatsHandlerWithCollector creates a handler with custom collector interface.
+// Used for testing with mock collectors.
+func NewPublishingStatsHandlerWithCollector(
+	collector MetricsCollectorInterface,
+	logger *slog.Logger,
+) *PublishingStatsHandler {
+	return &PublishingStatsHandler{
+		collector: collector,
+		logger:    logger,
+	}
+}
+
+// MockCollectorForHandler is a mock implementation of MetricsCollectorInterface for testing.
+type MockCollectorForHandler struct {
+	CollectAllFunc        func(ctx context.Context) *publishing.MetricsSnapshot
+	GetCollectorCountFunc func() int
+	GetCollectorNamesFunc func() []string
+}
+
+func (m *MockCollectorForHandler) CollectAll(ctx context.Context) *publishing.MetricsSnapshot {
+	if m.CollectAllFunc != nil {
+		return m.CollectAllFunc(ctx)
+	}
+	return &publishing.MetricsSnapshot{
+		Timestamp:      time.Now(),
+		Metrics:        make(map[string]float64),
+		CollectorCount: 0,
+	}
+}
+
 // ============================================================================
 // Response Models
 // ============================================================================
