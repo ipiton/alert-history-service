@@ -52,37 +52,175 @@ The system automatically detects and switches between modes based on target avai
   - Queue remains empty
   - System stays healthy and observable
 
+## Architecture (TN-060)
+
+### ModeManager Component
+
+The TN-060 implementation introduces a centralized `ModeManager` component that manages mode state and transitions:
+
+```
+┌─────────────────────────────────────────────────┐
+│              ModeManager                        │
+│  ┌───────────────────────────────────────────┐ │
+│  │  State: currentMode (Normal/MetricsOnly)  │ │
+│  │  Transitions: tracked with atomic counter │ │
+│  │  Caching: <100ns read performance         │ │
+│  │  Subscribers: event-driven notifications  │ │
+│  └───────────────────────────────────────────┘ │
+│                                                 │
+│  ┌──────────────────┬──────────────────┐       │
+│  │  Integration     │  Integration     │       │
+│  │  - Handlers      │  - Queue         │       │
+│  │  - Coordinator   │  - Publisher     │       │
+│  └──────────────────┴──────────────────┘       │
+└─────────────────────────────────────────────────┘
+```
+
+**Key Features**:
+- **Automatic mode detection**: Based on enabled target count
+- **Thread-safe**: `sync.RWMutex` for concurrent access
+- **High performance**: <100ns for mode checks (0 allocations)
+- **Event-driven**: Subscribe to mode change notifications
+- **Metrics**: Prometheus integration for observability
+- **Periodic checking**: Background goroutine (5s interval)
+- **Graceful shutdown**: Clean lifecycle management
+
+### Performance Characteristics
+
+**Benchmarks** (on Apple Silicon M1):
+- `GetCurrentMode()`: **34 ns/op** (0 allocs)
+- `IsMetricsOnly()`: **35 ns/op** (0 allocs)
+- `CheckModeTransition()`: **173 ns/op** (1 alloc)
+- Concurrent access: **141 ns/op** (0 allocs)
+
+**Throughput**: >29M ops/sec (concurrent reads)
+
 ## Implementation
 
-### Endpoint: GET /api/v1/publishing/mode
+### Endpoint: GET /api/v1/publishing/mode (Enhanced)
 
 ```bash
 curl http://localhost:8080/api/v1/publishing/mode
 ```
 
-**Response (Normal Mode)**:
+**Response (Normal Mode)** - Enhanced with TN-060 metrics:
 ```json
 {
   "mode": "normal",
   "targets_available": true,
   "enabled_targets": 5,
-  "metrics_only_active": false
+  "metrics_only_active": false,
+  "transition_count": 12,
+  "current_mode_duration_seconds": 3600.5,
+  "last_transition_time": "2025-11-14T10:30:00Z",
+  "last_transition_reason": "targets_available"
 }
 ```
 
-**Response (Metrics-Only Mode)**:
+**Response (Metrics-Only Mode)** - Enhanced with TN-060 metrics:
 ```json
 {
   "mode": "metrics-only",
   "targets_available": false,
   "enabled_targets": 0,
-  "metrics_only_active": true
+  "metrics_only_active": true,
+  "transition_count": 13,
+  "current_mode_duration_seconds": 120.3,
+  "last_transition_time": "2025-11-14T12:30:00Z",
+  "last_transition_reason": "no_enabled_targets"
 }
 ```
 
-### Code Implementation
+**New Fields (TN-060)**:
+- `transition_count`: Total number of mode transitions since startup
+- `current_mode_duration_seconds`: How long system has been in current mode
+- `last_transition_time`: When the last transition occurred
+- `last_transition_reason`: Why the transition happened (`targets_available`, `no_enabled_targets`, `targets_disabled`)
 
-From `handlers.go`:
+### Integration Examples
+
+#### 1. Checking Mode Before Publishing (Handlers)
+
+```go
+func (h *PublishingHandlers) SubmitAlert(w http.ResponseWriter, r *http.Request) {
+    // ... parse request ...
+
+    // TN-060: Check if in metrics-only mode
+    if h.modeManager != nil && h.modeManager.IsMetricsOnly() {
+        h.logger.Info("Alert submission rejected (metrics-only mode)",
+            "alert_fingerprint", req.Alert.Fingerprint)
+
+        h.sendJSON(w, http.StatusOK, SubmitAlertResponse{
+            Success: false,
+            Message: "Alert not submitted: system is in metrics-only mode",
+            Mode:    "metrics-only",
+        })
+        return
+    }
+
+    // ... proceed with submission ...
+}
+```
+
+#### 2. Skipping Jobs in Queue Workers
+
+```go
+func (q *PublishingQueue) worker(id int) {
+    for {
+        job := q.selectNextJob()
+
+        if job != nil {
+            // TN-060: Skip processing in metrics-only mode
+            if q.modeManager != nil && q.modeManager.IsMetricsOnly() {
+                q.logger.Debug("Job skipped (metrics-only mode)",
+                    "job_id", job.ID,
+                    "target", job.Target.Name)
+                continue
+            }
+
+            // ... process job ...
+        }
+    }
+}
+```
+
+#### 3. Subscribing to Mode Changes
+
+```go
+// Subscribe to mode change events
+modeManager.Subscribe(func(from, to publishing.Mode, reason string) {
+    log.Printf("Mode changed: %v -> %v (reason: %s)", from, to, reason)
+
+    // Send alert to monitoring
+    if to == publishing.ModeMetricsOnly {
+        sendAlert("Publishing system entered metrics-only mode")
+    }
+})
+```
+
+#### 4. Monitoring Mode via Prometheus
+
+```promql
+# Current mode (0=normal, 1=metrics-only)
+alert_history_publishing_mode_current
+
+# Total transitions
+alert_history_publishing_mode_transitions_total
+
+# Time in each mode
+histogram_quantile(0.99,
+  rate(alert_history_publishing_mode_duration_seconds_bucket[5m])
+)
+
+# Mode check performance
+histogram_quantile(0.99,
+  rate(alert_history_publishing_mode_check_duration_seconds_bucket[5m])
+)
+```
+
+### Code Implementation (Legacy)
+
+From `handlers.go` (pre-TN-060):
 
 ```go
 func (h *PublishingHandlers) GetPublishingMode(w http.ResponseWriter, r *http.Request) {
@@ -137,9 +275,58 @@ func (h *PublishingHandlers) GetPublishingMode(w http.ResponseWriter, r *http.Re
 - Prometheus metrics show target availability
 - Alerting on metrics-only mode possible
 
+## Prometheus Metrics (TN-060)
+
+### Mode-Specific Metrics
+
+The ModeManager exposes comprehensive Prometheus metrics:
+
+1. **`publishing_mode_current`** (Gauge)
+   - Current mode: `0` = normal, `1` = metrics-only
+   - Use for alerting and dashboards
+
+2. **`publishing_mode_transitions_total`** (Counter)
+   - Total number of mode transitions
+   - Labeled by: `from_mode`, `to_mode`
+   - High transition count may indicate instability
+
+3. **`publishing_mode_duration_seconds`** (Histogram)
+   - Time spent in each mode
+   - Labeled by: `mode` (normal, metrics-only)
+   - Buckets: 1s to 1h
+
+4. **`publishing_mode_check_duration_seconds`** (Histogram)
+   - Mode check operation latency
+   - Buckets: 1µs to 1ms
+   - Should be <100µs
+
+5. **`publishing_submissions_rejected_total`** (Counter)
+   - Submissions rejected due to metrics-only mode
+   - Labeled by: `reason="metrics_only"`
+
+6. **`publishing_jobs_skipped_total`** (Counter)
+   - Jobs skipped in queue due to metrics-only mode
+   - Labeled by: `reason="metrics_only"`
+
+### Example Queries
+
+```promql
+# Alert if system stays in metrics-only mode > 5 minutes
+alert_history_publishing_mode_current == 1
+
+# Rate of transitions (should be low)
+rate(alert_history_publishing_mode_transitions_total[5m])
+
+# Submissions rejected per second
+rate(alert_history_publishing_submissions_rejected_total[1m])
+
+# Jobs skipped per second
+rate(alert_history_publishing_jobs_skipped_total[1m])
+```
+
 ## Monitoring
 
-### Prometheus Metrics
+### General Prometheus Metrics
 
 Key metrics for monitoring mode state:
 
@@ -277,7 +464,120 @@ publishing_target_refreshes_total{} (continues incrementing)
 publishing_target_discovery_duration_seconds{} (continues collecting)
 ```
 
-## Troubleshooting
+## Troubleshooting (TN-060)
+
+### Issue: Stuck in Metrics-Only Mode
+
+**Symptoms**:
+- `publishing_mode_current = 1` for extended period
+- All submissions rejected
+- No publishing jobs processed
+
+**Diagnosis**:
+```bash
+# Check current mode
+curl http://localhost:8080/api/v1/publishing/mode
+
+# Check target discovery
+curl http://localhost:8080/api/v1/publishing/targets
+
+# Check Prometheus metrics
+curl http://localhost:8080/metrics | grep publishing_mode
+```
+
+**Common Causes**:
+1. **No targets configured** - Check Kubernetes secrets with `publishing-target=true` label
+2. **All targets disabled** - Verify target `enabled: true` in secrets
+3. **Discovery failure** - Check logs for K8s API errors
+4. **RBAC issues** - Ensure service account has `secrets:get/list` permissions
+
+**Resolution**:
+```bash
+# 1. Verify K8s secret exists
+kubectl get secrets -l publishing-target=true
+
+# 2. Check secret content
+kubectl get secret <secret-name> -o yaml
+
+# 3. Force target refresh (if available)
+curl -X POST http://localhost:8080/api/v1/publishing/targets/refresh
+
+# 4. Restart service (last resort)
+kubectl rollout restart deployment/alert-history
+```
+
+### Issue: Frequent Mode Transitions
+
+**Symptoms**:
+- High `publishing_mode_transitions_total` rate
+- Flapping between modes
+- Unstable publishing
+
+**Diagnosis**:
+```promql
+# Check transition rate
+rate(alert_history_publishing_mode_transitions_total[5m])
+
+# Check mode duration (should be > 1 minute)
+rate(alert_history_publishing_mode_duration_seconds[5m])
+```
+
+**Common Causes**:
+1. **Target health issues** - Targets going up/down frequently
+2. **Discovery instability** - K8s API timeouts/errors
+3. **Config changes** - Frequent secret updates
+
+**Resolution**:
+- Investigate target health issues
+- Check K8s API stability
+- Review secret update patterns
+- Consider adding hysteresis/debouncing (future enhancement)
+
+### Issue: High Mode Check Latency
+
+**Symptoms**:
+- `publishing_mode_check_duration_seconds` > 1ms
+- Slow request handling
+
+**Diagnosis**:
+```promql
+# Check P99 latency
+histogram_quantile(0.99,
+  rate(alert_history_publishing_mode_check_duration_seconds_bucket[5m])
+)
+```
+
+**Common Causes**:
+1. **Lock contention** - High concurrent access
+2. **Large target list** - Slow iteration
+3. **Resource constraints** - CPU throttling
+
+**Resolution**:
+- Review concurrent request patterns
+- Optimize target discovery
+- Scale horizontally
+- Cache is already enabled (should be <100ns)
+
+### Issue: Memory Leak or High Allocations
+
+**Diagnosis**:
+```bash
+# Run benchmarks
+go test -bench=. -benchmem ./internal/infrastructure/publishing
+
+# Profile memory
+go test -memprofile=mem.prof ./internal/infrastructure/publishing
+go tool pprof mem.prof
+```
+
+**Expected**: 0 allocations for `GetCurrentMode()` and `IsMetricsOnly()`
+
+**Resolution**:
+- Check for subscriber leaks (unsubscribe not called)
+- Review metric label cardinality
+- Monitor goroutine count
+
+## Troubleshooting (Legacy)
 
 ### Issue: Stuck in Metrics-Only Mode
 

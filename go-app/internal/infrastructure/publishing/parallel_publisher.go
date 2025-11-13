@@ -201,6 +201,7 @@ type DefaultParallelPublisher struct {
 	factory       *PublisherFactory       // Creates publishers by type
 	healthMonitor HealthMonitor           // Health status checks (optional, can be nil)
 	discoveryMgr  TargetDiscoveryManager  // Target enumeration
+	modeManager   ModeManager             // TN-060: Mode manager for metrics-only fallback
 	metrics       *ParallelPublishMetrics // Prometheus metrics (optional, can be nil)
 	logger        *slog.Logger            // Structured logging
 	options       ParallelPublishOptions  // Configuration options
@@ -257,6 +258,7 @@ func NewDefaultParallelPublisher(
 	factory *PublisherFactory,
 	healthMonitor HealthMonitor,
 	discoveryMgr TargetDiscoveryManager,
+	modeManager ModeManager,
 	metrics *ParallelPublishMetrics,
 	logger *slog.Logger,
 	options ParallelPublishOptions,
@@ -283,6 +285,7 @@ func NewDefaultParallelPublisher(
 		factory:       factory,
 		healthMonitor: healthMonitor,
 		discoveryMgr:  discoveryMgr,
+		modeManager:   modeManager,
 		metrics:       metrics,
 		logger:        logger,
 		options:       options,
@@ -296,6 +299,21 @@ func (p *DefaultParallelPublisher) PublishToMultiple(
 	targets []*core.PublishingTarget,
 ) (*ParallelPublishResult, error) {
 	startTime := time.Now()
+
+	// TN-060: Check mode before publishing (metrics-only mode fallback)
+	if p.modeManager != nil && p.modeManager.IsMetricsOnly() {
+		p.logger.Info("Parallel publishing skipped (metrics-only mode)",
+			"fingerprint", alert.Alert.Fingerprint,
+			"targets_count", len(targets),
+		)
+		// Return empty result (no publishing attempts)
+		return &ParallelPublishResult{
+			SuccessCount: 0,
+			FailureCount: 0,
+			TotalTargets: len(targets),
+			Duration:     time.Since(startTime),
+		}, nil
+	}
 
 	// 1. Validate inputs
 	if alert == nil {
@@ -384,6 +402,20 @@ func (p *DefaultParallelPublisher) PublishToAll(
 	ctx context.Context,
 	alert *core.EnrichedAlert,
 ) (*ParallelPublishResult, error) {
+	// TN-060: Check mode before publishing (metrics-only mode fallback)
+	if p.modeManager != nil && p.modeManager.IsMetricsOnly() {
+		p.logger.Info("PublishToAll skipped (metrics-only mode)",
+			"fingerprint", alert.Alert.Fingerprint,
+		)
+		// Return empty result (no publishing attempts)
+		return &ParallelPublishResult{
+			SuccessCount: 0,
+			FailureCount: 0,
+			TotalTargets: 0,
+			Duration:     0,
+		}, nil
+	}
+
 	// 1. Validate input
 	if alert == nil {
 		return nil, fmt.Errorf("%w: alert is nil", ErrInvalidInput)
@@ -431,6 +463,20 @@ func (p *DefaultParallelPublisher) PublishToHealthy(
 	ctx context.Context,
 	alert *core.EnrichedAlert,
 ) (*ParallelPublishResult, error) {
+	// TN-060: Check mode before publishing (metrics-only mode fallback)
+	if p.modeManager != nil && p.modeManager.IsMetricsOnly() {
+		p.logger.Info("PublishToHealthy skipped (metrics-only mode)",
+			"fingerprint", alert.Alert.Fingerprint,
+		)
+		// Return empty result (no publishing attempts)
+		return &ParallelPublishResult{
+			SuccessCount: 0,
+			FailureCount: 0,
+			TotalTargets: 0,
+			Duration:     0,
+		}, nil
+	}
+
 	// 1. Validate input
 	if alert == nil {
 		return nil, fmt.Errorf("%w: alert is nil", ErrInvalidInput)
