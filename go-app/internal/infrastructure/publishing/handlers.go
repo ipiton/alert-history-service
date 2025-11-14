@@ -19,6 +19,7 @@ type PublishingHandlers struct {
 	refreshManager   *RefreshManager
 	queue            *PublishingQueue
 	coordinator      *PublishingCoordinator
+	modeManager      ModeManager
 	logger           *slog.Logger
 }
 
@@ -28,6 +29,7 @@ func NewPublishingHandlers(
 	refreshManager *RefreshManager,
 	queue *PublishingQueue,
 	coordinator *PublishingCoordinator,
+	modeManager ModeManager,
 	logger *slog.Logger,
 ) *PublishingHandlers {
 	if logger == nil {
@@ -39,6 +41,7 @@ func NewPublishingHandlers(
 		refreshManager:   refreshManager,
 		queue:            queue,
 		coordinator:      coordinator,
+		modeManager:      modeManager,
 		logger:           logger,
 	}
 }
@@ -101,10 +104,14 @@ type QueueStatusResponse struct {
 
 // PublishingModeResponse represents current publishing mode
 type PublishingModeResponse struct {
-	Mode              string `json:"mode"`
-	TargetsAvailable  bool   `json:"targets_available"`
-	EnabledTargets    int    `json:"enabled_targets"`
-	MetricsOnlyActive bool   `json:"metrics_only_active"`
+	Mode                      string    `json:"mode"`
+	TargetsAvailable          bool      `json:"targets_available"`
+	EnabledTargets            int       `json:"enabled_targets"`
+	MetricsOnlyActive         bool      `json:"metrics_only_active"`
+	TransitionCount           int64     `json:"transition_count,omitempty"`           // TN-060: Number of mode transitions
+	CurrentModeDurationSeconds float64   `json:"current_mode_duration_seconds,omitempty"` // TN-060: Duration in current mode
+	LastTransitionTime        time.Time `json:"last_transition_time,omitempty"`      // TN-060: Last transition timestamp
+	LastTransitionReason      string    `json:"last_transition_reason,omitempty"`     // TN-060: Reason for last transition
 }
 
 // TestTargetRequest represents test request
@@ -138,6 +145,7 @@ type SubmitAlertResponse struct {
 	Success bool     `json:"success"`
 	Message string   `json:"message"`
 	JobIDs  []string `json:"job_ids,omitempty"` // List of created job IDs
+	Mode    string   `json:"mode,omitempty"`    // TN-060: Current publishing mode
 }
 
 // DetailedQueueStatsResponse represents detailed queue statistics
@@ -425,7 +433,37 @@ func (h *PublishingHandlers) GetQueueStatus(w http.ResponseWriter, r *http.Reque
 
 // 7. GetPublishingMode - GET /api/v1/publishing/mode
 func (h *PublishingHandlers) GetPublishingMode(w http.ResponseWriter, r *http.Request) {
-	// Count enabled targets
+	// Use ModeManager if available (TN-060)
+	if h.modeManager != nil {
+		modeMetrics := h.modeManager.GetModeMetrics()
+		currentMode := h.modeManager.GetCurrentMode()
+
+		// Count enabled targets
+		targets := h.discoveryManager.ListTargets()
+		enabledCount := 0
+		for _, t := range targets {
+			if t.Enabled {
+				enabledCount++
+			}
+		}
+		targetsAvailable := enabledCount > 0
+
+		response := PublishingModeResponse{
+			Mode:                      currentMode.String(),
+			TargetsAvailable:          targetsAvailable,
+			EnabledTargets:           enabledCount,
+			MetricsOnlyActive:         currentMode == ModeMetricsOnly,
+			TransitionCount:           modeMetrics.TransitionCount,
+			CurrentModeDurationSeconds: modeMetrics.CurrentModeDuration.Seconds(),
+			LastTransitionTime:        modeMetrics.LastTransitionTime,
+			LastTransitionReason:      modeMetrics.LastTransitionReason,
+		}
+
+		h.sendJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Fallback to basic mode detection (backward compatibility)
 	targets := h.discoveryManager.ListTargets()
 	enabledCount := 0
 	for _, t := range targets {
@@ -465,6 +503,24 @@ func (h *PublishingHandlers) SubmitAlert(w http.ResponseWriter, r *http.Request)
 
 	if req.Alert == nil {
 		h.sendError(w, http.StatusBadRequest, "Missing alert", "alert field is required")
+		return
+	}
+
+	// Check mode before submitting (TN-060: Metrics-only mode fallback)
+	if h.modeManager != nil && h.modeManager.IsMetricsOnly() {
+		h.logger.Info("Alert submission rejected (metrics-only mode)",
+			"alert_fingerprint", req.Alert.Fingerprint,
+		)
+
+		// Record metric (if metrics available via queue)
+		// Note: ModeManager metrics are recorded in mode_manager.go
+
+		// Return informative response
+		h.sendJSON(w, http.StatusOK, SubmitAlertResponse{
+			Success: false,
+			Message: "Alert not submitted: system is in metrics-only mode",
+			Mode:    "metrics-only",
+		})
 		return
 	}
 

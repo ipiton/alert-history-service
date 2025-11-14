@@ -20,6 +20,7 @@ type PublishingResult struct {
 type PublishingCoordinator struct {
 	queue           *PublishingQueue
 	discoveryManager TargetDiscoveryManager
+	modeManager     ModeManager // TN-060: Mode manager for metrics-only fallback
 	semaphore       chan struct{}
 	logger          *slog.Logger
 }
@@ -40,6 +41,7 @@ func DefaultCoordinatorConfig() CoordinatorConfig {
 func NewPublishingCoordinator(
 	queue *PublishingQueue,
 	discoveryManager TargetDiscoveryManager,
+	modeManager ModeManager,
 	config CoordinatorConfig,
 	logger *slog.Logger,
 ) *PublishingCoordinator {
@@ -50,6 +52,7 @@ func NewPublishingCoordinator(
 	return &PublishingCoordinator{
 		queue:           queue,
 		discoveryManager: discoveryManager,
+		modeManager:     modeManager,
 		semaphore:       make(chan struct{}, config.MaxConcurrent),
 		logger:          logger,
 	}
@@ -57,6 +60,15 @@ func NewPublishingCoordinator(
 
 // PublishToAll publishes alert to all enabled targets concurrently
 func (c *PublishingCoordinator) PublishToAll(ctx context.Context, enrichedAlert *core.EnrichedAlert) ([]*PublishingResult, error) {
+	// TN-060: Check mode before publishing (metrics-only mode fallback)
+	if c.modeManager != nil && c.modeManager.IsMetricsOnly() {
+		c.logger.Info("Publishing skipped (metrics-only mode)",
+			"fingerprint", enrichedAlert.Alert.Fingerprint,
+		)
+		// Return empty results (no publishing attempts)
+		return []*PublishingResult{}, nil
+	}
+
 	// Get all enabled targets
 	targets := c.discoveryManager.ListTargets()
 	if len(targets) == 0 {
@@ -143,6 +155,16 @@ func (c *PublishingCoordinator) PublishToAll(ctx context.Context, enrichedAlert 
 
 // PublishToTargets publishes alert to specific targets by name
 func (c *PublishingCoordinator) PublishToTargets(ctx context.Context, enrichedAlert *core.EnrichedAlert, targetNames []string) ([]*PublishingResult, error) {
+	// TN-060: Check mode before publishing (metrics-only mode fallback)
+	if c.modeManager != nil && c.modeManager.IsMetricsOnly() {
+		c.logger.Info("Publishing skipped (metrics-only mode)",
+			"fingerprint", enrichedAlert.Alert.Fingerprint,
+			"targets", targetNames,
+		)
+		// Return empty results (no publishing attempts)
+		return []*PublishingResult{}, nil
+	}
+
 	if len(targetNames) == 0 {
 		return nil, fmt.Errorf("no target names provided")
 	}

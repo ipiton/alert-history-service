@@ -114,6 +114,7 @@ type PublishingQueue struct {
 	factory           *PublisherFactory
 	dlqRepository     DLQRepository     // Dead Letter Queue for failed jobs
 	jobTrackingStore  JobTrackingStore  // LRU cache for job status tracking
+	modeManager       ModeManager       // TN-060: Mode manager for metrics-only fallback
 	maxRetries        int
 	retryInterval     time.Duration
 	workerCount       int
@@ -151,7 +152,7 @@ func DefaultPublishingQueueConfig() PublishingQueueConfig {
 }
 
 // NewPublishingQueue creates a new publishing queue
-func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, jobTrackingStore JobTrackingStore, config PublishingQueueConfig, metrics *PublishingMetrics, logger *slog.Logger) *PublishingQueue {
+func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, jobTrackingStore JobTrackingStore, config PublishingQueueConfig, metrics *PublishingMetrics, modeManager ModeManager, logger *slog.Logger) *PublishingQueue {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -165,6 +166,7 @@ func NewPublishingQueue(factory *PublisherFactory, dlqRepository DLQRepository, 
 		factory:            factory,
 		dlqRepository:      dlqRepository,
 		jobTrackingStore:   jobTrackingStore,
+		modeManager:        modeManager,
 		maxRetries:         config.MaxRetries,
 		retryInterval:      config.RetryInterval,
 		workerCount:        config.WorkerCount,
@@ -338,6 +340,17 @@ func (q *PublishingQueue) worker(id int) {
 		}
 
 		if job != nil {
+			// TN-060: Check mode before processing (metrics-only mode fallback)
+			if q.modeManager != nil && q.modeManager.IsMetricsOnly() {
+				q.logger.Debug("Job skipped (metrics-only mode)",
+					"job_id", job.ID,
+					"target", job.Target.Name,
+					"worker_id", id,
+				)
+				// Skip processing, continue to next job
+				continue
+			}
+
 			// Update worker metrics
 			if q.metrics != nil {
 				q.metrics.RecordWorkerActive(id, true)
