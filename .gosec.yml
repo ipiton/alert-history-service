@@ -1,0 +1,98 @@
+# Gosec configuration file
+# Documentation: https://github.com/securego/gosec#configuration
+
+# Global settings
+global:
+  # Nosec comments will be ignored
+  nosec: false
+  # Show ignored lines
+  show-ignored: true
+  # Audit mode: report all issues without failing
+  audit: false
+
+# Severity levels: LOW, MEDIUM, HIGH
+severity:
+  # Only report MEDIUM and HIGH severity issues
+  default: "LOW"
+
+# Confidence levels: LOW, MEDIUM, HIGH
+confidence:
+  # Only report MEDIUM and HIGH confidence issues
+  default: "LOW"
+
+# Exclude specific rules
+# List of rule IDs: https://github.com/securego/gosec#available-rules
+exclude:
+  # G104: Audit errors not checked (too noisy, we handle errors)
+  # - G104
+  
+  # G107: Url provided to HTTP request as taint input (false positives)
+  # - G107
+
+  # G304: File path provided as taint input (we validate paths)
+  # - G304
+
+# Include specific rules (if you want to run only certain rules)
+# include:
+#   - G101  # Look for hard coded credentials
+#   - G102  # Bind to all interfaces
+#   - G103  # Audit the use of unsafe block
+#   - G104  # Audit errors not checked
+#   - G106  # Audit the use of ssh.InsecureIgnoreHostKey
+#   - G107  # Url provided to HTTP request as taint input
+#   - G201  # SQL query construction using format string
+#   - G202  # SQL query construction using string concatenation
+#   - G203  # Use of unescaped data in HTML templates
+#   - G204  # Audit use of command execution
+#   - G301  # Poor file permissions used when creating a directory
+#   - G302  # Poor file permissions used with chmod
+#   - G303  # Creating tempfile using a predictable path
+#   - G304  # File path provided as taint input
+#   - G305  # File traversal when extracting zip archive
+#   - G306  # Poor file permissions used when writing to a new file
+#   - G307  # Deferring a method which returns an error
+#   - G401  # Detect the usage of DES, RC4, MD5 or SHA1
+#   - G402  # Look for bad TLS connection settings
+#   - G403  # Ensure minimum RSA key length of 2048 bits
+#   - G404  # Insecure random number source (rand)
+#   - G501  # Import blocklist: crypto/md5
+#   - G502  # Import blocklist: crypto/des
+#   - G503  # Import blocklist: crypto/rc4
+#   - G504  # Import blocklist: net/http/cgi
+#   - G505  # Import blocklist: crypto/sha1
+#   - G601  # Implicit memory aliasing of items from a range statement
+
+# Exclude specific paths or files
+exclude-generated: true
+exclude-dirs:
+  - vendor
+  - node_modules
+  - testdata
+  - tests/mocks
+  - _test.go  # Exclude test files (less critical)
+
+# Maximum number of issues to report (0 = unlimited)
+max-issues: 0
+
+# Tests: Include or exclude test files
+tests: true
+
+# Go build tags
+# tags: []
+
+# Build environment
+# env: []
+
+# Build GOOS
+# go-os: ""
+
+# Build GOARCH
+# go-arch: ""
+
+# Output format: json, yaml, csv, sonarqube, junit-xml, html, text, sarif
+# Default: text
+# format: "text"
+
+# Output file (default: stdout)
+# output: "results.txt"
+
