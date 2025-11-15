@@ -339,3 +339,4 @@ b212282 TN-047 Target Discovery
 
 ### Task List
 Все 15 задач документированы в `/tasks/TN-04[6-9]` и `/tasks/TN-05[0-9]`, `/tasks/TN-060`
+

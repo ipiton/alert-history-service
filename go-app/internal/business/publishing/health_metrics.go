@@ -1,6 +1,7 @@
 package publishing
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,6 +57,11 @@ type HealthMetrics struct {
 	successRate         *prometheus.GaugeVec // By target_name (percentage 0-100)
 }
 
+var (
+	healthMetricsInstance *HealthMetrics
+	healthMetricsOnce     sync.Once
+)
+
 // NewHealthMetrics creates HealthMetrics and registers with Prometheus.
 //
 // This function:
@@ -74,6 +80,8 @@ type HealthMetrics struct {
 //	    return fmt.Errorf("failed to create health metrics: %w", err)
 //	}
 func NewHealthMetrics() (*HealthMetrics, error) {
+	var initErr error
+	healthMetricsOnce.Do(func() {
 	m := &HealthMetrics{}
 
 	// 1. Health checks total (Counter)
@@ -141,7 +149,10 @@ func NewHealthMetrics() (*HealthMetrics, error) {
 		m.errorsTotal,
 	)
 
-	return m, nil
+		healthMetricsInstance = m
+	})
+
+	return healthMetricsInstance, initErr
 }
 
 // RecordHealthCheck records health check metrics.

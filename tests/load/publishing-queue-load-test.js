@@ -283,3 +283,4 @@ export function teardown(data) {
     console.log(`\n🏁 Load test completed in ${duration.toFixed(2)}s`);
     console.log('   Check results with: k6 cloud <run-id> or k6 analyze results.json');
 }
+

@@ -448,3 +448,4 @@ func isValidLabelName(name string) bool {
 	}
 	return labelNameRegex.MatchString(name)
 }
+

@@ -43,3 +43,4 @@ var (
 	// This typically maps to HTTP 400 Bad Request.
 	ErrValidation = errors.New("validation failed")
 )
+

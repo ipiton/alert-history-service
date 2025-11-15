@@ -1,6 +1,8 @@
 package publishing
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -35,11 +37,18 @@ type SlackMetrics struct {
 	RateLimitHits prometheus.Counter
 }
 
+var (
+	slackMetricsInstance *SlackMetrics
+	slackMetricsOnce     sync.Once
+)
+
 // NewSlackMetrics creates a new SlackMetrics instance
 // Registers all metrics with Prometheus registry (promauto)
+// Uses sync.Once to prevent duplicate registration
 func NewSlackMetrics() *SlackMetrics {
-	return &SlackMetrics{
-		MessagesPosted: promauto.NewCounterVec(
+	slackMetricsOnce.Do(func() {
+		slackMetricsInstance = &SlackMetrics{
+			MessagesPosted: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "alert_history",
 				Subsystem: "publishing",
@@ -106,15 +115,17 @@ func NewSlackMetrics() *SlackMetrics {
 			},
 		),
 
-		RateLimitHits: promauto.NewCounter(
-			prometheus.CounterOpts{
-				Namespace: "alert_history",
-				Subsystem: "publishing",
-				Name:      "slack_rate_limit_hits_total",
-				Help:      "Total number of Slack rate limit hits (429 errors)",
-			},
-		),
-	}
+			RateLimitHits: promauto.NewCounter(
+				prometheus.CounterOpts{
+					Namespace: "alert_history",
+					Subsystem: "publishing",
+					Name:      "slack_rate_limit_hits_total",
+					Help:      "Total number of Slack rate limit hits (429 errors)",
+				},
+			),
+		}
+	})
+	return slackMetricsInstance
 }
 
 // RecordCacheSize updates cache size gauge

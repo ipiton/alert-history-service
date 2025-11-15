@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -128,13 +129,8 @@ type deduplicationService struct {
 	businessMetrics *metrics.BusinessMetrics // TN-036 Phase 3: Direct BusinessMetrics integration
 
 	// Metrics tracking (in-memory for fast access)
-	stats struct {
-		totalProcessed int64
-		created        int64
-		updated        int64
-		ignored        int64
-		totalTime      time.Duration
-	}
+	statsMu sync.Mutex
+	stats   *DuplicateStats
 }
 
 // DeduplicationConfig holds configuration for deduplication service
@@ -193,14 +189,13 @@ func NewDeduplicationService(config *DeduplicationConfig) (DeduplicationService,
 		fingerprint:     config.Fingerprint,
 		logger:          config.Logger,
 		businessMetrics: config.BusinessMetrics,
+		stats: &DuplicateStats{
+			TotalProcessed: 0,
+			Created:        0,
+			Updated:        0,
+			Ignored:        0,
+		},
 	}
-
-	// Initialize stats
-	service.stats.totalProcessed = 0
-	service.stats.created = 0
-	service.stats.updated = 0
-	service.stats.ignored = 0
-	service.stats.totalTime = 0
 
 	return service, nil
 }
@@ -261,18 +256,23 @@ func (s *deduplicationService) ProcessAlert(ctx context.Context, alert *core.Ale
 	processingTime := time.Since(startTime)
 	result.ProcessingTime = processingTime
 
-	// Update in-memory stats
-	s.stats.totalProcessed++
-	s.stats.totalTime += processingTime
-
+	s.statsMu.Lock()
+	s.stats.TotalProcessed++
+	if s.stats.AverageProcessingTime == 0 {
+		s.stats.AverageProcessingTime = processingTime
+	} else {
+		// Running average
+		s.stats.AverageProcessingTime = (s.stats.AverageProcessingTime*time.Duration(s.stats.TotalProcessed-1) + processingTime) / time.Duration(s.stats.TotalProcessed)
+	}
 	switch result.Action {
 	case ProcessActionCreated:
-		s.stats.created++
+		s.stats.Created++
 	case ProcessActionUpdated:
-		s.stats.updated++
+		s.stats.Updated++
 	case ProcessActionIgnored:
-		s.stats.ignored++
+		s.stats.Ignored++
 	}
+	s.statsMu.Unlock()
 
 	// Record Prometheus metrics (TN-036 Phase 3)
 	if s.businessMetrics != nil {
@@ -443,11 +443,14 @@ func (s *deduplicationService) recordMetrics(action ProcessAction, duration time
 
 // GetDuplicateStats implements DeduplicationService.GetDuplicateStats
 func (s *deduplicationService) GetDuplicateStats(ctx context.Context) (*DuplicateStats, error) {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+
 	stats := &DuplicateStats{
-		TotalProcessed: s.stats.totalProcessed,
-		Created:        s.stats.created,
-		Updated:        s.stats.updated,
-		Ignored:        s.stats.ignored,
+		TotalProcessed: s.stats.TotalProcessed,
+		Created:        s.stats.Created,
+		Updated:        s.stats.Updated,
+		Ignored:        s.stats.Ignored,
 	}
 
 	// Calculate rates
@@ -459,7 +462,7 @@ func (s *deduplicationService) GetDuplicateStats(ctx context.Context) (*Duplicat
 
 	// Calculate average processing time
 	if stats.TotalProcessed > 0 {
-		stats.AverageProcessingTime = s.stats.totalTime / time.Duration(stats.TotalProcessed)
+		stats.AverageProcessingTime = s.stats.AverageProcessingTime
 	}
 
 	return stats, nil
@@ -467,11 +470,14 @@ func (s *deduplicationService) GetDuplicateStats(ctx context.Context) (*Duplicat
 
 // ResetStats implements DeduplicationService.ResetStats
 func (s *deduplicationService) ResetStats(ctx context.Context) error {
-	s.stats.totalProcessed = 0
-	s.stats.created = 0
-	s.stats.updated = 0
-	s.stats.ignored = 0
-	s.stats.totalTime = 0
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+
+	s.stats.TotalProcessed = 0
+	s.stats.Created = 0
+	s.stats.Updated = 0
+	s.stats.Ignored = 0
+	s.stats.AverageProcessingTime = 0
 
 	s.logger.Debug("Reset deduplication stats")
 	return nil

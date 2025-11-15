@@ -328,3 +328,4 @@ type CacheStats struct {
 	LastSync time.Time                           // Last cache rebuild time
 	ByStatus map[silencing.SilenceStatus]int     // Count by status
 }
+

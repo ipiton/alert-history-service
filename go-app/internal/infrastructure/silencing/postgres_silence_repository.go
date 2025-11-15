@@ -390,13 +390,17 @@ func (r *PostgresSilenceRepository) DeleteSilence(ctx context.Context, id string
 	operation := "delete"
 
 	defer func() {
-		duration := time.Since(start).Seconds()
-		r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		if r.metrics != nil {
+			duration := time.Since(start).Seconds()
+			r.metrics.OperationDuration.WithLabelValues(operation, "success").Observe(duration)
+		}
 	}()
 
 	// Step 1: Validate UUID format
 	if _, err := uuid.Parse(id); err != nil {
-		r.metrics.Errors.WithLabelValues(operation, "invalid_uuid").Inc()
+		if r.metrics != nil {
+			r.metrics.Errors.WithLabelValues(operation, "invalid_uuid").Inc()
+		}
 		return fmt.Errorf("%w: %s", ErrInvalidUUID, err)
 	}
 

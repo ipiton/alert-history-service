@@ -461,6 +461,97 @@ func TestHealthMonitor_Concurrent(t *testing.T) {
 	})
 }
 
+// TestHealthMonitor_DegradedState tests degraded state detection
+func TestHealthMonitor_DegradedState(t *testing.T) {
+	// Create failing HTTP server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	// Setup discovery with target pointing to failing server
+	discoveryMgr := createTestDiscoveryManager(t, map[string]*core.PublishingTarget{
+		"test-target": {
+			Name:    "test-target",
+			Type:    "webhook",
+			URL:     server.URL,
+			Enabled: true,
+		},
+	})
+
+	config := DefaultHealthConfig()
+	config.CheckInterval = 100 * time.Millisecond
+	config.FailureThreshold = 3
+
+	monitor, err := NewHealthMonitor(discoveryMgr, config, slog.Default(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+
+	// Start monitor and let it run checks
+	if err := monitor.Start(); err != nil {
+		t.Fatalf("Failed to start monitor: %v", err)
+	}
+	defer monitor.Stop(time.Second)
+
+	// Wait for checks to complete
+	time.Sleep(300 * time.Millisecond)
+
+	// Verify degraded or unhealthy state
+	ctx := context.Background()
+	health, err := monitor.GetHealthByName(ctx, "test-target")
+	if err != nil {
+		t.Fatalf("GetHealthByName failed: %v", err)
+	}
+
+	if health.IsHealthy() {
+		t.Errorf("Expected degraded or unhealthy state, got healthy: %+v", health)
+	}
+}
+
+// TestHealthMonitor_ConcurrentChecks tests concurrent health checks
+func TestHealthMonitor_ConcurrentChecks(t *testing.T) {
+	// Create healthy HTTP server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Setup discovery with multiple targets
+	discoveryMgr := createTestDiscoveryManager(t, map[string]*core.PublishingTarget{
+		"target-1": {Name: "target-1", Type: "webhook", URL: server.URL, Enabled: true},
+		"target-2": {Name: "target-2", Type: "webhook", URL: server.URL, Enabled: true},
+		"target-3": {Name: "target-3", Type: "webhook", URL: server.URL, Enabled: true},
+	})
+
+	monitor, err := NewHealthMonitor(discoveryMgr, DefaultHealthConfig(), slog.Default(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+
+	// Run concurrent GetHealth calls
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = monitor.GetHealth(ctx)
+		}()
+	}
+	wg.Wait()
+
+	// Verify all targets are accessible
+	allHealth, err := monitor.GetHealth(ctx)
+	if err != nil {
+		t.Fatalf("GetHealth failed: %v", err)
+	}
+
+	if len(allHealth) != 3 {
+		t.Errorf("Expected 3 health statuses, got %d", len(allHealth))
+	}
+}
+
 // Helper functions
 
 var (
@@ -516,6 +607,19 @@ func createTestHealthMonitorWithDiscovery(t *testing.T) (*DefaultHealthMonitor, 
 	}
 
 	return monitor, discovery
+}
+
+func createTestDiscoveryManager(t *testing.T, targets map[string]*core.PublishingTarget) TargetDiscoveryManager {
+	t.Helper()
+
+	discovery := NewTestHealthDiscoveryManager()
+	targetList := make([]*core.PublishingTarget, 0, len(targets))
+	for _, target := range targets {
+		targetList = append(targetList, target)
+	}
+	discovery.SetTargets(targetList)
+
+	return discovery
 }
 
 // createTestHealthMonitorWith creates health monitor with custom discovery and config.

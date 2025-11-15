@@ -117,3 +117,4 @@ func NewSilenceMetrics() *SilenceMetrics {
 		),
 	}
 }
+

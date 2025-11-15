@@ -680,3 +680,4 @@ func BenchmarkSilence_JSONUnmarshal(b *testing.B) {
 		_ = json.Unmarshal(jsonData, &silence)
 	}
 }
+
