@@ -1,9 +1,9 @@
 # TN-061: POST /webhook - Universal Webhook Endpoint
 ## 🏗️ TECHNICAL DESIGN DOCUMENT
 
-**Version**: 1.0  
-**Date**: 2025-11-15  
-**Status**: Approved for Implementation  
+**Version**: 1.0
+**Date**: 2025-11-15
+**Status**: Approved for Implementation
 **Target Quality**: 150% Enterprise Grade (Grade A++)
 
 ---
@@ -223,7 +223,7 @@
 
 ### 2.1 WebhookHTTPHandler (NEW)
 
-**File**: `cmd/server/handlers/webhook_handler.go`  
+**File**: `cmd/server/handlers/webhook_handler.go`
 **Responsibility**: HTTP endpoint implementation for POST /webhook
 
 #### 2.1.1 Interface Definition
@@ -278,14 +278,14 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := h.readBody(r)
 	if err != nil {
 		if errors.Is(err, ErrPayloadTooLarge) {
-			h.writeError(w, r, http.StatusRequestEntityTooLarge, 
+			h.writeError(w, r, http.StatusRequestEntityTooLarge,
 				"Payload too large", map[string]interface{}{
 					"max_size": h.config.MaxRequestSize,
 					"received_size": r.ContentLength,
 				})
 			return
 		}
-		h.writeError(w, r, http.StatusBadRequest, 
+		h.writeError(w, r, http.StatusBadRequest,
 			"Failed to read request body", map[string]interface{}{
 				"error": err.Error(),
 			})
@@ -304,7 +304,7 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Determine HTTP status code from error type
 		statusCode := h.errorToStatusCode(err)
-		
+
 		// If partial response available, use it (validation errors)
 		if webhookResp != nil {
 			h.writeResponse(w, r, statusCode, webhookResp)
@@ -321,7 +321,7 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if webhookResp.Status == "partial_success" {
 		statusCode = http.StatusMultiStatus // 207
 	}
-	
+
 	h.writeResponse(w, r, statusCode, webhookResp)
 }
 
@@ -349,7 +349,7 @@ func (h *WebhookHTTPHandler) readBody(r *http.Request) ([]byte, error) {
 
 // writeResponse writes successful/partial response
 func (h *WebhookHTTPHandler) writeResponse(
-	w http.ResponseWriter, 
+	w http.ResponseWriter,
 	r *http.Request,
 	statusCode int,
 	resp *webhook.HandleWebhookResponse,
@@ -360,7 +360,7 @@ func (h *WebhookHTTPHandler) writeResponse(
 	w.Header().Set("X-Processing-Time", resp.ProcessingTime)
 	w.Header().Set("X-Webhook-Type", resp.WebhookType)
 	w.Header().Set("X-Alerts-Processed", strconv.Itoa(resp.AlertsProcessed))
-	
+
 	// Write status code
 	w.WriteHeader(statusCode)
 
@@ -392,9 +392,9 @@ func (h *WebhookHTTPHandler) writeError(
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", errorResp.RequestID)
-	
+
 	// Add Retry-After for rate limiting / service unavailable
-	if statusCode == http.StatusTooManyRequests || 
+	if statusCode == http.StatusTooManyRequests ||
 	   statusCode == http.StatusServiceUnavailable {
 		w.Header().Set("Retry-After", "60") // 60 seconds
 	}
@@ -454,7 +454,7 @@ type ErrorResponse struct {
 
 ### 2.2 Middleware Stack Design
 
-**File**: `pkg/middleware/webhook_middleware.go`  
+**File**: `pkg/middleware/webhook_middleware.go`
 **Responsibility**: Cross-cutting concerns (logging, metrics, auth, rate limiting)
 
 #### 2.2.1 Middleware Chain
@@ -478,31 +478,31 @@ func BuildWebhookMiddlewareStack(config *MiddlewareConfig) Middleware {
 	return Chain(
 		// 1. Recovery (outermost - catch all panics)
 		RecoveryMiddleware(config.Logger),
-		
+
 		// 2. RequestID (generate/validate X-Request-ID)
 		RequestIDMiddleware(),
-		
+
 		// 3. Logging (log request/response)
 		LoggingMiddleware(config.Logger),
-		
+
 		// 4. Metrics (record Prometheus metrics)
 		MetricsMiddleware(config.MetricsRegistry),
-		
+
 		// 5. RateLimit (enforce rate limits)
 		RateLimitMiddleware(config.RateLimiter),
-		
+
 		// 6. Authentication (validate API key/JWT)
 		AuthenticationMiddleware(config.AuthConfig),
-		
+
 		// 7. Compression (gzip/deflate support)
 		CompressionMiddleware(),
-		
+
 		// 8. CORS (cross-origin headers)
 		CORSMiddleware(config.CORSConfig),
-		
+
 		// 9. SizeLimit (max request size)
 		SizeLimitMiddleware(config.MaxRequestSize),
-		
+
 		// 10. Timeout (context timeout)
 		TimeoutMiddleware(config.RequestTimeout),
 	)
@@ -557,7 +557,7 @@ func RequestIDMiddleware() Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Try to extract from X-Request-ID header
 			requestID := r.Header.Get("X-Request-ID")
-			
+
 			// Generate if missing
 			if requestID == "" {
 				requestID = generateRequestID()
@@ -676,7 +676,7 @@ func MetricsMiddleware(registry *metrics.Registry) Middleware {
 			// Record metrics
 			duration := time.Since(start).Seconds()
 			status := determineStatus(rw.statusCode) // "success", "failure", "partial"
-			
+
 			registry.WebhookMetrics().RecordRequest(r.Method, status, duration)
 			registry.WebhookMetrics().RecordDuration(r.Method, duration)
 		})
@@ -724,7 +724,7 @@ func RateLimitMiddleware(config *RateLimitConfig) Middleware {
 					"client_ip", clientIP,
 					"limit", config.GlobalLimit,
 				)
-				
+
 				writeRateLimitError(w, r, "global", config.GlobalLimit)
 				return
 			}
@@ -743,7 +743,7 @@ func RateLimitMiddleware(config *RateLimitConfig) Middleware {
 					"client_ip", clientIP,
 					"limit", config.PerIPLimit,
 				)
-				
+
 				writeRateLimitError(w, r, "per_ip", config.PerIPLimit)
 				return
 			}
@@ -943,11 +943,11 @@ func CompressionMiddleware() Middleware {
 			if strings.Contains(encoding, "gzip") {
 				gzipWriter := gzip.NewWriter(w)
 				defer gzipWriter.Close()
-				
+
 				w.Header().Set("Content-Encoding", "gzip")
 				w = &gzipResponseWriter{ResponseWriter: w, Writer: gzipWriter}
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -960,13 +960,13 @@ func CORSMiddleware(config *CORSConfig) Middleware {
 			w.Header().Set("Access-Control-Allow-Origin", config.AllowedOrigins)
 			w.Header().Set("Access-Control-Allow-Methods", config.AllowedMethods)
 			w.Header().Set("Access-Control-Allow-Headers", config.AllowedHeaders)
-			
+
 			// Handle preflight requests
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -981,10 +981,10 @@ func SizeLimitMiddleware(maxSize int64) Middleware {
 				http.Error(w, "Payload too large", http.StatusRequestEntityTooLarge)
 				return
 			}
-			
+
 			// Wrap body with LimitReader
 			r.Body = http.MaxBytesReader(w, r.Body, maxSize)
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -996,7 +996,7 @@ func TimeoutMiddleware(timeout time.Duration) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			defer cancel()
-			
+
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
@@ -1006,7 +1006,7 @@ func TimeoutMiddleware(timeout time.Duration) Middleware {
 
 ### 2.3 Integration in main.go
 
-**File**: `cmd/server/main.go`  
+**File**: `cmd/server/main.go`
 **Changes**: Register webhook endpoint with middleware stack
 
 ```go
@@ -1560,7 +1560,7 @@ webhook:
     type: "api_key"          # api_key, jwt, hmac
     api_key: "${WEBHOOK_API_KEY}"  # from environment
     jwt_secret: "${WEBHOOK_JWT_SECRET}"
-    
+
   signature_verification:
     enabled: false
     secret: "${WEBHOOK_SECRET}"
@@ -1683,7 +1683,7 @@ func SecurityHeadersMiddleware() Middleware {
 			w.Header().Set("X-XSS-Protection", "1; mode=block")
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'")
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -1793,9 +1793,8 @@ alert_history_rest_webhook_middleware_duration_seconds{middleware="recovery|requ
 
 ---
 
-**Document Status**: ✅ COMPLETE (v1.0) - APPROVED FOR IMPLEMENTATION  
-**Next Action**: Proceed to Phase 3 - Core Implementation  
-**Author**: AI Assistant (Claude Sonnet 4.5)  
-**Approver**: TBD (maintainer review required)  
+**Document Status**: ✅ COMPLETE (v1.0) - APPROVED FOR IMPLEMENTATION
+**Next Action**: Proceed to Phase 3 - Core Implementation
+**Author**: AI Assistant (Claude Sonnet 4.5)
+**Approver**: TBD (maintainer review required)
 **Estimated Implementation**: 40-50 hours (6-7 working days)
-

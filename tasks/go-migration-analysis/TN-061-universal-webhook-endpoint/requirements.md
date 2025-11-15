@@ -1,9 +1,9 @@
 # TN-061: POST /webhook - Universal Webhook Endpoint
 ## 📋 TECHNICAL REQUIREMENTS SPECIFICATION
 
-**Version**: 1.0  
-**Date**: 2025-11-15  
-**Status**: Draft  
+**Version**: 1.0
+**Date**: 2025-11-15
+**Status**: Draft
 **Target Quality**: 150% Enterprise Grade (Grade A++)
 
 ---
@@ -57,7 +57,7 @@ Endpoint считается успешным при выполнении **вс�
 ## 2. FUNCTIONAL REQUIREMENTS
 
 ### FR-1: HTTP Request Handling
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-1.1 HTTP Method Support
@@ -81,7 +81,7 @@ Endpoint считается успешным при выполнении **вс�
 - **SHOULD**: Allow timeout configuration via environment variable
 
 ### FR-2: Webhook Format Detection
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-2.1 Alertmanager Format Detection
@@ -104,7 +104,7 @@ Endpoint считается успешным при выполнении **вс�
 - **SHOULD**: Log detection results for analysis
 
 ### FR-3: Payload Parsing
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-3.1 Alertmanager Payload Parsing
@@ -138,7 +138,7 @@ Endpoint считается успешным при выполнении **вс�
 - **MUST**: Log parsing errors with payload sample (first 500 bytes)
 
 ### FR-4: Payload Validation
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-4.1 Alertmanager Payload Validation
@@ -175,7 +175,7 @@ Endpoint считается успешным при выполнении **вс�
 - **MUST**: Log validation failures with full payload (debug level)
 
 ### FR-5: Domain Model Conversion
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-5.1 Alert Conversion (Webhook → core.Alert)
@@ -202,7 +202,7 @@ Endpoint считается успешным при выполнении **вс�
   - `namespace`: "default" (if not in labels)
 
 ### FR-6: Alert Processing
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-6.1 Async Processing
@@ -242,7 +242,7 @@ For each alert, **MUST** execute:
   ```
 
 ### FR-7: Response Formatting
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### FR-7.1 Success Response (HTTP 200)
@@ -334,7 +334,7 @@ For each alert, **MUST** execute:
 ## 3. NON-FUNCTIONAL REQUIREMENTS
 
 ### NFR-1: Performance Requirements (150% Target)
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### NFR-1.1 Latency Requirements
@@ -406,7 +406,7 @@ For each alert, **MUST** execute:
 - ✅ No connection pool exhaustion under load
 
 ### NFR-2: Reliability Requirements (150% Target)
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### NFR-2.1 Availability
@@ -435,7 +435,7 @@ For each alert, **MUST** execute:
 - **SHOULD**: Implement exponential backoff for retries (100ms → 5s)
 
 ### NFR-3: Security Requirements (150% Target)
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### NFR-3.1 OWASP Top 10 Compliance
@@ -540,7 +540,7 @@ Content-Security-Policy: default-src 'none'
 - **SHOULD**: Pass Trivy container scan (zero critical vulnerabilities)
 
 ### NFR-4: Observability Requirements (150% Target)
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### NFR-4.1 Prometheus Metrics (15+ metrics)
@@ -636,7 +636,7 @@ alert_history_rest_webhook_auth_failures_total{auth_type="api_key|jwt"}
 - Rule 5: High processing time (p99 >50ms for 5 minutes)
 
 ### NFR-5: Testability Requirements (150% Target)
-**Priority**: CRITICAL  
+**Priority**: CRITICAL
 **Status**: Required
 
 #### NFR-5.1 Unit Tests
@@ -890,7 +890,7 @@ OBSERVABILITY_LOGGING_LEVEL=info
 
 ### DR-3: Cache Data
 - **Storage**: Redis 7+
-- **Keys**: 
+- **Keys**:
   - Deduplication cache: `dedup:<fingerprint>` (TTL: 24h)
   - Rate limiting: `ratelimit:ip:<ip>` (TTL: 1 minute)
   - Classification cache: `classification:<fingerprint>` (TTL: 1h)
@@ -985,8 +985,7 @@ OBSERVABILITY_LOGGING_LEVEL=info
 
 ---
 
-**Document Status**: ✅ COMPLETE (v1.0)  
-**Next Action**: Proceed to Phase 1 - Design Document (design.md)  
-**Author**: AI Assistant (Claude Sonnet 4.5)  
+**Document Status**: ✅ COMPLETE (v1.0)
+**Next Action**: Proceed to Phase 1 - Design Document (design.md)
+**Author**: AI Assistant (Claude Sonnet 4.5)
 **Approver**: TBD (maintainer review required)
-
