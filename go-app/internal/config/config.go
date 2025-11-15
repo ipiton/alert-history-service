@@ -19,6 +19,7 @@ type Config struct {
 	Lock     LockConfig     `mapstructure:"lock"`
 	App      AppConfig      `mapstructure:"app"`
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
+	Webhook  WebhookConfig  `mapstructure:"webhook"`
 }
 
 // ServerConfig holds server-related configuration
@@ -124,6 +125,46 @@ type MetricsConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	Path    string `mapstructure:"path"`
 	Port    int    `mapstructure:"port"`
+}
+
+// WebhookConfig holds webhook endpoint configuration
+type WebhookConfig struct {
+	MaxRequestSize  int64         `mapstructure:"max_request_size"`
+	RequestTimeout  time.Duration `mapstructure:"request_timeout"`
+	MaxAlertsPerReq int           `mapstructure:"max_alerts_per_request"`
+	RateLimiting    RateLimitingConfig `mapstructure:"rate_limiting"`
+	Authentication  AuthenticationConfig `mapstructure:"authentication"`
+	Signature       SignatureConfig `mapstructure:"signature"`
+	CORS            CORSWebhookConfig `mapstructure:"cors"`
+}
+
+// RateLimitingConfig holds rate limiting configuration
+type RateLimitingConfig struct {
+	Enabled     bool `mapstructure:"enabled"`
+	PerIPLimit  int  `mapstructure:"per_ip_limit"`
+	GlobalLimit int  `mapstructure:"global_limit"`
+}
+
+// AuthenticationConfig holds authentication configuration
+type AuthenticationConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	Type      string `mapstructure:"type"`
+	APIKey    string `mapstructure:"api_key"`
+	JWTSecret string `mapstructure:"jwt_secret"`
+}
+
+// SignatureConfig holds signature verification configuration
+type SignatureConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Secret  string `mapstructure:"secret"`
+}
+
+// CORSWebhookConfig holds CORS configuration for webhook endpoint
+type CORSWebhookConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	AllowedOrigins string `mapstructure:"allowed_origins"`
+	AllowedMethods string `mapstructure:"allowed_methods"`
+	AllowedHeaders string `mapstructure:"allowed_headers"`
 }
 
 // LoadConfig loads configuration from file and environment variables
@@ -271,6 +312,32 @@ func setDefaults() {
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.path", "/metrics")
 	viper.SetDefault("metrics.port", 8080)
+
+	// Webhook defaults
+	viper.SetDefault("webhook.max_request_size", 10485760) // 10MB
+	viper.SetDefault("webhook.request_timeout", "30s")
+	viper.SetDefault("webhook.max_alerts_per_request", 1000)
+	
+	// Webhook rate limiting defaults
+	viper.SetDefault("webhook.rate_limiting.enabled", true)
+	viper.SetDefault("webhook.rate_limiting.per_ip_limit", 100)   // requests per minute
+	viper.SetDefault("webhook.rate_limiting.global_limit", 10000) // requests per minute
+	
+	// Webhook authentication defaults
+	viper.SetDefault("webhook.authentication.enabled", false)
+	viper.SetDefault("webhook.authentication.type", "api_key")
+	viper.SetDefault("webhook.authentication.api_key", "")
+	viper.SetDefault("webhook.authentication.jwt_secret", "")
+	
+	// Webhook signature verification defaults
+	viper.SetDefault("webhook.signature.enabled", false)
+	viper.SetDefault("webhook.signature.secret", "")
+	
+	// Webhook CORS defaults
+	viper.SetDefault("webhook.cors.enabled", false)
+	viper.SetDefault("webhook.cors.allowed_origins", "*")
+	viper.SetDefault("webhook.cors.allowed_methods", "POST, OPTIONS")
+	viper.SetDefault("webhook.cors.allowed_headers", "Content-Type, X-Request-ID, X-API-Key, Authorization")
 }
 
 // Validate validates the configuration
