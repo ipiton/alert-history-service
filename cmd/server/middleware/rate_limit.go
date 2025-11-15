@@ -194,4 +194,3 @@ func (fl *fixedWindowLimiter) Allow() bool {
 
 	return false
 }
-

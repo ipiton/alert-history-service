@@ -1,10 +1,10 @@
 /**
  * TN-061: Webhook Endpoint - Stress Test
- * 
+ *
  * Scenario: Find breaking point of the system
  * Pattern: Gradually increase load until failure
  * Purpose: Identify maximum capacity and failure modes
- * 
+ *
  * Performance Targets (150% Quality):
  * - Find maximum sustainable throughput
  * - Graceful degradation (no crashes)
@@ -49,7 +49,7 @@ export const options = {
     // Relaxed thresholds for stress test
     'http_req_duration': ['p(95)<50', 'p(99)<100'],
     'error_rate': ['rate<0.5'], // Allow 50% error rate at peak
-    
+
     // Track specific error types
     'timeout_rate': ['rate<0.1'],
     'rate_limit_rate': ['rate<0.4'],
@@ -66,7 +66,7 @@ const payloads = [
       startsAt: new Date().toISOString(),
     }],
   }),
-  
+
   // Medium payload (5 alerts)
   JSON.stringify({
     alerts: Array(5).fill(null).map((_, i) => ({
@@ -75,7 +75,7 @@ const payloads = [
       startsAt: new Date().toISOString(),
     })),
   }),
-  
+
   // Large payload (20 alerts)
   JSON.stringify({
     alerts: Array(20).fill(null).map((_, i) => ({
@@ -163,7 +163,7 @@ export function setup() {
   console.log('  Stage 7: 50K req/s (500%)');
   console.log('  Stage 8: 1K req/s (recovery)');
   console.log('');
-  
+
   return { startTime: new Date().toISOString() };
 }
 
@@ -180,4 +180,3 @@ export function teardown(data) {
   console.log('  - Verify recovery in final stage');
   console.log('  - Review metrics for bottlenecks');
 }
-

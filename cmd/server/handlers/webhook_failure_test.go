@@ -28,12 +28,12 @@ type failingAlertProcessor struct {
 
 func (f *failingAlertProcessor) ProcessAlert(ctx context.Context, alert *core.Alert) error {
 	calls := atomic.AddInt32(&f.totalCalls, 1)
-	
+
 	if calls > f.failAfter {
 		atomic.AddInt32(&f.failCount, 1)
 		return errors.New("simulated processing failure")
 	}
-	
+
 	return nil
 }
 
@@ -501,4 +501,3 @@ func BenchmarkFailure_ErrorPath(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

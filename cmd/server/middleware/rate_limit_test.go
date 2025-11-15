@@ -429,4 +429,3 @@ func BenchmarkRateLimitMiddleware_Disabled(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

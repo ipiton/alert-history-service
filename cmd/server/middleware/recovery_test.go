@@ -220,4 +220,3 @@ func BenchmarkRecoveryMiddleware_WithPanic(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

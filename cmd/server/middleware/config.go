@@ -58,4 +58,3 @@ type CORSConfig struct {
 	AllowedMethods string // e.g., "POST, OPTIONS"
 	AllowedHeaders string // e.g., "Content-Type, X-API-Key"
 }
-

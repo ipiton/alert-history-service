@@ -88,7 +88,7 @@ func TestWebhookHTTPHandler_ServeHTTP_Success(t *testing.T) {
 	payload := []byte(`{"alerts":[{"status":"firing","labels":{"alertname":"TestAlert"}}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Add request ID to context
 	ctx := context.WithValue(req.Context(), middleware.RequestIDKey, "test-request-123")
 	req = req.WithContext(ctx)
@@ -532,7 +532,7 @@ func BenchmarkWebhookHTTPHandler_ServeHTTP(b *testing.B) {
 // BenchmarkWebhookHTTPHandler_LargePayload benchmarks with large payload
 func BenchmarkWebhookHTTPHandler_LargePayload(b *testing.B) {
 	handler := newTestWebhookHandler(&mockUniversalWebhookHandler{}, nil)
-	
+
 	// Create large payload with 100 alerts
 	alerts := make([]string, 100)
 	for i := 0; i < 100; i++ {
@@ -552,4 +552,3 @@ func BenchmarkWebhookHTTPHandler_LargePayload(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

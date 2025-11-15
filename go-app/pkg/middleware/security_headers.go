@@ -106,4 +106,3 @@ func SecurityHeaders(config SecurityHeadersConfig) func(http.Handler) http.Handl
 func SecureHeaders() func(http.Handler) http.Handler {
 	return SecurityHeaders(DefaultSecurityHeadersConfig())
 }
-

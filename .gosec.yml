@@ -25,7 +25,7 @@ confidence:
 exclude:
   # G104: Audit errors not checked (too noisy, we handle errors)
   # - G104
-  
+
   # G107: Url provided to HTTP request as taint input (false positives)
   # - G107
 
@@ -95,4 +95,3 @@ tests: true
 
 # Output file (default: stdout)
 # output: "results.txt"
-

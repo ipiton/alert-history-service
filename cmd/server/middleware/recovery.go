@@ -27,7 +27,7 @@ func RecoveryMiddleware(logger *slog.Logger) Middleware {
 					w.Header().Set("Content-Type", "application/json")
 					w.Header().Set("X-Request-ID", GetRequestID(r.Context()))
 					w.WriteHeader(http.StatusInternalServerError)
-					
+
 					json.NewEncoder(w).Encode(map[string]string{
 						"status":     "error",
 						"message":    "Internal server error",
@@ -40,4 +40,3 @@ func RecoveryMiddleware(logger *slog.Logger) Middleware {
 		})
 	}
 }
-

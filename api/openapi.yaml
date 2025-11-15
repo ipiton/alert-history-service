@@ -4,17 +4,17 @@ info:
   version: 1.0.0
   description: |
     Universal webhook endpoint for receiving alerts from Alertmanager and other sources.
-    
+
     ## Features
     - Auto-detection of webhook formats (Alertmanager, Generic)
     - Multiple authentication methods (API Key, HMAC signature)
     - Rate limiting (per-IP and global)
     - Comprehensive input validation
     - OWASP Top 10 compliant
-    
+
     ## Phase
     TN-061: POST /webhook - Universal Webhook Endpoint
-    
+
   contact:
     name: Alert History Team
     email: support@example.com
@@ -45,16 +45,16 @@ paths:
       description: |
         Universal endpoint that accepts webhooks in multiple formats.
         Automatically detects format (Alertmanager, Generic) and processes alerts.
-        
+
         ## Authentication
         Supports two methods:
         - API Key: Pass in `X-API-Key` header
         - HMAC Signature: Pass in `X-Signature` header
-        
+
         ## Rate Limiting
         - Per-IP: 100 requests per minute
         - Global: 10,000 requests per minute
-        
+
         ## Request Size
         - Maximum: 10MB
         - Maximum alerts per request: 1000
@@ -467,4 +467,3 @@ components:
           type: string
           description: Additional error details
           example: "JSON parsing failed"
-

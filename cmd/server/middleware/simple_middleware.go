@@ -115,4 +115,3 @@ func TimeoutMiddleware(timeout time.Duration) Middleware {
 		})
 	}
 }
-

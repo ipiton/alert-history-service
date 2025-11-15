@@ -556,4 +556,3 @@ func BenchmarkIntegration_FullStack(b *testing.B) {
 		fullHandler.ServeHTTP(rr, req)
 	}
 }
-

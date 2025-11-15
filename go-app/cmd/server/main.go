@@ -592,10 +592,10 @@ func main() {
 
 	// TN-061: Initialize Universal Webhook Handler with middleware stack (150% quality)
 	slog.Info("Initializing Universal Webhook Handler (TN-061)...")
-	
+
 	// Import is needed: "github.com/vitaliisemenov/alert-history/internal/infrastructure/webhook"
 	universalWebhookHandler := webhook.NewUniversalWebhookHandler(alertProcessor, appLogger)
-	
+
 	// Create webhook HTTP handler configuration
 	webhookHTTPConfig := &handlers.WebhookConfig{
 		MaxRequestSize:  cfg.Webhook.MaxRequestSize,
@@ -607,14 +607,14 @@ func main() {
 		APIKey:          cfg.Webhook.Authentication.APIKey,
 		SignatureSecret: cfg.Webhook.Signature.Secret,
 	}
-	
+
 	// Create webhook HTTP handler
 	webhookHTTPHandler := handlers.NewWebhookHTTPHandler(
 		universalWebhookHandler,
 		webhookHTTPConfig,
 		appLogger,
 	)
-	
+
 	// Build middleware stack for webhook endpoint
 	webhookMiddlewareConfig := &middleware.MiddlewareConfig{
 		Logger:          appLogger,
@@ -642,10 +642,10 @@ func main() {
 		RequestTimeout:    cfg.Webhook.RequestTimeout,
 		EnableCompression: false, // Disabled by default for webhooks
 	}
-	
+
 	webhookMiddlewareStack := middleware.BuildWebhookMiddlewareStack(webhookMiddlewareConfig)
 	webhookHandlerWithMiddleware := webhookMiddlewareStack(webhookHTTPHandler)
-	
+
 	slog.Info("✅ Universal Webhook Handler initialized",
 		"max_request_size", cfg.Webhook.MaxRequestSize,
 		"request_timeout", cfg.Webhook.RequestTimeout,
@@ -664,7 +664,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handlers.HealthHandler)
-	
+
 	// TN-061: Register Universal Webhook Handler with middleware stack (150% quality)
 	mux.Handle("/webhook", webhookHandlerWithMiddleware)
 	slog.Info("✅ POST /webhook endpoint registered",

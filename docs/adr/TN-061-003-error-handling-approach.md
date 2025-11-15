@@ -1,9 +1,9 @@
 # ADR-003: Error Handling Approach
 
-**Status**: Accepted  
-**Date**: 2025-11-15  
-**Phase**: TN-061  
-**Deciders**: Development Team  
+**Status**: Accepted
+**Date**: 2025-11-15
+**Phase**: TN-061
+**Deciders**: Development Team
 **Technical Story**: Robust error handling for webhook endpoint
 
 ## Context and Problem Statement
@@ -127,7 +127,7 @@ func RecoveryMiddleware() func(http.Handler) http.Handler {
                         "stack", debug.Stack(),
                         "request_id", getRequestID(r.Context()),
                     )
-                    
+
                     // Return generic error (don't leak panic details)
                     respondError(w, r, http.StatusInternalServerError,
                         "internal_error",
@@ -153,7 +153,7 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         )
         return
     }
-    
+
     // Validation errors
     if err := h.validator.ValidateWebhook(webhook); err != nil {
         respondError(w, r, http.StatusBadRequest,
@@ -163,10 +163,10 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         )
         return
     }
-    
+
     // Processing (Layer 5-6)
     result := h.processAlerts(webhook.Alerts)
-    
+
     if result.AllSucceeded() {
         respondSuccess(w, r, result)
     } else if result.SomeSucceeded() {
@@ -184,16 +184,16 @@ func (h *WebhookHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func sanitizeError(err error) string {
     // Remove sensitive information
     errStr := err.Error()
-    
+
     // Remove file paths
     errStr = removeFilePaths(errStr)
-    
+
     // Remove IP addresses (except client IP)
     errStr = removeIPAddresses(errStr)
-    
+
     // Remove stack traces
     errStr = removeStackTraces(errStr)
-    
+
     return errStr
 }
 ```
@@ -319,7 +319,6 @@ Internal log:
 
 ---
 
-**Author**: AI Assistant (Claude Sonnet 4.5)  
-**Reviewers**: Development Team, Security Team  
+**Author**: AI Assistant (Claude Sonnet 4.5)
+**Reviewers**: Development Team, Security Team
 **Last Updated**: 2025-11-15
-

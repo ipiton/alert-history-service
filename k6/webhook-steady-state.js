@@ -1,10 +1,10 @@
 /**
  * TN-061: Webhook Endpoint - Steady State Load Test
- * 
+ *
  * Scenario: Sustained load at target throughput
  * Target: 10,000 req/s for 10 minutes
  * Purpose: Validate system can handle production load
- * 
+ *
  * Performance Targets (150% Quality):
  * - p95 latency < 5ms
  * - p99 latency < 10ms
@@ -40,11 +40,11 @@ export const options = {
     'error_rate': ['rate<0.0001'], // < 0.01%
     'success_rate': ['rate>0.9999'], // > 99.99%
     'http_req_failed': ['rate<0.0001'],
-    
+
     // Response times
     'http_req_waiting': ['p(95)<3', 'p(99)<7'],
     'http_req_connecting': ['p(95)<1'],
-    
+
     // Throughput
     'http_reqs': ['rate>9500'], // Allow 5% margin
   },
@@ -159,11 +159,11 @@ export function setup() {
   console.log(`API Key: ${API_KEY ? 'Configured' : 'Not configured'}`);
   console.log(`Payload size: ${webhookPayload.length} bytes`);
   console.log('');
-  
+
   // Warmup request
   const response = http.get(`${BASE_URL}/healthz`);
   console.log(`Health check: ${response.status}`);
-  
+
   return { startTime: new Date().toISOString() };
 }
 
@@ -174,4 +174,3 @@ export function teardown(data) {
   console.log(`Started: ${data.startTime}`);
   console.log(`Ended: ${new Date().toISOString()}`);
 }
-

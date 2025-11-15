@@ -1,9 +1,9 @@
 # ADR-001: Middleware Stack Design
 
-**Status**: Accepted  
-**Date**: 2025-11-15  
-**Phase**: TN-061  
-**Deciders**: Development Team  
+**Status**: Accepted
+**Date**: 2025-11-15
+**Phase**: TN-061
+**Deciders**: Development Team
 **Technical Story**: Webhook endpoint middleware architecture
 
 ## Context and Problem Statement
@@ -138,7 +138,6 @@ BenchmarkMiddlewareStack/full_stack            250000    5000 ns/op
 
 ---
 
-**Author**: AI Assistant (Claude Sonnet 4.5)  
-**Reviewers**: Development Team  
+**Author**: AI Assistant (Claude Sonnet 4.5)
+**Reviewers**: Development Team
 **Last Updated**: 2025-11-15
-

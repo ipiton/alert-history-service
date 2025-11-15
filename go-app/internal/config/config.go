@@ -317,22 +317,22 @@ func setDefaults() {
 	viper.SetDefault("webhook.max_request_size", 10485760) // 10MB
 	viper.SetDefault("webhook.request_timeout", "30s")
 	viper.SetDefault("webhook.max_alerts_per_request", 1000)
-	
+
 	// Webhook rate limiting defaults
 	viper.SetDefault("webhook.rate_limiting.enabled", true)
 	viper.SetDefault("webhook.rate_limiting.per_ip_limit", 100)   // requests per minute
 	viper.SetDefault("webhook.rate_limiting.global_limit", 10000) // requests per minute
-	
+
 	// Webhook authentication defaults
 	viper.SetDefault("webhook.authentication.enabled", false)
 	viper.SetDefault("webhook.authentication.type", "api_key")
 	viper.SetDefault("webhook.authentication.api_key", "")
 	viper.SetDefault("webhook.authentication.jwt_secret", "")
-	
+
 	// Webhook signature verification defaults
 	viper.SetDefault("webhook.signature.enabled", false)
 	viper.SetDefault("webhook.signature.secret", "")
-	
+
 	// Webhook CORS defaults
 	viper.SetDefault("webhook.cors.enabled", false)
 	viper.SetDefault("webhook.cors.allowed_origins", "*")

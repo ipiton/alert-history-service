@@ -30,7 +30,7 @@ func MetricsMiddleware(registry *metrics.Registry) Middleware {
 			// Record request metric (counter)
 			// This assumes webhook metrics are exposed via registry
 			// Actual implementation depends on metrics package structure
-			
+
 			// Log metrics recording (for now, until metrics package is fully integrated)
 			_ = duration
 			_ = status
@@ -54,4 +54,3 @@ func determineStatus(statusCode int) string {
 		return "unknown"
 	}
 }
-

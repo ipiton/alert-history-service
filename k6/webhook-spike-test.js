@@ -1,10 +1,10 @@
 /**
  * TN-061: Webhook Endpoint - Spike Test
- * 
+ *
  * Scenario: Sudden traffic spike to test elasticity
  * Pattern: 1K → 20K → 1K req/s
  * Purpose: Validate system handles sudden load increases
- * 
+ *
  * Performance Targets (150% Quality):
  * - System remains stable during spike
  * - Recovery to normal after spike
@@ -45,7 +45,7 @@ export const options = {
     'http_req_duration': ['p(95)<15', 'p(99)<30'],
     'error_rate': ['rate<0.001'], // < 0.1%
     'http_req_failed': ['rate<0.001'],
-    
+
     // Spike-specific thresholds
     'spike_errors': ['rate<0.005'], // < 0.5% during spike
     'recovery_errors': ['rate<0.0001'], // < 0.01% after recovery
@@ -91,7 +91,7 @@ export default function () {
     webhookPayload,
     {
       headers: headers,
-      tags: { 
+      tags: {
         type: 'webhook',
         phase: testPhase,
       },
@@ -104,7 +104,7 @@ export default function () {
   webhookDuration.add(duration, { phase: testPhase });
 
   const success = check(response, {
-    'status is 200 or 207 or 429': (r) => 
+    'status is 200 or 207 or 429': (r) =>
       r.status === 200 || r.status === 207 || r.status === 429,
     'response time < 30ms': (r) => r.timings.duration < 30,
   });
@@ -112,7 +112,7 @@ export default function () {
   // Track errors by phase
   if (!success || response.status >= 400) {
     errorRate.add(1);
-    
+
     if (testPhase === 'spike') {
       spikeErrors.add(1);
     } else if (testPhase === 'recovery') {
@@ -120,7 +120,7 @@ export default function () {
     }
   } else {
     errorRate.add(0);
-    
+
     if (testPhase === 'spike') {
       spikeErrors.add(0);
     } else if (testPhase === 'recovery') {
@@ -158,7 +158,7 @@ export function setup() {
   console.log('  3.5-4m: Ramp down (20K → 1K)');
   console.log('  4-6m: Stabilize (1K req/s)');
   console.log('');
-  
+
   return { startTime: new Date().toISOString() };
 }
 
@@ -173,4 +173,3 @@ export function teardown(data) {
   console.log('  ✓ Quick recovery after spike');
   console.log('  ✓ No lingering performance issues');
 }
-

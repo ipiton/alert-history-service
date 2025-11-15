@@ -305,4 +305,3 @@ func (v *EnhancedValidator) ValidateWebhook(webhook *AlertmanagerWebhook) error 
 
 	return nil
 }
-

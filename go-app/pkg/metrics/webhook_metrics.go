@@ -225,4 +225,3 @@ func (m *WebhookMetrics) UpdateResourceMetrics(goroutines int, memoryBytes uint6
 	m.DBConnectionsTotal.WithLabelValues("in_use").Set(float64(dbInUse))
 	m.DBConnectionsTotal.WithLabelValues("open").Set(float64(dbOpen))
 }
-

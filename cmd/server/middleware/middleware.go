@@ -70,4 +70,3 @@ func BuildWebhookMiddlewareStack(config *MiddlewareConfig) Middleware {
 
 	return Chain(middlewares...)
 }
-

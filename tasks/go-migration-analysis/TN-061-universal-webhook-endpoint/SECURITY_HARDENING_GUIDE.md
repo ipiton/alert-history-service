@@ -1,7 +1,7 @@
 # TN-061: Security Hardening Guide
 
-**Date**: 2025-11-15  
-**Target**: OWASP Top 10 Compliant, Zero Known Vulnerabilities  
+**Date**: 2025-11-15
+**Target**: OWASP Top 10 Compliant, Zero Known Vulnerabilities
 **Quality Level**: 150% (Grade A++)
 
 ---
@@ -48,12 +48,12 @@ func (h *WebhookHTTPHandler) checkPermissions(r *http.Request, perms *WebhookPer
             return false
         }
     }
-    
+
     // Check payload size against user limit
     if r.ContentLength > perms.MaxPayload {
         return false
     }
-    
+
     return true
 }
 ```
@@ -115,12 +115,12 @@ func (s *SecretRotation) Validate(signature string) bool {
     if validateHMAC(payload, signature, s.currentSecret) {
         return true
     }
-    
+
     // Fall back to previous secret during rotation window
     if time.Since(s.rotatedAt) < 24*time.Hour {
         return validateHMAC(payload, signature, s.previousSecret)
     }
-    
+
     return false
 }
 ```
@@ -157,7 +157,7 @@ func (r *AlertRepository) Insert(alert *Alert) error {
 
 // ❌ INSECURE: String concatenation
 func InsertInsecure(alert *Alert) error {
-    query := fmt.Sprintf("INSERT INTO alerts VALUES ('%s', '%s')", 
+    query := fmt.Sprintf("INSERT INTO alerts VALUES ('%s', '%s')",
         alert.Fingerprint, alert.AlertName) // SQL INJECTION!
     return db.Exec(query)
 }
@@ -183,24 +183,24 @@ func validateAlert(alert *Alert) error {
     if alert.AlertName == "" {
         return errors.New("alert_name required")
     }
-    
+
     // Validate characters (alphanumeric + allowed symbols)
     if !isValidAlertName(alert.AlertName) {
         return errors.New("alert_name contains invalid characters")
     }
-    
+
     // Length limits
     if len(alert.AlertName) > 255 {
         return errors.New("alert_name too long")
     }
-    
+
     // Validate labels
     for key, value := range alert.Labels {
         if !isValidLabelKey(key) || !isValidLabelValue(value) {
             return fmt.Errorf("invalid label: %s=%s", key, value)
         }
     }
-    
+
     return nil
 }
 
@@ -305,21 +305,21 @@ func SecurityHeadersMiddleware() Middleware {
             w.Header().Set("X-Content-Type-Options", "nosniff")
             w.Header().Set("X-Frame-Options", "DENY")
             w.Header().Set("X-XSS-Protection", "1; mode=block")
-            
+
             // CSP
             w.Header().Set("Content-Security-Policy", "default-src 'self'")
-            
+
             // HSTS (only over HTTPS)
             if r.TLS != nil {
                 w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
             }
-            
+
             // Referrer policy
             w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-            
+
             // Permissions policy
             w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-            
+
             next.ServeHTTP(w, r)
         })
     }
@@ -330,12 +330,12 @@ func SecurityHeadersMiddleware() Middleware {
 ```go
 func handleError(w http.ResponseWriter, err error, requestID string) {
     // Log detailed error internally
-    logger.Error("Request failed", 
+    logger.Error("Request failed",
         "error", err,
         "request_id", requestID,
         "stack_trace", debug.Stack(),
     )
-    
+
     // Return generic error to client (don't expose internals)
     response := ErrorResponse{
         Status:    "error",
@@ -343,7 +343,7 @@ func handleError(w http.ResponseWriter, err error, requestID string) {
         RequestID: requestID,
         // DO NOT include: error details, stack traces, file paths
     }
-    
+
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusInternalServerError)
     json.NewEncoder(w).Encode(response)
@@ -395,17 +395,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
-      
+
       - name: Run Gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -fmt json -out gosec-results.json ./...
-      
+
       - name: Run Nancy (dependency check)
         run: |
           go install github.com/sonatype-nexus-community/nancy@latest
           go list -json -deps ./... | nancy sleuth
-      
+
       - name: Upload results
         uses: github/codeql-action/upload-sarif@v2
         with:
@@ -466,7 +466,7 @@ type AuthRateLimiter struct {
 func (a *AuthRateLimiter) CheckAndIncrement(clientIP string) bool {
     a.mu.Lock()
     defer a.mu.Unlock()
-    
+
     // Check if locked out
     if lockUntil, locked := a.lockouts[clientIP]; locked {
         if time.Now().Before(lockUntil) {
@@ -475,16 +475,16 @@ func (a *AuthRateLimiter) CheckAndIncrement(clientIP string) bool {
         delete(a.lockouts, clientIP)
         delete(a.attempts, clientIP)
     }
-    
+
     // Increment attempts
     a.attempts[clientIP]++
-    
+
     // Lock out after 5 failed attempts
     if a.attempts[clientIP] >= 5 {
         a.lockouts[clientIP] = time.Now().Add(15 * time.Minute)
         return false
     }
-    
+
     return true
 }
 ```
@@ -521,16 +521,16 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
-      
+
       - name: Verify dependencies
         run: go mod verify
-      
+
       - name: Run tests
         run: go test -v ./...
-      
+
       - name: Build
         run: go build -trimpath -ldflags="-s -w" ./...
-      
+
       - name: Sign binary (optional)
         run: cosign sign-blob --key cosign.key binary
 ```
@@ -599,7 +599,7 @@ var (
         },
         []string{"type", "reason"},
     )
-    
+
     rateLimitHits = prometheus.NewCounterVec(
         prometheus.CounterOpts{
             Name: "webhook_rate_limit_hits_total",
@@ -607,7 +607,7 @@ var (
         },
         []string{"client_ip"},
     )
-    
+
     suspiciousActivity = prometheus.NewCounterVec(
         prometheus.CounterOpts{
             Name: "webhook_suspicious_activity_total",
@@ -628,12 +628,12 @@ groups:
         expr: rate(webhook_auth_failures_total[5m]) > 10
         annotations:
           summary: "High authentication failure rate"
-      
+
       - alert: SuspiciousActivity
         expr: webhook_suspicious_activity_total > 100
         annotations:
           summary: "Suspicious activity detected"
-      
+
       - alert: RateLimitExceeded
         expr: rate(webhook_rate_limit_hits_total[1m]) > 50
         annotations:
@@ -666,7 +666,7 @@ func isValidURL(urlStr string) bool {
     if err != nil {
         return false
     }
-    
+
     // Block private/internal IPs
     host := u.Hostname()
     ip := net.ParseIP(host)
@@ -675,7 +675,7 @@ func isValidURL(urlStr string) bool {
         if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
             return false
         }
-        
+
         // Block specific ranges
         privateRanges := []string{
             "10.0.0.0/8",
@@ -684,7 +684,7 @@ func isValidURL(urlStr string) bool {
             "127.0.0.0/8",
             "169.254.0.0/16",
         }
-        
+
         for _, cidr := range privateRanges {
             _, ipNet, _ := net.ParseCIDR(cidr)
             if ipNet.Contains(ip) {
@@ -692,17 +692,17 @@ func isValidURL(urlStr string) bool {
             }
         }
     }
-    
+
     // Block localhost
     if host == "localhost" || strings.HasSuffix(host, ".local") {
         return false
     }
-    
+
     // Only allow HTTP/HTTPS
     if u.Scheme != "http" && u.Scheme != "https" {
         return false
     }
-    
+
     return true
 }
 ```
@@ -730,17 +730,17 @@ type InputValidator struct {
 func (v *InputValidator) Validate(webhook *AlertmanagerWebhook) error {
     // Check alerts count
     if len(webhook.Alerts) > v.maxAlertsCount {
-        return fmt.Errorf("too many alerts: %d (max: %d)", 
+        return fmt.Errorf("too many alerts: %d (max: %d)",
             len(webhook.Alerts), v.maxAlertsCount)
     }
-    
+
     // Validate each alert
     for i, alert := range webhook.Alerts {
         if err := v.validateAlert(&alert, i); err != nil {
             return err
         }
     }
-    
+
     return nil
 }
 
@@ -749,12 +749,12 @@ func (v *InputValidator) validateAlert(alert *Alert, index int) error {
     if alert.Status == "" {
         return fmt.Errorf("alert[%d]: status required", index)
     }
-    
+
     // Status whitelist
     if !contains(v.allowedStatuses, alert.Status) {
         return fmt.Errorf("alert[%d]: invalid status: %s", index, alert.Status)
     }
-    
+
     // Validate labels
     for key, value := range alert.Labels {
         if len(key) > v.maxLabelSize {
@@ -763,13 +763,13 @@ func (v *InputValidator) validateAlert(alert *Alert, index int) error {
         if len(value) > v.maxLabelSize {
             return fmt.Errorf("alert[%d]: label value too long", index)
         }
-        
+
         // Validate characters
         if !isValidLabelKey(key) {
             return fmt.Errorf("alert[%d]: invalid label key: %s", index, key)
         }
     }
-    
+
     return nil
 }
 ```
@@ -869,8 +869,7 @@ echo "Review reports: gosec-report.json, zap-report.html"
 
 ---
 
-**Document Status**: Security Hardening Guide Complete  
-**OWASP Compliance**: Top 10 (2021) Addressed  
-**Next**: Implementation + Security Scanning  
+**Document Status**: Security Hardening Guide Complete
+**OWASP Compliance**: Top 10 (2021) Addressed
+**Next**: Implementation + Security Scanning
 **Target**: Zero Known Vulnerabilities
-

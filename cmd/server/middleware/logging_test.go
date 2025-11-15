@@ -325,4 +325,3 @@ func BenchmarkLoggingMiddleware_WithError(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

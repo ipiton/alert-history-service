@@ -468,4 +468,3 @@ func BenchmarkValidateAlert(b *testing.B) {
 		_ = validator.ValidateAlert(alert)
 	}
 }
-

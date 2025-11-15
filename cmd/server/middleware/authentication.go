@@ -87,7 +87,7 @@ func validateHMAC(r *http.Request, secret string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to read body: %w", err)
 	}
-	
+
 	// Restore body for downstream handlers
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
 
@@ -103,4 +103,3 @@ func validateHMAC(r *http.Request, secret string) (bool, error) {
 
 	return true, nil
 }
-

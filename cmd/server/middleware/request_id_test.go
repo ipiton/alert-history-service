@@ -302,4 +302,3 @@ func BenchmarkGenerateRequestID(b *testing.B) {
 		_ = generateRequestID()
 	}
 }
-

@@ -1,9 +1,9 @@
 # ADR-002: Rate Limiting Strategy
 
-**Status**: Accepted  
-**Date**: 2025-11-15  
-**Phase**: TN-061  
-**Deciders**: Development Team, Security Team  
+**Status**: Accepted
+**Date**: 2025-11-15
+**Phase**: TN-061
+**Deciders**: Development Team, Security Team
 **Technical Story**: DDoS protection and fair resource allocation
 
 ## Context and Problem Statement
@@ -74,7 +74,7 @@ We need an effective rate limiting strategy that balances protection with usabil
   - Allows legitimate bursts
   - Smooth rate enforcement
   - Fair for variable traffic patterns
-  
+
 * **Global (Fixed Window)**:
   - Simpler implementation
   - Lower memory usage at scale
@@ -88,7 +88,7 @@ type RateLimitConfig struct {
     PerIPEnabled     bool
     PerIPRate        int           // tokens per second
     PerIPBurst       int           // max burst size
-    
+
     // Global limits (fixed window)
     GlobalEnabled    bool
     GlobalLimit      int           // max requests per window
@@ -100,7 +100,7 @@ var DefaultConfig = RateLimitConfig{
     PerIPEnabled:  true,
     PerIPRate:     100,    // 100 req/s per IP
     PerIPBurst:    200,    // burst up to 200
-    
+
     GlobalEnabled: true,
     GlobalLimit:   10000,  // 10K req/min
     GlobalWindow:  1 * time.Minute,
@@ -241,7 +241,6 @@ rate_limiting:
 
 ---
 
-**Author**: AI Assistant (Claude Sonnet 4.5)  
-**Reviewers**: Development Team, Security Team  
+**Author**: AI Assistant (Claude Sonnet 4.5)
+**Reviewers**: Development Team, Security Team
 **Last Updated**: 2025-11-15
-

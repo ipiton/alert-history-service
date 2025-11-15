@@ -172,4 +172,3 @@ groups:
           summary: "High validation error rate ({{$value}} errors/s)"
           description: "The webhook endpoint is experiencing more than 10 validation errors per second."
           runbook_url: "https://docs.example.com/runbooks/webhook-validation-errors"
-

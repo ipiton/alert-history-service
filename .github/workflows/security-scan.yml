@@ -30,7 +30,7 @@ jobs:
         uses: securego/gosec@master
         with:
           args: '-fmt sarif -out gosec-results.sarif ./...'
-      
+
       - name: Upload Gosec results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -152,4 +152,3 @@ jobs:
           else
             echo "✅ All security scans passed"
           fi
-

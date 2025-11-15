@@ -492,4 +492,3 @@ func BenchmarkAuthenticationMiddleware_HMAC(b *testing.B) {
 		handler.ServeHTTP(rr, req)
 	}
 }
-

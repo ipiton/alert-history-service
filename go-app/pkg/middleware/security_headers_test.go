@@ -258,4 +258,3 @@ func BenchmarkSecurityHeaders_WithTLS(b *testing.B) {
 		wrappedHandler.ServeHTTP(rec, req)
 	}
 }
-

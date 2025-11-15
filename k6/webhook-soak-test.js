@@ -1,10 +1,10 @@
 /**
  * TN-061: Webhook Endpoint - Soak Test
- * 
+ *
  * Scenario: Sustained moderate load for extended period
  * Duration: 4 hours at 2K req/s
  * Purpose: Detect memory leaks, resource exhaustion, degradation
- * 
+ *
  * Performance Targets (150% Quality):
  * - Stable performance throughout test
  * - No memory leaks
@@ -45,10 +45,10 @@ export const options = {
     'error_rate': ['rate<0.0001'], // < 0.01%
     'success_rate': ['rate>0.9999'], // > 99.99%
     'http_req_failed': ['rate<0.0001'],
-    
+
     // Degradation detection
     'degradation_score': ['value<1.2'], // < 20% degradation
-    
+
     // Memory/resource indicators (indirect)
     'http_req_connecting': ['p(95)<1'],
     'http_req_waiting': ['p(95)<3'],
@@ -136,7 +136,7 @@ export default function () {
     errorCount++;
     successRate.add(0);
     errorRate.add(1);
-    
+
     // Log errors periodically
     if (errorCount % 100 === 0) {
       console.error(`Error #${errorCount}: ${response.status} - ${response.body?.substring(0, 100)}`);
@@ -156,7 +156,7 @@ export default function () {
     const currentAvgLatency = latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length;
     const degradation = currentAvgLatency / firstHourAvgLatency;
     degradationScore.add(degradation);
-    
+
     // Alert if significant degradation
     if (degradation > 1.5 && requestCount % 100000 === 0) {
       console.warn(`⚠️ Performance degradation detected: ${(degradation * 100).toFixed(1)}% increase in latency`);
@@ -169,7 +169,7 @@ export default function () {
     const minutes = Math.floor(elapsed / 60);
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    
+
     console.log(`Progress: ${hours}h ${mins}m - Requests: ${requestCount.toLocaleString()}, Success rate: ${(successCount / requestCount * 100).toFixed(3)}%`);
   }
 
@@ -192,12 +192,12 @@ export function setup() {
   console.log('');
   console.log('⏰ This test will run for 4 hours. Grab a coffee! ☕');
   console.log('');
-  
+
   // Health check
   const response = http.get(`${BASE_URL}/healthz`);
   console.log(`Initial health check: ${response.status}`);
-  
-  return { 
+
+  return {
     startTime: new Date().toISOString(),
     startTimestamp: Date.now(),
   };
@@ -207,7 +207,7 @@ export function teardown(data) {
   const elapsed = (Date.now() - data.startTimestamp) / 1000;
   const hours = Math.floor(elapsed / 3600);
   const minutes = Math.floor((elapsed % 3600) / 60);
-  
+
   console.log('');
   console.log('=== Soak Test Complete ===');
   console.log(`Started: ${data.startTime}`);
@@ -229,4 +229,3 @@ export function teardown(data) {
   console.log('  - Connection pool stats');
   console.log('  - GC pause times');
 }
-
