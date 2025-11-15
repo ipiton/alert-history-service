@@ -1,0 +1,174 @@
+groups:
+  - name: webhook_performance
+    interval: 30s
+    rules:
+      - alert: WebhookHighLatency
+        expr: histogram_quantile(0.99, rate(webhook_request_duration_seconds_bucket[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook p99 latency is high ({{$value}}s)"
+          description: "The 99th percentile latency for webhook requests is above 10ms for the last 5 minutes."
+          runbook_url: "https://docs.example.com/runbooks/webhook-high-latency"
+
+      - alert: WebhookHighErrorRate
+        expr: (rate(webhook_errors_total[5m]) / rate(webhook_requests_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook error rate is high ({{$value | humanizePercentage}})"
+          description: "The webhook endpoint has an error rate above 1% for the last 5 minutes."
+          runbook_url: "https://docs.example.com/runbooks/webhook-high-error-rate"
+
+      - alert: WebhookLowThroughput
+        expr: rate(webhook_requests_total[5m]) < 10
+        for: 10m
+        labels:
+          severity: info
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook throughput is low ({{$value}} req/s)"
+          description: "The webhook endpoint is receiving fewer than 10 requests per second."
+          runbook_url: "https://docs.example.com/runbooks/webhook-low-throughput"
+
+      - alert: WebhookHighThroughput
+        expr: rate(webhook_requests_total[5m]) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook throughput is very high ({{$value}} req/s)"
+          description: "The webhook endpoint is receiving more than 10,000 requests per second. Consider scaling."
+          runbook_url: "https://docs.example.com/runbooks/webhook-high-throughput"
+
+  - name: webhook_security
+    interval: 30s
+    rules:
+      - alert: WebhookHighAuthFailureRate
+        expr: rate(webhook_auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          component: webhook
+          phase: TN-061
+          security: auth
+        annotations:
+          summary: "High authentication failure rate ({{$value}} failures/s)"
+          description: "The webhook endpoint is experiencing more than 10 authentication failures per second."
+          runbook_url: "https://docs.example.com/runbooks/webhook-auth-failures"
+
+      - alert: WebhookRateLimitExceeded
+        expr: rate(webhook_rate_limit_hits_total[1m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+          security: rate_limit
+        annotations:
+          summary: "Multiple clients hitting rate limits ({{$value}} hits/s)"
+          description: "Many clients are hitting rate limits, which may indicate an attack or misconfiguration."
+          runbook_url: "https://docs.example.com/runbooks/webhook-rate-limit"
+
+      - alert: WebhookSuspiciousActivity
+        expr: rate(webhook_suspicious_activity_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: webhook
+          phase: TN-061
+          security: suspicious
+        annotations:
+          summary: "Suspicious activity detected ({{$value}} events/s)"
+          description: "The webhook endpoint has detected suspicious activity patterns."
+          runbook_url: "https://docs.example.com/runbooks/webhook-suspicious-activity"
+
+  - name: webhook_resources
+    interval: 30s
+    rules:
+      - alert: WebhookHighMemoryUsage
+        expr: webhook_memory_usage_bytes > 1e9
+        for: 10m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook memory usage is high ({{$value | humanize}}B)"
+          description: "The webhook endpoint is using more than 1GB of memory for the last 10 minutes."
+          runbook_url: "https://docs.example.com/runbooks/webhook-high-memory"
+
+      - alert: WebhookHighGoroutineCount
+        expr: webhook_active_goroutines > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "High number of active goroutines ({{$value}})"
+          description: "The webhook endpoint has more than 1000 active goroutines, which may indicate a goroutine leak."
+          runbook_url: "https://docs.example.com/runbooks/webhook-goroutine-leak"
+
+      - alert: WebhookDBConnectionPoolExhausted
+        expr: webhook_db_connections_total{state="in_use"} / webhook_db_connections_total{state="open"} > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Database connection pool is nearly exhausted ({{$value | humanizePercentage}} in use)"
+          description: "The webhook endpoint is using more than 90% of available database connections."
+          runbook_url: "https://docs.example.com/runbooks/webhook-db-pool-exhausted"
+
+  - name: webhook_availability
+    interval: 30s
+    rules:
+      - alert: WebhookDown
+        expr: up{job="webhook-endpoint"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "Webhook endpoint is down"
+          description: "The webhook endpoint has been down for more than 1 minute."
+          runbook_url: "https://docs.example.com/runbooks/webhook-down"
+
+      - alert: WebhookHighTimeoutRate
+        expr: rate(webhook_timeouts_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "High timeout rate ({{$value}} timeouts/s)"
+          description: "The webhook endpoint is experiencing more than 1 timeout per second."
+          runbook_url: "https://docs.example.com/runbooks/webhook-timeouts"
+
+  - name: webhook_validation
+    interval: 30s
+    rules:
+      - alert: WebhookHighValidationErrorRate
+        expr: rate(webhook_validation_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: webhook
+          phase: TN-061
+        annotations:
+          summary: "High validation error rate ({{$value}} errors/s)"
+          description: "The webhook endpoint is experiencing more than 10 validation errors per second."
+          runbook_url: "https://docs.example.com/runbooks/webhook-validation-errors"

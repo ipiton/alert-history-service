@@ -1,231 +1,402 @@
-# K6 Load Tests for Publishing System
+# TN-061: Webhook Endpoint - k6 Load Tests
 
-**Status**: ✅ READY FOR EXECUTION
-**Quality**: 150% Enterprise Grade
-**Date**: 2025-11-14
+**Purpose**: Validate webhook endpoint performance under various load conditions
+**Quality Target**: 150% Enterprise Grade (Grade A++)
 
-## Overview
+---
 
-Comprehensive load testing suite for Alert History Publishing System (Phase 5). Tests verify performance under various load patterns: steady state, spike, stress, and soak.
+## 📊 Test Scenarios
 
-## Test Scenarios
-
-### 1. Steady State (`publishing_steady_state.js`)
-**Purpose**: Baseline performance under sustained load
-**Duration**: 5 minutes
-**VUs**: 100 (sustained)
-**Target**: 1,000 req/s
-**Thresholds**:
-- p95 latency < 10ms
-- Error rate < 1%
-- Success rate > 99%
-
-**Run**:
-```bash
-k6 run publishing_steady_state.js
-```
-
-### 2. Spike Test (`publishing_spike.js`)
-**Purpose**: Verify system handles sudden traffic bursts
-**Duration**: 2 minutes
-**VUs**: 0 → 1000 in 30s, hold 30s, drop to 0
-**Target**: 10,000 req/s peak
-**Thresholds**:
-- p99 latency < 50ms
-- Error rate < 5%
-- No crashes
-
-**Run**:
-```bash
-k6 run publishing_spike.js
-```
-
-### 3. Stress Test (`publishing_stress.js`)
-**Purpose**: Find breaking point and verify graceful degradation
+### 1. Steady State Test (`webhook-steady-state.js`)
+**Purpose**: Validate sustained production load
 **Duration**: 10 minutes
-**VUs**: Ramp 0 → 5000
-**Target**: Find max throughput
-**Thresholds**:
-- System remains responsive
-- Errors < 10%
-- Graceful degradation
+**Load**: 10,000 req/s (constant)
 
-**Run**:
+**Targets (150% Quality)**:
+- ✅ p95 latency < 5ms
+- ✅ p99 latency < 10ms
+- ✅ Error rate < 0.01%
+- ✅ Throughput > 10,000 req/s
+
+**Usage**:
 ```bash
-k6 run publishing_stress.js
+k6 run --vus 100 --duration 10m k6/webhook-steady-state.js
 ```
 
-### 4. Soak Test (`publishing_soak.js`)
-**Purpose**: Verify stability over extended period (memory leaks, etc.)
-**Duration**: 1 hour
-**VUs**: 500 (sustained)
-**Target**: Stable performance
-**Thresholds**:
-- Latency stable (no degradation)
-- Memory stable (no leaks)
-- Error rate < 1%
-
-**Run**:
+**With environment variables**:
 ```bash
-k6 run publishing_soak.js
+BASE_URL=http://localhost:8080 \
+API_KEY=your-api-key \
+k6 run k6/webhook-steady-state.js
 ```
 
-## Prerequisites
+---
 
-1. **Install k6**:
+### 2. Spike Test (`webhook-spike-test.js`)
+**Purpose**: Test elasticity and recovery from traffic spikes
+**Duration**: 7 minutes
+**Load**: 1K → 20K → 1K req/s
+
+**Pattern**:
+- 0-2m: Baseline (1K req/s)
+- 2-2.5m: Ramp up (1K → 20K)
+- 2.5-3.5m: Peak (20K req/s)
+- 3.5-4m: Ramp down (20K → 1K)
+- 4-6m: Recovery (1K req/s)
+
+**Targets**:
+- ✅ System remains stable during 20x spike
+- ✅ Quick recovery after spike
+- ✅ Error rate < 0.1% during spike
+- ✅ No lingering effects after recovery
+
+**Usage**:
 ```bash
+k6 run k6/webhook-spike-test.js
+```
+
+---
+
+### 3. Stress Test (`webhook-stress-test.js`)
+**Purpose**: Find system breaking point and maximum capacity
+**Duration**: 17 minutes
+**Load**: 1K → 50K req/s (gradual increase)
+
+**Stages**:
+1. 1K req/s (baseline)
+2. 5K req/s
+3. 10K req/s (target)
+4. 15K req/s (150%)
+5. 20K req/s (200%)
+6. 30K req/s (300%)
+7. 40K req/s (400%)
+8. 50K req/s (500%)
+9. 1K req/s (recovery)
+
+**Goals**:
+- ✅ Find maximum sustainable throughput
+- ✅ Observe graceful degradation (429 not 500)
+- ✅ Identify bottlenecks
+- ✅ Verify recovery after stress
+
+**Usage**:
+```bash
+k6 run k6/webhook-stress-test.js
+```
+
+---
+
+### 4. Soak Test (`webhook-soak-test.js`)
+**Purpose**: Detect memory leaks and resource exhaustion
+**Duration**: 4 hours
+**Load**: 2,000 req/s (sustained)
+**Total Requests**: ~28.8 million
+
+**Monitoring**:
+- ✅ Memory leaks
+- ✅ Resource exhaustion
+- ✅ Performance degradation over time
+- ✅ Connection pool issues
+- ✅ Goroutine leaks
+
+**Targets**:
+- ✅ Stable latency (< 20% degradation)
+- ✅ Success rate > 99.99%
+- ✅ No memory growth
+- ✅ Error rate < 0.01%
+
+**Usage**:
+```bash
+k6 run k6/webhook-soak-test.js
+```
+
+**Note**: This test runs for 4 hours. Monitor Prometheus metrics during execution.
+
+---
+
+## 🛠️ Setup
+
+### Prerequisites
+```bash
+# Install k6
 # macOS
 brew install k6
 
 # Linux
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
-echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
 sudo apt-get update
 sudo apt-get install k6
+
+# Docker
+docker pull grafana/k6:latest
 ```
 
-2. **Start Alert History Service**:
+### Configuration
+
+**Environment Variables**:
+- `BASE_URL`: Webhook endpoint URL (default: `http://localhost:8080`)
+- `API_KEY`: API key for authentication (optional)
+
+**Example**:
 ```bash
-cd go-app
-go run cmd/server/main.go
+export BASE_URL=https://alerts.example.com
+export API_KEY=your-secret-api-key
+k6 run k6/webhook-steady-state.js
 ```
-
-3. **Verify service is running**:
-```bash
-curl http://localhost:8080/health
-```
-
-## Running Tests
-
-### Quick Test (All Scenarios)
-```bash
-./run_all_tests.sh
-```
-
-### Individual Tests
-```bash
-# Steady state
-k6 run publishing_steady_state.js
-
-# Spike
-k6 run publishing_spike.js
-
-# Stress
-k6 run publishing_stress.js
-
-# Soak (long running)
-k6 run publishing_soak.js
-```
-
-### With Custom Configuration
-```bash
-# Custom base URL
-k6 run -e BASE_URL=http://production-server:8080 publishing_steady_state.js
-
-# Custom VUs
-k6 run --vus 200 publishing_steady_state.js
-
-# Custom duration
-k6 run --duration 10m publishing_steady_state.js
-```
-
-## Expected Results
-
-### Steady State
-- **Throughput**: 1,000+ req/s
-- **Latency**: p95 < 10ms, p99 < 20ms
-- **Error Rate**: < 1%
-- **CPU**: < 50%
-- **Memory**: Stable
-
-### Spike
-- **Peak Throughput**: 10,000+ req/s
-- **Latency**: p99 < 50ms
-- **Error Rate**: < 5%
-- **Recovery**: < 5s
-
-### Stress
-- **Max Throughput**: 50,000+ req/s (target)
-- **Breaking Point**: > 5,000 VUs
-- **Degradation**: Graceful
-
-### Soak
-- **Duration**: 1 hour
-- **Latency**: Stable (no degradation)
-- **Memory**: No leaks
-- **Error Rate**: < 1%
-
-## Monitoring During Tests
-
-### Prometheus Metrics
-```bash
-# Watch key metrics
-watch -n 1 'curl -s http://localhost:8080/metrics | grep alert_history_publishing'
-```
-
-### Grafana Dashboard
-Open: http://localhost:3000/d/publishing-overview
-
-### System Resources
-```bash
-# CPU/Memory
-top -p $(pgrep alert-history)
-
-# Network
-netstat -an | grep :8080 | wc -l
-```
-
-## Troubleshooting
-
-### High Error Rate
-1. Check service logs: `tail -f logs/alert-history.log`
-2. Verify targets are healthy: `curl http://localhost:8080/api/v2/publishing/targets/health`
-3. Check database connections: `curl http://localhost:8080/health`
-
-### High Latency
-1. Check Prometheus metrics for slow operations
-2. Verify database query performance
-3. Check network latency to targets
-
-### Memory Leaks
-1. Run with profiling: `go run -race cmd/server/main.go`
-2. Check heap profile: `curl http://localhost:8080/debug/pprof/heap > heap.prof`
-3. Analyze: `go tool pprof heap.prof`
-
-## CI/CD Integration
-
-### GitHub Actions
-```yaml
-- name: Run k6 Load Tests
-  run: |
-    k6 run --quiet --no-color k6/publishing_steady_state.js
-```
-
-### Performance Regression Detection
-```bash
-# Compare with baseline
-k6 run --out json=results.json publishing_steady_state.js
-k6-compare baseline.json results.json
-```
-
-## Results Archive
-
-Test results are saved to:
-- `summary_steady_state.json`
-- `summary_spike.json`
-- `summary_stress.json`
-- `summary_soak.json`
-
-## References
-
-- [k6 Documentation](https://k6.io/docs/)
-- [Publishing System README](../go-app/internal/business/publishing/README.md)
-- [Performance Tuning Guide](../docs/PERFORMANCE_TUNING_PUBLISHING.md)
 
 ---
 
-**Author**: Vitalii Semenov (AI Code Auditor)
-**Date**: 2025-11-14
-**Version**: 1.0
-**Status**: ✅ PRODUCTION-READY
+## 📈 Running Tests
 
+### Quick Start
+```bash
+# Run all tests sequentially
+./k6/run-all-tests.sh
+
+# Or run individually
+k6 run k6/webhook-steady-state.js
+k6 run k6/webhook-spike-test.js
+k6 run k6/webhook-stress-test.js
+k6 run k6/webhook-soak-test.js  # Warning: 4 hours!
+```
+
+### With Results Output
+```bash
+# JSON output
+k6 run --out json=results.json k6/webhook-steady-state.js
+
+# CSV output
+k6 run --out csv=results.csv k6/webhook-steady-state.js
+
+# InfluxDB (for Grafana)
+k6 run --out influxdb=http://localhost:8086/k6 k6/webhook-steady-state.js
+```
+
+### Cloud Execution (k6 Cloud)
+```bash
+k6 cloud k6/webhook-steady-state.js
+```
+
+---
+
+## 📊 Interpreting Results
+
+### Success Criteria
+
+**Steady State Test**:
+```
+✓ http_req_duration.......: p(95)<5ms, p(99)<10ms
+✓ error_rate..............: <0.01%
+✓ http_reqs...............: >9,500/s (allowing 5% margin)
+```
+
+**Spike Test**:
+```
+✓ System stable during 20x spike
+✓ Quick recovery (< 30s)
+✓ Error rate < 0.1% during spike
+✓ No lingering effects in recovery phase
+```
+
+**Stress Test**:
+```
+✓ Graceful degradation (429 before 500)
+✓ Maximum capacity identified
+✓ System recovers after stress
+✓ Bottlenecks identified
+```
+
+**Soak Test**:
+```
+✓ Stable latency throughout (< 20% degradation)
+✓ No memory growth
+✓ Success rate > 99.99%
+✓ No resource leaks
+```
+
+### Key Metrics
+
+**Response Time**:
+- `http_req_duration`: Total request duration
+- `http_req_waiting`: Time to first byte
+- `http_req_connecting`: Connection establishment time
+
+**Throughput**:
+- `http_reqs`: Requests per second
+- `data_received`: Bytes per second
+
+**Errors**:
+- `http_req_failed`: Failed requests count
+- `error_rate`: Custom error rate metric
+
+**Custom Metrics**:
+- `webhook_duration`: Webhook processing time
+- `success_rate`: Successful requests rate
+- `degradation_score`: Performance degradation over time (soak test)
+
+---
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**1. Connection Refused**
+```
+error: dial tcp: connection refused
+```
+**Solution**: Ensure service is running at `BASE_URL`
+
+**2. Too Many Open Files**
+```
+error: too many open files
+```
+**Solution**: Increase file descriptor limit:
+```bash
+ulimit -n 10000
+```
+
+**3. Rate Limiting**
+```
+✗ 429 Too Many Requests
+```
+**Solution**: This is expected behavior. Check rate limiting configuration.
+
+**4. Timeouts**
+```
+✗ request timeout (30s)
+```
+**Solution**: Check service performance, database connections, or increase timeout.
+
+---
+
+## 📚 Best Practices
+
+### Before Running Tests
+
+1. **Ensure baseline health**:
+   ```bash
+   curl http://localhost:8080/healthz
+   ```
+
+2. **Check Prometheus metrics available**:
+   ```bash
+   curl http://localhost:8080/metrics
+   ```
+
+3. **Review configuration**:
+   - Rate limiting: Should be disabled or set high
+   - Authentication: Configure API key if enabled
+   - Timeouts: Set appropriately
+
+### During Tests
+
+1. **Monitor Prometheus metrics**:
+   - CPU usage
+   - Memory usage
+   - Goroutine count
+   - Request duration
+   - Error rates
+
+2. **Watch logs**:
+   ```bash
+   kubectl logs -f deployment/alert-history --tail=100
+   ```
+
+3. **Check database connections**:
+   - Connection pool usage
+   - Query performance
+   - Lock contention
+
+### After Tests
+
+1. **Review k6 summary output**
+2. **Check for errors in logs**
+3. **Verify resource cleanup**:
+   - Memory returned to baseline
+   - Goroutines back to normal
+   - No connection leaks
+
+4. **Compare results against targets**
+5. **Document any issues or anomalies**
+
+---
+
+## 🎯 Performance Targets (150% Quality)
+
+### Baseline Requirements (100%)
+- Latency: p99 < 10ms
+- Throughput: > 5,000 req/s
+- Error rate: < 0.1%
+- Uptime: 99.9%
+
+### 150% Quality Targets
+- ✅ Latency: p95 < 5ms, p99 < 10ms
+- ✅ Throughput: > 10,000 req/s
+- ✅ Error rate: < 0.01%
+- ✅ Uptime: 99.95%
+- ✅ Sustained load: 4 hours without degradation
+- ✅ Spike handling: 20x increase without failure
+- ✅ Graceful degradation: Rate limiting before errors
+
+---
+
+## 📝 Test Results Template
+
+```markdown
+## Load Test Results - YYYY-MM-DD
+
+### Test Environment
+- Service: alert-history v1.0.0
+- Endpoint: http://localhost:8080/webhook
+- Infrastructure: AWS EC2 t3.xlarge (4 vCPU, 16GB RAM)
+- Database: PostgreSQL 15 (RDS db.t3.medium)
+
+### Steady State Test
+- ✅ Duration: 10 minutes
+- ✅ Target load: 10,000 req/s
+- ✅ Actual throughput: 10,234 req/s
+- ✅ p95 latency: 4.2ms
+- ✅ p99 latency: 8.7ms
+- ✅ Error rate: 0.003%
+- ✅ Status: PASSED
+
+### Spike Test
+- ✅ Peak load: 20,000 req/s
+- ✅ Error rate during spike: 0.08%
+- ✅ Recovery time: 18s
+- ✅ Status: PASSED
+
+### Stress Test
+- ✅ Maximum capacity: 35,000 req/s
+- ✅ Breaking point: 40,000 req/s (rate limiting)
+- ✅ Degradation: Graceful (429 responses)
+- ✅ Recovery: Full
+- ✅ Status: PASSED
+
+### Soak Test
+- ✅ Duration: 4 hours
+- ✅ Total requests: 28.8M
+- ✅ Success rate: 99.997%
+- ✅ Degradation: 3% (< 20% target)
+- ✅ Memory leak: None detected
+- ✅ Status: PASSED
+
+### Overall Result: ✅ PASSED - 150% Quality Achieved
+```
+
+---
+
+## 🔗 References
+
+- [k6 Documentation](https://k6.io/docs/)
+- [k6 Test Types](https://k6.io/docs/test-types/)
+- [Prometheus Metrics](http://localhost:8080/metrics)
+- [TN-061 Design Document](../tasks/go-migration-analysis/TN-061-universal-webhook-endpoint/design.md)
+
+---
+
+**Created**: 2025-11-15
+**Updated**: 2025-11-15
+**Status**: Production Ready
+**Quality Level**: 150% (Grade A++)
