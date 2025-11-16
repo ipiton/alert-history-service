@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
 // Comprehensive benchmarks for performance testing
@@ -297,10 +299,12 @@ func BenchmarkErrorResponse_Creation(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = ErrorResponse{
-			Error:      string(ErrCodeValidation),
-			Message:    "Test error",
-			StatusCode: 400,
-			Timestamp:  time.Now(),
+			Error: ErrorDetail{
+				Code:      ErrCodeValidation,
+				Message:   "Test error",
+				Timestamp: time.Now(),
+				RequestID: "test",
+			},
 		}
 	}
 }

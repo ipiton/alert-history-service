@@ -667,7 +667,7 @@ func main() {
 		// TN-062: For enterprise-level integration, we need real TargetDiscoveryManager and ParallelPublisher
 		// These will be initialized from the Publishing System section (TN-046/047/048)
 		// If K8s is not available, we'll use existing stub from infrastructure
-		
+
 		var proxyTargetManager publishing.TargetDiscoveryManager
 		var proxyParallelPublisher infrapublishing.ParallelPublisher
 
@@ -681,13 +681,13 @@ func main() {
 			// proxyTargetManager = discoveryMgr (from K8s section)
 			// proxyParallelPublisher = parallelPublisher (from K8s section)
 		}
-		
+
 		// Fallback: Use existing stub for development/testing (until K8s is enabled)
 		if proxyTargetManager == nil {
 			proxyTargetManager = infrapublishing.NewStubTargetDiscoveryManager(appLogger)
 			slog.Info("TN-062: Using StubTargetDiscoveryManager (K8s not available, 0 targets)")
 		}
-		
+
 		if proxyParallelPublisher == nil {
 			// Use real ParallelPublisher with stub target manager (enterprise-ready, just no targets)
 			if publisherFactory != nil && publishingMetrics != nil && modeManager != nil {
@@ -708,7 +708,7 @@ func main() {
 					slog.Info("TN-062: Using DefaultParallelPublisher (enterprise-ready, real implementation)")
 				}
 			}
-			
+
 			// Last resort fallback: use stub from infrastructure
 			if proxyParallelPublisher == nil {
 				proxyParallelPublisher = infrapublishing.NewStubParallelPublisher(appLogger)
@@ -743,7 +743,7 @@ func main() {
 					publishingStatus = "stub (fallback mode)"
 				}
 			}
-			
+
 			targetStatus := "stub (0 targets, K8s not configured)"
 			if proxyTargetManager != nil {
 				targetCount := proxyTargetManager.GetTargetCount()
@@ -751,7 +751,7 @@ func main() {
 					targetStatus = fmt.Sprintf("production (%d targets from K8s)", targetCount)
 				}
 			}
-			
+
 			slog.Info("✅ Proxy Webhook Service initialized",
 				"classification", "enabled (TN-033)",
 				"filtering", "enabled (TN-035, 7 rules)",

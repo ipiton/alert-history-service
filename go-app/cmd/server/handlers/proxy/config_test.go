@@ -17,7 +17,7 @@ func TestDefaultProxyWebhookConfig(t *testing.T) {
 	// HTTP config
 	assert.Equal(t, 10*1024*1024, config.MaxRequestSize) // 10MB
 	assert.Equal(t, 30*time.Second, config.RequestTimeout)
-	assert.Equal(t, 100, config.MaxAlertsPerRequest)
+	assert.Equal(t, 100, config.MaxAlertsPerReq)
 
 	// Pipeline toggles
 	assert.True(t, config.EnableClassification)
@@ -32,17 +32,18 @@ func TestDefaultProxyWebhookConfig(t *testing.T) {
 	// Classification defaults
 	assert.Equal(t, 5*time.Second, config.Classification.Timeout)
 	assert.Equal(t, 15*time.Minute, config.Classification.CacheTTL)
-	assert.True(t, config.Classification.EnableFallback)
+	assert.True(t, config.Classification.FallbackEnabled)
 
 	// Filtering defaults
-	assert.Equal(t, 1*time.Second, config.Filtering.Timeout)
+	// Filtering timeout is now part of top-level config
+	assert.Equal(t, 1*time.Second, config.FilteringTimeout)
 	assert.Equal(t, string(FilterActionAllow), config.Filtering.DefaultAction)
 
 	// Publishing defaults
-	assert.Equal(t, 10*time.Second, config.Publishing.Timeout)
-	assert.True(t, config.Publishing.EnableParallel)
-	assert.Equal(t, 3, config.Publishing.MaxRetries)
-	assert.True(t, config.Publishing.EnableDLQ)
+	assert.Equal(t, 5*time.Second, config.Publishing.TimeoutPerTarget)
+	assert.True(t, config.Publishing.Parallel)
+	assert.Equal(t, 3, config.Publishing.RetryMaxAttempts)
+	assert.True(t, config.Publishing.DLQEnabled)
 
 	// Timeouts
 	assert.Equal(t, 5*time.Second, config.ClassificationTimeout)
@@ -51,7 +52,7 @@ func TestDefaultProxyWebhookConfig(t *testing.T) {
 
 	// Concurrency
 	assert.Equal(t, 10, config.MaxConcurrentAlerts)
-	assert.Equal(t, 10, config.MaxConcurrentTargets)
+	assert.Equal(t, 10, config.MaxPublishingTargets)
 
 	// Error handling
 	assert.False(t, config.ContinueOnError)
@@ -75,7 +76,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:      0, // Invalid
 				RequestTimeout:      30 * time.Second,
-				MaxAlertsPerRequest: 100,
+				MaxAlertsPerReq: 100,
 			},
 			expectError: true,
 			errorMsg:    "max_request_size",
@@ -85,7 +86,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:      -1, // Invalid
 				RequestTimeout:      30 * time.Second,
-				MaxAlertsPerRequest: 100,
+				MaxAlertsPerReq: 100,
 			},
 			expectError: true,
 			errorMsg:    "max_request_size",
@@ -95,7 +96,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:      10 * 1024 * 1024,
 				RequestTimeout:      0, // Invalid
-				MaxAlertsPerRequest: 100,
+				MaxAlertsPerReq: 100,
 			},
 			expectError: true,
 			errorMsg:    "request_timeout",
@@ -105,7 +106,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:      10 * 1024 * 1024,
 				RequestTimeout:      30 * time.Second,
-				MaxAlertsPerRequest: 0, // Invalid
+				MaxAlertsPerReq: 0, // Invalid
 			},
 			expectError: true,
 			errorMsg:    "max_alerts_per_request",
@@ -115,7 +116,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:        10 * 1024 * 1024,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerRequest:   100,
+				MaxAlertsPerReq:   100,
 				ClassificationTimeout: 0, // Invalid
 			},
 			expectError: true,
@@ -126,7 +127,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:        10 * 1024 * 1024,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerRequest:   100,
+				MaxAlertsPerReq:   100,
 				ClassificationTimeout: 5 * time.Second,
 				FilteringTimeout:      0, // Invalid
 			},
@@ -138,7 +139,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:        10 * 1024 * 1024,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerRequest:   100,
+				MaxAlertsPerReq:   100,
 				ClassificationTimeout: 5 * time.Second,
 				FilteringTimeout:      1 * time.Second,
 				PublishingTimeout:     0, // Invalid
@@ -151,7 +152,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:        10 * 1024 * 1024,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerRequest:   100,
+				MaxAlertsPerReq:   100,
 				ClassificationTimeout: 5 * time.Second,
 				FilteringTimeout:      1 * time.Second,
 				PublishingTimeout:     10 * time.Second,
@@ -165,30 +166,33 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 			config: ProxyWebhookConfig{
 				MaxRequestSize:        20 * 1024 * 1024, // 20MB
 				RequestTimeout:        60 * time.Second,
-				MaxAlertsPerRequest:   200,
+				MaxAlertsPerReq:       200,
 				ClassificationTimeout: 10 * time.Second,
 				FilteringTimeout:      2 * time.Second,
 				PublishingTimeout:     20 * time.Second,
 				MaxConcurrentAlerts:   20,
-				MaxConcurrentTargets:  15,
+				MaxPublishingTargets:  15,
 				EnableClassification:  true,
 				EnableFiltering:       true,
 				EnablePublishing:      true,
 				ContinueOnError:       true,
-				Classification: &ClassificationPipelineConfig{
-					Timeout:        10 * time.Second,
-					CacheTTL:       30 * time.Minute,
-					EnableFallback: true,
+				Classification: ClassificationPipelineConfig{
+					Enabled:         true,
+					Timeout:         10 * time.Second,
+					CacheTTL:        30 * time.Minute,
+					FallbackEnabled: true,
 				},
-				Filtering: &FilteringPipelineConfig{
-					Timeout:       2 * time.Second,
+				Filtering: FilteringPipelineConfig{
+					Enabled:       true,
 					DefaultAction: string(FilterActionAllow),
 				},
-				Publishing: &PublishingPipelineConfig{
-					Timeout:        20 * time.Second,
-					EnableParallel: true,
-					MaxRetries:     5,
-					EnableDLQ:      true,
+				Publishing: PublishingPipelineConfig{
+					Enabled:          true,
+					Parallel:         true,
+					TimeoutPerTarget: 5 * time.Second,
+					RetryEnabled:     true,
+					RetryMaxAttempts: 5,
+					DLQEnabled:       true,
 				},
 			},
 			expectError: false,
@@ -214,14 +218,16 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 // TestClassificationPipelineConfig tests classification pipeline configuration
 func TestClassificationPipelineConfig(t *testing.T) {
 	config := &ClassificationPipelineConfig{
-		Timeout:        5 * time.Second,
-		CacheTTL:       15 * time.Minute,
-		EnableFallback: true,
+		Enabled:         true,
+		Timeout:         5 * time.Second,
+		CacheTTL:        15 * time.Minute,
+		FallbackEnabled: true,
 	}
 
+	assert.True(t, config.Enabled)
 	assert.Equal(t, 5*time.Second, config.Timeout)
 	assert.Equal(t, 15*time.Minute, config.CacheTTL)
-	assert.True(t, config.EnableFallback)
+	assert.True(t, config.FallbackEnabled)
 }
 
 // TestFilteringPipelineConfig tests filtering pipeline configuration
@@ -234,7 +240,7 @@ func TestFilteringPipelineConfig(t *testing.T) {
 		{
 			name: "allow default action",
 			config: FilteringPipelineConfig{
-				Timeout:       1 * time.Second,
+				Enabled:       true,
 				DefaultAction: string(FilterActionAllow),
 			},
 			expectedValid: true,
@@ -242,7 +248,7 @@ func TestFilteringPipelineConfig(t *testing.T) {
 		{
 			name: "deny default action",
 			config: FilteringPipelineConfig{
-				Timeout:       1 * time.Second,
+				Enabled:       true,
 				DefaultAction: string(FilterActionDeny),
 			},
 			expectedValid: true,
@@ -250,7 +256,7 @@ func TestFilteringPipelineConfig(t *testing.T) {
 		{
 			name: "with rules file",
 			config: FilteringPipelineConfig{
-				Timeout:       1 * time.Second,
+				Enabled:       true,
 				DefaultAction: string(FilterActionAllow),
 				RulesFile:     "/etc/alerting/filter-rules.yaml",
 			},
@@ -274,39 +280,42 @@ func TestPublishingPipelineConfig(t *testing.T) {
 		{
 			name: "parallel publishing enabled",
 			config: PublishingPipelineConfig{
-				Timeout:          10 * time.Second,
-				EnableParallel:   true,
+				Enabled:          true,
+				Parallel:         true,
 				TimeoutPerTarget: 5 * time.Second,
-				MaxRetries:       3,
-				EnableDLQ:        true,
+				RetryEnabled:     true,
+				RetryMaxAttempts: 3,
+				DLQEnabled:       true,
 			},
 		},
 		{
 			name: "sequential publishing",
 			config: PublishingPipelineConfig{
-				Timeout:          20 * time.Second,
-				EnableParallel:   false,
+				Enabled:          true,
+				Parallel:         false,
 				TimeoutPerTarget: 10 * time.Second,
-				MaxRetries:       5,
-				EnableDLQ:        false,
+				RetryEnabled:     true,
+				RetryMaxAttempts: 5,
+				DLQEnabled:       false,
 			},
 		},
 		{
 			name: "no retries",
 			config: PublishingPipelineConfig{
-				Timeout:          10 * time.Second,
-				EnableParallel:   true,
+				Enabled:          true,
+				Parallel:         true,
 				TimeoutPerTarget: 5 * time.Second,
-				MaxRetries:       0,
-				EnableDLQ:        true,
+				RetryEnabled:     false,
+				RetryMaxAttempts: 0,
+				DLQEnabled:       true,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.GreaterOrEqual(t, tt.config.Timeout, time.Duration(0))
-			assert.GreaterOrEqual(t, tt.config.MaxRetries, 0)
+			assert.GreaterOrEqual(t, tt.config.TimeoutPerTarget, time.Duration(0))
+			assert.GreaterOrEqual(t, tt.config.RetryMaxAttempts, 0)
 		})
 	}
 }
@@ -346,12 +355,12 @@ func TestProxyWebhookConfig_ResourceLimits(t *testing.T) {
 			config := ProxyWebhookConfig{
 				MaxRequestSize:        tt.maxRequestSize,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerRequest:   tt.maxAlertsPerReq,
+				MaxAlertsPerReq:   tt.maxAlertsPerReq,
 				ClassificationTimeout: 5 * time.Second,
 				FilteringTimeout:      1 * time.Second,
 				PublishingTimeout:     10 * time.Second,
 				MaxConcurrentAlerts:   tt.maxConcurrentAlert,
-				MaxConcurrentTargets:  10,
+				MaxPublishingTargets:  10,
 			}
 
 			err := config.Validate()
