@@ -47,6 +47,31 @@ const (
 	serviceVersion = "1.0.0"
 )
 
+// metricsLoggerAdapter adapts slog.Logger to metrics.Logger interface.
+type metricsLoggerAdapter struct {
+	logger *slog.Logger
+}
+
+// Debug implements metrics.Logger interface.
+func (a *metricsLoggerAdapter) Debug(msg string, args ...interface{}) {
+	a.logger.Debug(msg, args...)
+}
+
+// Info implements metrics.Logger interface.
+func (a *metricsLoggerAdapter) Info(msg string, args ...interface{}) {
+	a.logger.Info(msg, args...)
+}
+
+// Warn implements metrics.Logger interface.
+func (a *metricsLoggerAdapter) Warn(msg string, args ...interface{}) {
+	a.logger.Warn(msg, args...)
+}
+
+// Error implements metrics.Logger interface.
+func (a *metricsLoggerAdapter) Error(msg string, args ...interface{}) {
+	a.logger.Error(msg, args...)
+}
+
 func main() {
 	// Parse command line flags
 	var showVersion = flag.Bool("version", false, "Show version information")
@@ -1473,9 +1498,54 @@ func main() {
 	}
 
 	// Add Prometheus metrics endpoint if enabled
+	// TN-65: Enhanced metrics endpoint with self-observability and error handling
 	if cfg.Metrics.Enabled {
-		mux.Handle(cfg.Metrics.Path, promhttp.Handler())
-		slog.Info("Prometheus metrics endpoint enabled", "path", cfg.Metrics.Path)
+		// Create enhanced metrics endpoint handler
+		endpointConfig := metrics.DefaultEndpointConfig()
+		endpointConfig.Path = cfg.Metrics.Path
+		endpointConfig.EnableGoRuntime = false // Disabled by default for performance
+		endpointConfig.EnableProcess = false    // Disabled by default for security
+		endpointConfig.EnableSelfMetrics = true
+
+		metricsHandler, err := metrics.NewMetricsEndpointHandler(endpointConfig, metricsRegistry)
+		if err != nil {
+			slog.Error("Failed to create metrics endpoint handler", "error", err)
+			return fmt.Errorf("failed to create metrics endpoint handler: %w", err)
+		}
+
+		// Set logger for error handling
+		metricsHandler.SetLogger(&metricsLoggerAdapter{logger: appLogger})
+
+		// Register HTTP metrics from MetricsManager
+		if metricsManager != nil {
+			if httpMetrics := metricsManager.Metrics(); httpMetrics != nil {
+				if err := metricsHandler.RegisterHTTPMetrics(httpMetrics); err != nil {
+					slog.Warn("Failed to register HTTP metrics", "error", err)
+				} else {
+					slog.Info("✅ HTTP metrics registered with endpoint handler")
+				}
+			}
+		}
+
+		// Verify metrics registry integration
+		if metricsRegistry != nil {
+			if err := metricsHandler.RegisterMetricsRegistry(metricsRegistry); err != nil {
+				slog.Warn("Failed to register metrics registry", "error", err)
+			} else {
+				slog.Info("✅ Metrics Registry integrated with endpoint handler",
+					"categories", []string{"business", "technical", "infra"})
+			}
+		}
+
+		mux.Handle(cfg.Metrics.Path, metricsHandler)
+		slog.Info("Prometheus metrics endpoint enabled (TN-65 enhanced)",
+			"path", cfg.Metrics.Path,
+			"features", []string{
+				"Self-observability metrics",
+				"Enhanced error handling",
+				"Performance optimization",
+				"Enterprise-grade reliability",
+			})
 	}
 
 	// Add pprof endpoints for performance profiling

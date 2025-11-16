@@ -1,0 +1,75 @@
+🧩 5. Roadmap Alertmanager++ OSS (v1)
+
+🔥 Версия 0.1 “Core Complete”
+
+Цель: drop-in Alertmanager replacement
+
+Уже готово:
+
+✔ Webhook ingestion
+✔ Storage
+✔ Filtering
+✔ Deduplication
+✔ Grouping
+✔ Inhibition
+✔ Silence engine
+✔ History querying
+✔ Publishing
+✔ Metrics
+
+Допилить:
+
+⬜ /api/v2/alerts endpoint
+⬜ Routing tree (baseline)
+⬜ Config management API
+
+⸻
+
+🚀 Версия 0.2 “Usable in production”
+
+⬜ Simple dashboard HTML (без JS-frameworks)
+⬜ Silence UI
+⬜ Grouping UI
+⬜ Route visualization (optional)
+⬜ Helm chart production-ready
+⬜ Migration guide “Alertmanager → AM++”
+
+⸻
+
+🌍 Версия 0.3 “Open Source community ready”
+
+⬜ Plugin system hooks
+⬜ Webhook templates
+⬜ Alert history export/import
+⬜ Integration examples
+⬜ Terraform module
+⬜ Docker Compose ready
+⬜ Documentation site (mkdocs)
+
+⸻
+
+⚡ Версия 1.0 “Enterprise OSS”
+
+⬜ HA clustering
+⬜ State synchronization
+⬜ Route editor
+⬜ Multi-tenant mode
+⬜ Recording rules templates
+⬜ SLOs & MTTR analytics
+
+⸻
+
+🧠 6. Ты уже сделал 70% OSS Alertmanager++
+
+Это видно из файла: огромное количество задач капитально реализовано на grade A+.
+
+По сути, ты можешь:
+
+→ Выпустить Alertmanager++ OSS уже через 2 недели
+
+Если сделать оставшиеся 3 вещи:
+	1.	/api/v2/alerts (Prometheus ingest)
+	2.	Routing tree baseline
+	3.	Config reload API
+
+

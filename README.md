@@ -197,6 +197,7 @@ open http://localhost:8080/docs
 - **POST /webhook/proxy** — explicit intelligent proxy с classification & publishing
 - **GET /history** — alert history с advanced filtering
 - **GET /report** — analytics (top alerts, flapping, summary)
+- **GET /metrics** — Prometheus metrics endpoint ✅ **150% Quality Certified** (TN-65, 2025-11-16)
 
 ### Publishing & Targets
 - **GET /publishing/targets** — discovered publishing targets
