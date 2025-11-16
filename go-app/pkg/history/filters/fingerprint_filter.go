@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -19,15 +19,15 @@ func NewFingerprintFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid fingerprint filter params: expected []string")
 	}
-	
+
 	if len(values) == 0 {
 		return nil, fmt.Errorf("fingerprint filter requires at least one value")
 	}
-	
+
 	filter := &FingerprintFilter{
 		values: make([]string, 0, len(values)),
 	}
-	
+
 	for _, v := range values {
 		// Validate fingerprint format (64 hex characters)
 		if len(v) != 64 {
@@ -41,7 +41,7 @@ func NewFingerprintFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.values = append(filter.values, v)
 	}
-	
+
 	return filter, nil
 }
 
@@ -53,13 +53,13 @@ func (f *FingerprintFilter) Validate() error {
 	if len(f.values) == 0 {
 		return fmt.Errorf("fingerprint filter requires at least one value")
 	}
-	
+
 	for _, v := range f.values {
 		if len(v) != 64 {
 			return fmt.Errorf("invalid fingerprint format: %s (must be 64 hex characters)", v)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -87,4 +87,3 @@ func (f *FingerprintFilter) CacheKey() string {
 	sort.Strings(values) // Sort for consistent cache keys
 	return fmt.Sprintf("fingerprint:%s", strings.Join(values, ","))
 }
-

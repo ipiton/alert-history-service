@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -13,9 +13,9 @@ import (
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := middleware.GetRequestID(r.Context())
-	
+
 	queryParams := r.URL.Query()
-	
+
 	// Parse time range (required for stats)
 	var timeRange *core.TimeRange
 	if fromStr := queryParams.Get("from"); fromStr != "" {
@@ -33,7 +33,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 			timeRange.To = &to
 		}
 	}
-	
+
 	// Time range is optional - if not provided, use default (last 24 hours)
 	if timeRange == nil {
 		now := time.Now()
@@ -43,7 +43,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 			To:   &now,
 		}
 	}
-	
+
 	// Query repository
 	stats, err := h.repository.GetAggregatedStats(r.Context(), timeRange)
 	if err != nil {
@@ -53,13 +53,12 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		apierrors.WriteError(w, apierrors.InternalError("Failed to retrieve aggregated statistics").WithRequestID(requestID))
 		return
 	}
-	
+
 	duration := time.Since(start)
 	h.logger.Info("Stats request completed",
 		"request_id", requestID,
 		"total_alerts", stats.TotalAlerts,
 		"duration_ms", duration.Milliseconds())
-	
+
 	h.sendJSON(w, http.StatusOK, stats)
 }
-

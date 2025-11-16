@@ -7,7 +7,7 @@ import (
 // TestFilterRegistry tests FilterRegistry functionality
 func TestFilterRegistry(t *testing.T) {
 	registry := NewRegistry(nil)
-	
+
 	tests := []struct {
 		name    string
 		typ     FilterType
@@ -37,11 +37,11 @@ func TestFilterRegistry(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := registry.Create(tt.typ, tt.params)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Registry.Create() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -58,7 +58,7 @@ func TestFilterRegistry(t *testing.T) {
 // TestFilterRegistry_CreateFromQueryParams tests query parameter parsing
 func TestFilterRegistry_CreateFromQueryParams(t *testing.T) {
 	registry := NewRegistry(nil)
-	
+
 	tests := []struct {
 		name       string
 		queryParams map[string][]string
@@ -97,7 +97,7 @@ func TestFilterRegistry_CreateFromQueryParams(t *testing.T) {
 			wantCount:  0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filters, err := registry.CreateFromQueryParams(tt.queryParams)
@@ -113,4 +113,3 @@ func TestFilterRegistry_CreateFromQueryParams(t *testing.T) {
 		})
 	}
 }
-

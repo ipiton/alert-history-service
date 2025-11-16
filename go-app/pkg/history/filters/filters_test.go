@@ -3,7 +3,7 @@ package filters
 import (
 	"testing"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -43,7 +43,7 @@ func TestStatusFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewStatusFilter(tt.params)
@@ -55,7 +55,7 @@ func TestStatusFilter(t *testing.T) {
 				if err := filter.Validate(); err != nil {
 					t.Errorf("Validate() error = %v", err)
 				}
-				
+
 				// Test ApplyToQuery
 				qb := query.NewBuilder()
 				if err := filter.ApplyToQuery(qb); err != nil {
@@ -95,7 +95,7 @@ func TestSeverityFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewSeverityFilter(tt.params)
@@ -107,7 +107,7 @@ func TestSeverityFilter(t *testing.T) {
 				if err := filter.Validate(); err != nil {
 					t.Errorf("Validate() error = %v", err)
 				}
-				
+
 				qb := query.NewBuilder()
 				if err := filter.ApplyToQuery(qb); err != nil {
 					t.Errorf("ApplyToQuery() error = %v", err)
@@ -146,7 +146,7 @@ func TestNamespaceFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewNamespaceFilter(tt.params)
@@ -158,7 +158,7 @@ func TestNamespaceFilter(t *testing.T) {
 				if err := filter.Validate(); err != nil {
 					t.Errorf("Validate() error = %v", err)
 				}
-				
+
 				qb := query.NewBuilder()
 				if err := filter.ApplyToQuery(qb); err != nil {
 					t.Errorf("ApplyToQuery() error = %v", err)
@@ -173,7 +173,7 @@ func TestTimeRangeFilter(t *testing.T) {
 	now := time.Now()
 	from := now.Add(-24 * time.Hour)
 	to := now
-	
+
 	tests := []struct {
 		name    string
 		params  map[string]interface{}
@@ -222,7 +222,7 @@ func TestTimeRangeFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewTimeRangeFilter(tt.params)
@@ -234,7 +234,7 @@ func TestTimeRangeFilter(t *testing.T) {
 				if err := filter.Validate(); err != nil {
 					t.Errorf("Validate() error = %v", err)
 				}
-				
+
 				qb := query.NewBuilder()
 				if err := filter.ApplyToQuery(qb); err != nil {
 					t.Errorf("ApplyToQuery() error = %v", err)
@@ -246,7 +246,8 @@ func TestTimeRangeFilter(t *testing.T) {
 
 // TestFingerprintFilter tests FingerprintFilter functionality
 func TestFingerprintFilter(t *testing.T) {
-	validFingerprint := "a" + string(make([]byte, 63)) // 64 chars
+	// Generate valid 64-character hex fingerprint
+	validFingerprint := "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890"
 	
 	tests := []struct {
 		name    string
@@ -273,7 +274,7 @@ func TestFingerprintFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewFingerprintFilter(tt.params)
@@ -319,7 +320,7 @@ func TestAlertNameFilter(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, err := NewAlertNameFilter(tt.params)
@@ -335,4 +336,3 @@ func TestAlertNameFilter(t *testing.T) {
 		})
 	}
 }
-

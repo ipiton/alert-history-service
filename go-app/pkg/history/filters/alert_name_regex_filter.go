@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -20,26 +20,26 @@ func NewAlertNameRegexFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid alert_name_regex filter params: expected string")
 	}
-	
+
 	if patternStr == "" {
 		return nil, fmt.Errorf("alert_name_regex filter requires non-empty pattern")
 	}
-	
+
 	if len(patternStr) > 500 {
 		return nil, fmt.Errorf("alert_name_regex pattern too long: max 500 characters")
 	}
-	
+
 	// Validate and compile regex pattern
 	// Use timeout to prevent ReDoS attacks
 	done := make(chan bool, 1)
 	var compiled *regexp.Regexp
 	var compileErr error
-	
+
 	go func() {
 		compiled, compileErr = regexp.Compile(patternStr)
 		done <- true
 	}()
-	
+
 	select {
 	case <-done:
 		if compileErr != nil {
@@ -48,7 +48,7 @@ func NewAlertNameRegexFilter(params map[string]interface{}) (Filter, error) {
 	case <-time.After(5 * time.Second):
 		return nil, fmt.Errorf("regex compilation timeout (possible ReDoS attack)")
 	}
-	
+
 	return &AlertNameRegexFilter{
 		pattern:    compiled,
 		patternStr: patternStr,
@@ -79,4 +79,3 @@ func (f *AlertNameRegexFilter) ApplyToQuery(qb *query.Builder) error {
 func (f *AlertNameRegexFilter) CacheKey() string {
 	return fmt.Sprintf("alert_name_regex:%s", f.patternStr)
 }
-

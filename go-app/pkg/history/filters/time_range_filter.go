@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -17,7 +17,7 @@ type TimeRangeFilter struct {
 // NewTimeRangeFilter creates a new time range filter
 func NewTimeRangeFilter(params map[string]interface{}) (Filter, error) {
 	filter := &TimeRangeFilter{}
-	
+
 	// Parse "from" timestamp
 	if fromStr, ok := params["from"].(string); ok && fromStr != "" {
 		from, err := time.Parse(time.RFC3339, fromStr)
@@ -26,7 +26,7 @@ func NewTimeRangeFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.from = &from
 	}
-	
+
 	// Parse "to" timestamp
 	if toStr, ok := params["to"].(string); ok && toStr != "" {
 		to, err := time.Parse(time.RFC3339, toStr)
@@ -35,14 +35,14 @@ func NewTimeRangeFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.to = &to
 	}
-	
+
 	// Validate time range
 	if filter.from != nil && filter.to != nil {
 		if filter.from.After(*filter.to) {
-			return nil, fmt.Errorf("invalid time range: 'from' (%s) must be before 'to' (%s)", 
+			return nil, fmt.Errorf("invalid time range: 'from' (%s) must be before 'to' (%s)",
 				filter.from.Format(time.RFC3339), filter.to.Format(time.RFC3339))
 		}
-		
+
 		// Check max time range (90 days)
 		duration := filter.to.Sub(*filter.from)
 		maxDuration := 90 * 24 * time.Hour
@@ -50,12 +50,12 @@ func NewTimeRangeFilter(params map[string]interface{}) (Filter, error) {
 			return nil, fmt.Errorf("time range too large: %v (max 90 days)", duration)
 		}
 	}
-	
+
 	// At least one timestamp must be provided
 	if filter.from == nil && filter.to == nil {
 		return nil, fmt.Errorf("time_range filter requires at least one of 'from' or 'to'")
 	}
-	
+
 	return filter, nil
 }
 
@@ -67,12 +67,12 @@ func (f *TimeRangeFilter) Validate() error {
 	if f.from == nil && f.to == nil {
 		return fmt.Errorf("time_range filter requires at least one of 'from' or 'to'")
 	}
-	
+
 	if f.from != nil && f.to != nil {
 		if f.from.After(*f.to) {
 			return fmt.Errorf("invalid time range: 'from' must be before 'to'")
 		}
-		
+
 		// Check max time range (90 days)
 		duration := f.to.Sub(*f.from)
 		maxDuration := 90 * 24 * time.Hour
@@ -80,7 +80,7 @@ func (f *TimeRangeFilter) Validate() error {
 			return fmt.Errorf("time range too large: max 90 days")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -105,4 +105,3 @@ func (f *TimeRangeFilter) CacheKey() string {
 	}
 	return fmt.Sprintf("time_range:%s", strings.Join(parts, ","))
 }
-

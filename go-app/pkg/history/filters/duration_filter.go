@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -17,7 +17,7 @@ type DurationFilter struct {
 // NewDurationFilter creates a new duration filter
 func NewDurationFilter(params map[string]interface{}) (Filter, error) {
 	filter := &DurationFilter{}
-	
+
 	// Parse "min" duration
 	if minStr, ok := params["min"].(string); ok && minStr != "" {
 		min, err := time.ParseDuration(minStr)
@@ -29,7 +29,7 @@ func NewDurationFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.min = &min
 	}
-	
+
 	// Parse "max" duration
 	if maxStr, ok := params["max"].(string); ok && maxStr != "" {
 		max, err := time.ParseDuration(maxStr)
@@ -41,19 +41,19 @@ func NewDurationFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.max = &max
 	}
-	
+
 	// Validate duration range
 	if filter.min != nil && filter.max != nil {
 		if *filter.min > *filter.max {
 			return nil, fmt.Errorf("invalid duration range: min (%v) must be <= max (%v)", *filter.min, *filter.max)
 		}
 	}
-	
+
 	// At least one duration must be provided
 	if filter.min == nil && filter.max == nil {
 		return nil, fmt.Errorf("duration filter requires at least one of 'duration_min' or 'duration_max'")
 	}
-	
+
 	return filter, nil
 }
 
@@ -65,21 +65,21 @@ func (f *DurationFilter) Validate() error {
 	if f.min == nil && f.max == nil {
 		return fmt.Errorf("duration filter requires at least one of 'min' or 'max'")
 	}
-	
+
 	if f.min != nil && *f.min < 0 {
 		return fmt.Errorf("duration_min must be non-negative")
 	}
-	
+
 	if f.max != nil && *f.max < 0 {
 		return fmt.Errorf("duration_max must be non-negative")
 	}
-	
+
 	if f.min != nil && f.max != nil {
 		if *f.min > *f.max {
 			return fmt.Errorf("invalid duration range: min must be <= max")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -107,4 +107,3 @@ func (f *DurationFilter) CacheKey() string {
 	}
 	return fmt.Sprintf("duration:%s", strings.Join(parts, ","))
 }
-

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -100,18 +100,18 @@ func NewManager(cfg *Config, logger *slog.Logger) (*Manager, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	
+
 	manager := &Manager{
 		l1Enabled: cfg.L1Enabled,
 		l2Enabled: cfg.L2Enabled,
 		logger:    logger,
 		metrics:   NewMetrics(),
 	}
-	
+
 	// Initialize L1 cache
 	if cfg.L1Enabled {
 		manager.l1Cache = NewL1Cache(cfg.L1MaxEntries, cfg.L1TTL)
@@ -120,7 +120,7 @@ func NewManager(cfg *Config, logger *slog.Logger) (*Manager, error) {
 			"max_size_mb", cfg.L1MaxSizeMB,
 			"ttl", cfg.L1TTL)
 	}
-	
+
 	// Initialize L2 cache
 	if cfg.L2Enabled {
 		l2Cache, err := NewL2Cache(
@@ -140,14 +140,14 @@ func NewManager(cfg *Config, logger *slog.Logger) (*Manager, error) {
 			manager.l2Cache = l2Cache
 		}
 	}
-	
+
 	return manager, nil
 }
 
 // Get retrieves a value from cache (L1 first, then L2)
 func (cm *Manager) Get(ctx context.Context, key string) (*core.HistoryResponse, bool) {
 	start := time.Now()
-	
+
 	// Try L1 cache first
 	if cm.l1Enabled && cm.l1Cache != nil {
 		if value, found := cm.l1Cache.Get(key); found {
@@ -157,7 +157,7 @@ func (cm *Manager) Get(ctx context.Context, key string) (*core.HistoryResponse, 
 		}
 		cm.metrics.Misses.WithLabelValues("l1").Inc()
 	}
-	
+
 	// Try L2 cache (Redis)
 	if cm.l2Enabled && cm.l2Cache != nil {
 		l2Start := time.Now()
@@ -165,15 +165,15 @@ func (cm *Manager) Get(ctx context.Context, key string) (*core.HistoryResponse, 
 		if err == nil {
 			cm.metrics.Hits.WithLabelValues("l2").Inc()
 			cm.metrics.Latency.WithLabelValues("l2", "get", "hit").Observe(time.Since(l2Start).Seconds())
-			
+
 			// Populate L1 cache for next time
 			if cm.l1Enabled && cm.l1Cache != nil {
 				cm.l1Cache.Set(key, value)
 			}
-			
+
 			return value, true
 		}
-		
+
 		if err != ErrNotFound {
 			cm.metrics.Errors.WithLabelValues("l2", err.(*CacheError).Type).Inc()
 			cm.logger.Warn("L2 cache error", "error", err, "key", key)
@@ -181,7 +181,7 @@ func (cm *Manager) Get(ctx context.Context, key string) (*core.HistoryResponse, 
 		cm.metrics.Misses.WithLabelValues("l2").Inc()
 		cm.metrics.Latency.WithLabelValues("l2", "get", "miss").Observe(time.Since(l2Start).Seconds())
 	}
-	
+
 	cm.metrics.Latency.WithLabelValues("combined", "get", "miss").Observe(time.Since(start).Seconds())
 	return nil, false
 }
@@ -189,13 +189,13 @@ func (cm *Manager) Get(ctx context.Context, key string) (*core.HistoryResponse, 
 // Set stores a value in both L1 and L2 caches
 func (cm *Manager) Set(ctx context.Context, key string, value *core.HistoryResponse) error {
 	start := time.Now()
-	
+
 	// Store in L1 cache
 	if cm.l1Enabled && cm.l1Cache != nil {
 		cm.l1Cache.Set(key, value)
 		cm.metrics.Latency.WithLabelValues("l1", "set", "success").Observe(time.Since(start).Seconds())
 	}
-	
+
 	// Store in L2 cache
 	if cm.l2Enabled && cm.l2Cache != nil {
 		l2Start := time.Now()
@@ -206,7 +206,7 @@ func (cm *Manager) Set(ctx context.Context, key string, value *core.HistoryRespo
 		}
 		cm.metrics.Latency.WithLabelValues("l2", "set", "success").Observe(time.Since(l2Start).Seconds())
 	}
-	
+
 	return nil
 }
 
@@ -216,12 +216,12 @@ func (cm *Manager) Invalidate(ctx context.Context, key string) error {
 	if cm.l1Enabled && cm.l1Cache != nil {
 		cm.l1Cache.Delete(key)
 	}
-	
+
 	// Remove from L2
 	if cm.l2Enabled && cm.l2Cache != nil {
 		return cm.l2Cache.Delete(ctx, key)
 	}
-	
+
 	return nil
 }
 
@@ -242,11 +242,11 @@ func (cm *Manager) GenerateCacheKey(req *core.HistoryRequest) string {
 		cm.logger.Error("Failed to marshal request for cache key", "error", err)
 		return ""
 	}
-	
+
 	// Generate SHA-256 hash
 	hash := sha256.Sum256(data)
 	hashStr := base64.URLEncoding.EncodeToString(hash[:])
-	
+
 	// Format: "history:v2:{hash}"
 	return fmt.Sprintf("history:v2:%s", hashStr)
 }
@@ -254,18 +254,18 @@ func (cm *Manager) GenerateCacheKey(req *core.HistoryRequest) string {
 // Stats returns cache statistics
 func (cm *Manager) Stats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	if cm.l1Enabled && cm.l1Cache != nil {
 		stats["l1"] = cm.l1Cache.Stats()
 	}
-	
+
 	if cm.l2Enabled && cm.l2Cache != nil {
 		stats["l2"] = map[string]interface{}{
 			"enabled": true,
 			// Redis stats would require additional Redis commands
 		}
 	}
-	
+
 	return stats
 }
 
@@ -284,4 +284,3 @@ func (cm *Manager) Close() error {
 	}
 	return nil
 }
-

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -22,7 +22,7 @@ type SearchRequest struct {
 func (h *Handler) SearchAlerts(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := middleware.GetRequestID(r.Context())
-	
+
 	// Parse request body
 	var searchReq SearchRequest
 	if err := json.NewDecoder(r.Body).Decode(&searchReq); err != nil {
@@ -32,13 +32,13 @@ func (h *Handler) SearchAlerts(w http.ResponseWriter, r *http.Request) {
 		apierrors.WriteError(w, apierrors.ValidationError("Invalid request body: "+err.Error()).WithRequestID(requestID))
 		return
 	}
-	
+
 	// Validate query
 	if searchReq.Query == "" {
 		apierrors.WriteError(w, apierrors.ValidationError("query parameter is required").WithRequestID(requestID))
 		return
 	}
-	
+
 	// Set default pagination if not provided
 	if searchReq.Pagination == nil {
 		searchReq.Pagination = &core.Pagination{
@@ -46,33 +46,33 @@ func (h *Handler) SearchAlerts(w http.ResponseWriter, r *http.Request) {
 			PerPage: 50,
 		}
 	}
-	
+
 	// Validate pagination
 	if err := searchReq.Pagination.Validate(); err != nil {
 		apierrors.WriteError(w, apierrors.ValidationError("Invalid pagination: "+err.Error()).WithRequestID(requestID))
 		return
 	}
-	
+
 	// Build HistoryRequest with search query
 	// Note: Search is implemented as a filter in the filter system
 	// For now, we'll use the basic GetHistory with filters
 	// TODO: Integrate with FilterRegistry for full search support
-	
+
 	historyReq := &core.HistoryRequest{
 		Filters:    searchReq.Filters,
 		Pagination: searchReq.Pagination,
 		Sorting:    searchReq.Sorting,
 	}
-	
+
 	// If filters is nil, create empty filters
 	if historyReq.Filters == nil {
 		historyReq.Filters = &core.AlertFilters{}
 	}
-	
+
 	// TODO: Apply search query as a filter
 	// For now, search is a placeholder - will be implemented with FilterRegistry integration
 	// The search filter should be applied to alert_name, annotations, etc.
-	
+
 	// Query repository
 	response, err := h.repository.GetHistory(r.Context(), historyReq)
 	if err != nil {
@@ -83,7 +83,7 @@ func (h *Handler) SearchAlerts(w http.ResponseWriter, r *http.Request) {
 		apierrors.WriteError(w, apierrors.InternalError("Failed to search alerts").WithRequestID(requestID))
 		return
 	}
-	
+
 	// Add search metadata to response
 	searchResponse := map[string]interface{}{
 		"query":    searchReq.Query,
@@ -95,14 +95,13 @@ func (h *Handler) SearchAlerts(w http.ResponseWriter, r *http.Request) {
 		"has_next": response.HasNext,
 		"has_prev": response.HasPrev,
 	}
-	
+
 	duration := time.Since(start)
 	h.logger.Info("Search request completed",
 		"request_id", requestID,
 		"query", searchReq.Query,
 		"total", response.Total,
 		"duration_ms", duration.Milliseconds())
-	
+
 	h.sendJSON(w, http.StatusOK, searchResponse)
 }
-

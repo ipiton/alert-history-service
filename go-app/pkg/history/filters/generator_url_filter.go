@@ -3,7 +3,7 @@ package filters
 import (
 	"fmt"
 	"net/url"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -18,17 +18,17 @@ func NewGeneratorURLFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid generator_url filter params: expected string")
 	}
-	
+
 	if urlStr == "" {
 		return nil, fmt.Errorf("generator_url filter requires non-empty URL")
 	}
-	
+
 	// Validate URL format
 	_, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid generator_url format: %w", err)
 	}
-	
+
 	return &GeneratorURLFilter{url: urlStr}, nil
 }
 
@@ -40,12 +40,12 @@ func (f *GeneratorURLFilter) Validate() error {
 	if f.url == "" {
 		return fmt.Errorf("generator_url filter requires non-empty URL")
 	}
-	
+
 	_, err := url.Parse(f.url)
 	if err != nil {
 		return fmt.Errorf("invalid generator_url format: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -59,4 +59,3 @@ func (f *GeneratorURLFilter) ApplyToQuery(qb *query.Builder) error {
 func (f *GeneratorURLFilter) CacheKey() string {
 	return fmt.Sprintf("generator_url:%s", f.url)
 }
-

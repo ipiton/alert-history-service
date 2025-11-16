@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	securitymw "github.com/vitaliisemenov/alert-history/pkg/middleware"
 )
@@ -13,42 +13,42 @@ import (
 type StackConfig struct {
 	// Recovery configuration
 	EnableRecovery bool
-	
+
 	// RequestID configuration
 	EnableRequestID bool
-	
+
 	// Logging configuration
 	EnableLogging bool
 	Logger        *slog.Logger
-	
+
 	// Metrics configuration
 	EnableMetrics bool
-	
+
 	// Rate limiting configuration
 	EnableRateLimit bool
 	RateLimitPerIP  int // requests per second per IP
 	RateLimitGlobal int // global requests per second
 	RateLimitBurst  int // burst allowance
-	
+
 	// Authentication configuration
 	EnableAuth bool
 	AuthConfig middleware.AuthConfig
-	
+
 	// Authorization configuration
 	EnableAuthz bool
 	RequiredRole string // Required role for access (viewer, operator, admin)
-	
+
 	// CORS configuration
 	EnableCORS bool
 	CORSConfig middleware.CORSConfig
-	
+
 	// Compression configuration
 	EnableCompression bool
-	
+
 	// Timeout configuration
 	EnableTimeout bool
 	Timeout       time.Duration // Request timeout (default: 30s)
-	
+
 	// Security headers configuration
 	EnableSecurityHeaders bool
 	SecurityHeadersConfig securitymw.SecurityHeadersConfig
@@ -115,59 +115,59 @@ func (s *Stack) Apply(handler http.Handler) http.Handler {
 	if s.config.EnableRecovery {
 		handler = RecoveryMiddleware(s.config.Logger)(handler)
 	}
-	
+
 	// 2. RequestID (early - needed for tracing)
 	if s.config.EnableRequestID {
 		handler = middleware.RequestIDMiddleware(handler)
 	}
-	
+
 	// 3. Logging (log all requests)
 	if s.config.EnableLogging && s.config.Logger != nil {
 		handler = middleware.LoggingMiddleware(s.config.Logger)(handler)
 	}
-	
+
 	// 4. Metrics (collect metrics)
 	if s.config.EnableMetrics {
 		handler = middleware.MetricsMiddleware(handler)
 	}
-	
+
 	// 5. Timeout (set request timeout)
 	if s.config.EnableTimeout {
 		handler = TimeoutMiddleware(s.config.Timeout, s.config.Logger)(handler)
 	}
-	
+
 	// 6. Security Headers (set security headers)
 	if s.config.EnableSecurityHeaders {
 		handler = securitymw.SecurityHeaders(s.config.SecurityHeadersConfig)(handler)
 	}
-	
+
 	// 7. CORS (handle CORS preflight)
 	if s.config.EnableCORS {
 		handler = middleware.CORSMiddleware(s.config.CORSConfig)(handler)
 	}
-	
+
 	// 8. Compression (compress responses)
 	if s.config.EnableCompression {
 		handler = middleware.CompressionMiddleware(handler)
 	}
-	
+
 	// 9. RateLimit (rate limiting - before auth to prevent auth abuse)
 	if s.config.EnableRateLimit {
 		// Note: Using per-IP rate limit for now
 		// Global rate limit would require shared state (Redis)
 		handler = middleware.RateLimitMiddleware(s.config.RateLimitPerIP, s.config.RateLimitBurst)(handler)
 	}
-	
+
 	// 10. Authentication (verify API key)
 	if s.config.EnableAuth {
 		handler = middleware.AuthMiddleware(s.config.AuthConfig)(handler)
 	}
-	
+
 	// 11. Authorization (check RBAC permissions)
 	if s.config.EnableAuthz {
 		handler = middleware.RBACMiddleware(s.config.RequiredRole)(handler)
 	}
-	
+
 	return handler
 }
 
@@ -175,4 +175,3 @@ func (s *Stack) Apply(handler http.Handler) http.Handler {
 func (s *Stack) ApplyFunc(fn http.HandlerFunc) http.Handler {
 	return s.Apply(fn)
 }
-

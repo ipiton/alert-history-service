@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -14,9 +14,9 @@ import (
 func (h *Handler) GetFlappingAlerts(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := middleware.GetRequestID(r.Context())
-	
+
 	queryParams := r.URL.Query()
-	
+
 	// Parse time range
 	var timeRange *core.TimeRange
 	if fromStr := queryParams.Get("from"); fromStr != "" {
@@ -34,7 +34,7 @@ func (h *Handler) GetFlappingAlerts(w http.ResponseWriter, r *http.Request) {
 			timeRange.To = &to
 		}
 	}
-	
+
 	// Parse threshold (minimum transition count to be considered flapping)
 	threshold := 5 // default
 	if thresholdStr := queryParams.Get("threshold"); thresholdStr != "" {
@@ -45,7 +45,7 @@ func (h *Handler) GetFlappingAlerts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	// Query repository
 	flappingAlerts, err := h.repository.GetFlappingAlerts(r.Context(), timeRange, threshold)
 	if err != nil {
@@ -55,7 +55,7 @@ func (h *Handler) GetFlappingAlerts(w http.ResponseWriter, r *http.Request) {
 		apierrors.WriteError(w, apierrors.InternalError("Failed to retrieve flapping alerts").WithRequestID(requestID))
 		return
 	}
-	
+
 	// Build response
 	response := map[string]interface{}{
 		"alerts":    flappingAlerts,
@@ -65,14 +65,13 @@ func (h *Handler) GetFlappingAlerts(w http.ResponseWriter, r *http.Request) {
 	if timeRange != nil {
 		response["time_range"] = timeRange
 	}
-	
+
 	duration := time.Since(start)
 	h.logger.Info("Flapping alerts request completed",
 		"request_id", requestID,
 		"count", len(flappingAlerts),
 		"threshold", threshold,
 		"duration_ms", duration.Milliseconds())
-	
+
 	h.sendJSON(w, http.StatusOK, response)
 }
-

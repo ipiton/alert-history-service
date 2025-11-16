@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 )
 
@@ -16,32 +16,32 @@ func TimeoutMiddleware(timeout time.Duration, logger *slog.Logger) func(http.Han
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	if timeout <= 0 {
 		timeout = 30 * time.Second // Default timeout
 	}
-	
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Create context with timeout
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			defer cancel()
-			
+
 			// Create channel to detect if handler completed
 			done := make(chan bool, 1)
-			
+
 			// Wrap response writer to detect writes
 			rw := &timeoutResponseWriter{
 				ResponseWriter: w,
 				done:           done,
 			}
-			
+
 			// Run handler in goroutine
 			go func() {
 				next.ServeHTTP(rw, r.WithContext(ctx))
 				done <- true
 			}()
-			
+
 			// Wait for either completion or timeout
 			select {
 			case <-done:
@@ -57,10 +57,10 @@ func TimeoutMiddleware(timeout time.Duration, logger *slog.Logger) func(http.Han
 						"method", r.Method,
 						"path", r.URL.Path,
 					)
-					
+
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusGatewayTimeout)
-					
+
 					// Write timeout error response
 					timeoutError := map[string]interface{}{
 						"error": map[string]interface{}{
@@ -70,7 +70,7 @@ func TimeoutMiddleware(timeout time.Duration, logger *slog.Logger) func(http.Han
 							"timeout_seconds": timeout.Seconds(),
 						},
 					}
-					
+
 					if err := json.NewEncoder(w).Encode(timeoutError); err != nil {
 						logger.Error("Failed to encode timeout error", "error", err)
 					}
@@ -100,4 +100,3 @@ func (rw *timeoutResponseWriter) Write(b []byte) (int, error) {
 	}
 	return rw.ResponseWriter.Write(b)
 }
-

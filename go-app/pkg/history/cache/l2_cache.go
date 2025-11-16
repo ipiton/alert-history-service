@@ -9,7 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"time"
-	
+
 	"github.com/redis/go-redis/v9"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
@@ -36,7 +36,7 @@ func NewL2Cache(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	client := redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,
@@ -48,20 +48,20 @@ func NewL2Cache(
 		WriteTimeout: 3 * time.Second,
 		MaxRetries:   3,
 	})
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
-	
+
 	logger.Info("L2 cache (Redis) initialized",
 		"addr", addr,
 		"db", db,
 		"ttl", ttl,
 		"compression", compression)
-	
+
 	return &L2Cache{
 		client:      client,
 		ttl:         ttl,
@@ -80,7 +80,7 @@ func (c *L2Cache) Get(ctx context.Context, key string) (*core.HistoryResponse, e
 		c.logger.Error("L2 cache get error", "error", err, "key", key)
 		return nil, ErrConnectionFailed
 	}
-	
+
 	// Decompress if needed
 	if c.compression {
 		data, err = c.decompress(data)
@@ -89,14 +89,14 @@ func (c *L2Cache) Get(ctx context.Context, key string) (*core.HistoryResponse, e
 			return nil, ErrSerialization("decompression failed", err)
 		}
 	}
-	
+
 	// Deserialize
 	var response core.HistoryResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		c.logger.Error("Failed to unmarshal L2 cache data", "error", err, "key", key)
 		return nil, ErrSerialization("unmarshal failed", err)
 	}
-	
+
 	return &response, nil
 }
 
@@ -108,7 +108,7 @@ func (c *L2Cache) Set(ctx context.Context, key string, value *core.HistoryRespon
 		c.logger.Error("Failed to marshal cache value", "error", err, "key", key)
 		return ErrSerialization("marshal failed", err)
 	}
-	
+
 	// Compress if enabled
 	if c.compression {
 		data, err = c.compress(data)
@@ -117,13 +117,13 @@ func (c *L2Cache) Set(ctx context.Context, key string, value *core.HistoryRespon
 			return ErrSerialization("compression failed", err)
 		}
 	}
-	
+
 	// Store in Redis
 	if err := c.client.Set(ctx, key, data, c.ttl).Err(); err != nil {
 		c.logger.Error("Failed to set L2 cache", "error", err, "key", key)
 		return ErrConnectionFailed
 	}
-	
+
 	return nil
 }
 
@@ -140,14 +140,14 @@ func (c *L2Cache) Delete(ctx context.Context, key string) error {
 func (c *L2Cache) DeletePattern(ctx context.Context, pattern string) error {
 	var cursor uint64
 	var deletedCount int
-	
+
 	for {
 		keys, newCursor, err := c.client.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
 			c.logger.Error("Failed to scan keys", "error", err, "pattern", pattern)
 			return ErrConnectionFailed
 		}
-		
+
 		if len(keys) > 0 {
 			if err := c.client.Del(ctx, keys...).Err(); err != nil {
 				c.logger.Error("Failed to delete keys", "error", err, "pattern", pattern)
@@ -155,13 +155,13 @@ func (c *L2Cache) DeletePattern(ctx context.Context, pattern string) error {
 			}
 			deletedCount += len(keys)
 		}
-		
+
 		cursor = newCursor
 		if cursor == 0 {
 			break
 		}
 	}
-	
+
 	c.logger.Info("Invalidated cache pattern", "pattern", pattern, "deleted_count", deletedCount)
 	return nil
 }
@@ -170,14 +170,14 @@ func (c *L2Cache) DeletePattern(ctx context.Context, pattern string) error {
 func (c *L2Cache) compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
-	
+
 	if _, err := gzipWriter.Write(data); err != nil {
 		return nil, err
 	}
 	if err := gzipWriter.Close(); err != nil {
 		return nil, err
 	}
-	
+
 	return buf.Bytes(), nil
 }
 
@@ -189,7 +189,7 @@ func (c *L2Cache) decompress(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer gzipReader.Close()
-	
+
 	return io.ReadAll(gzipReader)
 }
 
@@ -202,4 +202,3 @@ func (c *L2Cache) Close() error {
 func (c *L2Cache) Ping(ctx context.Context) error {
 	return c.client.Ping(ctx).Err()
 }
-

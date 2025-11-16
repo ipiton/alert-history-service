@@ -11,12 +11,12 @@ type Config struct {
 	L1MaxEntries int64         // Maximum number of entries (default: 10,000)
 	L1MaxSizeMB  int64         // Maximum size in MB (default: 100)
 	L1TTL        time.Duration // Time-to-live (default: 5 minutes)
-	
+
 	// L2 Cache (Redis) configuration
 	L2Enabled    bool
 	L2TTL        time.Duration // Time-to-live (default: 1 hour)
 	L2Compression bool         // Enable gzip compression (default: true)
-	
+
 	// Redis connection settings
 	RedisAddr     string
 	RedisPassword string
@@ -59,4 +59,3 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-

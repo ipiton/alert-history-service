@@ -65,4 +65,3 @@ func ErrTimeout(msg string) error {
 		Type:    ErrTypeTimeout,
 	}
 }
-

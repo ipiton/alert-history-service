@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -25,7 +25,7 @@ func NewWarmer(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &Warmer{
 		cacheManager: cacheManager,
 		repository:   repository,
@@ -38,10 +38,10 @@ func NewWarmer(
 func (cw *Warmer) Start(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	// Warm cache immediately on start
 	cw.warmCache(ctx)
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -63,7 +63,7 @@ func (cw *Warmer) Stop() {
 func (cw *Warmer) warmCache(ctx context.Context) {
 	cw.logger.Info("Starting cache warming")
 	start := time.Now()
-	
+
 	// Define popular query patterns
 	popularQueries := []struct {
 		name string
@@ -105,7 +105,7 @@ func (cw *Warmer) warmCache(ctx context.Context) {
 			},
 		},
 	}
-	
+
 	// Warm cache for each popular query
 	warmed := 0
 	for _, pq := range popularQueries {
@@ -114,7 +114,7 @@ func (cw *Warmer) warmCache(ctx context.Context) {
 		if _, found := cw.cacheManager.Get(ctx, cacheKey); found {
 			continue // Already cached
 		}
-		
+
 		// Query from database
 		response, err := cw.repository.GetHistory(ctx, pq.req)
 		if err != nil {
@@ -123,7 +123,7 @@ func (cw *Warmer) warmCache(ctx context.Context) {
 				"error", err)
 			continue
 		}
-		
+
 		// Store in cache
 		if err := cw.cacheManager.Set(ctx, cacheKey, response); err != nil {
 			cw.logger.Warn("Failed to cache warmed query",
@@ -131,10 +131,10 @@ func (cw *Warmer) warmCache(ctx context.Context) {
 				"error", err)
 			continue
 		}
-		
+
 		warmed++
 	}
-	
+
 	duration := time.Since(start)
 	cw.logger.Info("Cache warming complete",
 		"warmed_queries", warmed,
@@ -149,4 +149,3 @@ func ptrString(s string) *string {
 func ptrStatus(s core.AlertStatus) *core.AlertStatus {
 	return &s
 }
-

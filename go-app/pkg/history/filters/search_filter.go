@@ -2,7 +2,7 @@ package filters
 
 import (
 	"fmt"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -17,15 +17,15 @@ func NewSearchFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid search filter params: expected string")
 	}
-	
+
 	if queryStr == "" {
 		return nil, fmt.Errorf("search filter requires non-empty query")
 	}
-	
+
 	if len(queryStr) > 500 {
 		return nil, fmt.Errorf("search query too long: max 500 characters")
 	}
-	
+
 	return &SearchFilter{query: queryStr}, nil
 }
 
@@ -58,4 +58,3 @@ func (f *SearchFilter) ApplyToQuery(qb *query.Builder) error {
 func (f *SearchFilter) CacheKey() string {
 	return fmt.Sprintf("search:%s", f.query)
 }
-

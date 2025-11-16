@@ -3,7 +3,7 @@ package filters
 import (
 	"fmt"
 	"strconv"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -18,12 +18,12 @@ func NewIsResolvedFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid is_resolved filter params: expected string")
 	}
-	
+
 	value, err := strconv.ParseBool(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid is_resolved value: %s (must be 'true' or 'false')", valueStr)
 	}
-	
+
 	return &IsResolvedFilter{value: value}, nil
 }
 
@@ -50,4 +50,3 @@ func (f *IsResolvedFilter) ApplyToQuery(qb *query.Builder) error {
 func (f *IsResolvedFilter) CacheKey() string {
 	return fmt.Sprintf("is_resolved:%v", f.value)
 }
-
