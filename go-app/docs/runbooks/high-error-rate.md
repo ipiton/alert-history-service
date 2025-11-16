@@ -1,6 +1,6 @@
 # Runbook: High Error Rate in History API
 
-**Severity**: P1 (High)  
+**Severity**: P1 (High)
 **Last Updated**: 2025-11-16
 
 ---
@@ -158,4 +158,3 @@ If error rate remains high:
 - [High Latency](./high-latency.md)
 - [Database Performance Issues](./database-performance.md)
 - [Authentication Failures](./authentication-failures.md)
-

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/pkg/history/cache"
 	"github.com/vitaliisemenov/alert-history/pkg/history/filters"
@@ -73,24 +73,24 @@ func TestHandler_GetHistory(t *testing.T) {
 			PerPage: 50,
 		},
 	}
-	
+
 	filterRegistry := filters.NewRegistry(nil)
 	handler := NewHandler(repo, filterRegistry, testCacheManager, nil)
-	
+
 	req := httptest.NewRequest("GET", "/api/v2/history?page=1&per_page=50", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.GetHistory(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("GetHistory() status = %v, want %v", w.Code, http.StatusOK)
 	}
-	
+
 	var response core.HistoryResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Errorf("Failed to decode response: %v", err)
 	}
-	
+
 	if response.Total != 10 {
 		t.Errorf("GetHistory() Total = %v, want 10", response.Total)
 	}
@@ -101,12 +101,12 @@ func TestHandler_GetHistory_InvalidParams(t *testing.T) {
 	repo := &MockRepository{}
 	filterRegistry := filters.NewRegistry(nil)
 	handler := NewHandler(repo, filterRegistry, testCacheManager, nil)
-	
+
 	req := httptest.NewRequest("GET", "/api/v2/history?page=0", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.GetHistory(w, req)
-	
+
 	// Should handle invalid params gracefully (defaults to page=1)
 	if w.Code != http.StatusOK {
 		t.Errorf("GetHistory() status = %v, want %v", w.Code, http.StatusOK)
@@ -118,12 +118,12 @@ func TestHandler_GetRecentAlerts(t *testing.T) {
 	repo := &MockRepository{}
 	filterRegistry := filters.NewRegistry(nil)
 	handler := NewHandler(repo, filterRegistry, testCacheManager, nil)
-	
+
 	req := httptest.NewRequest("GET", "/api/v2/history/recent?limit=10", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.GetRecentAlerts(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("GetRecentAlerts() status = %v, want %v", w.Code, http.StatusOK)
 	}
@@ -134,14 +134,13 @@ func TestHandler_GetStats(t *testing.T) {
 	repo := &MockRepository{}
 	filterRegistry := filters.NewRegistry(nil)
 	handler := NewHandler(repo, filterRegistry, testCacheManager, nil)
-	
+
 	req := httptest.NewRequest("GET", "/api/v2/history/stats", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.GetStats(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("GetStats() status = %v, want %v", w.Code, http.StatusOK)
 	}
 }
-

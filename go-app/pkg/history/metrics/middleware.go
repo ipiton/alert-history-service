@@ -11,43 +11,43 @@ func MetricsMiddleware(metrics *HistoryMetrics) func(http.Handler) http.Handler 
 	if metrics == nil {
 		metrics = Default()
 	}
-	
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			
+
 			// Increment active requests
 			metrics.HTTPActiveRequests.Inc()
 			defer metrics.HTTPActiveRequests.Dec()
-			
+
 			// Track request size
 			if r.ContentLength > 0 {
 				metrics.HTTPRequestSize.WithLabelValues(r.Method, r.URL.Path).Observe(float64(r.ContentLength))
 			}
-			
+
 			// Wrap response writer to capture status code and size
 			rw := &responseWriter{
 				ResponseWriter: w,
 				statusCode:     http.StatusOK,
 			}
-			
+
 			next.ServeHTTP(rw, r)
-			
+
 			// Calculate duration
 			duration := time.Since(start).Seconds()
-			
+
 			// Extract endpoint (simplified path)
 			endpoint := extractEndpoint(r.URL.Path)
 			statusCode := strconv.Itoa(rw.statusCode)
-			
+
 			// Record metrics
 			metrics.HTTPRequestsTotal.WithLabelValues(r.Method, endpoint, statusCode).Inc()
 			metrics.HTTPRequestDuration.WithLabelValues(r.Method, endpoint, statusCode).Observe(duration)
-			
+
 			if rw.size > 0 {
 				metrics.HTTPResponseSize.WithLabelValues(r.Method, endpoint, statusCode).Observe(float64(rw.size))
 			}
-			
+
 			// Record errors
 			if rw.statusCode >= 400 {
 				errorType := getErrorType(rw.statusCode)
@@ -86,17 +86,17 @@ func extractEndpoint(path string) string {
 		"/api/v2/history/stats":    "stats",
 		"/api/v2/history/search":   "search",
 	}
-	
+
 	// Check exact match first
 	if endpoint, ok := endpoints[path]; ok {
 		return endpoint
 	}
-	
+
 	// Check prefix match for /api/v2/history/{fingerprint}
 	if len(path) > 20 && path[:20] == "/api/v2/history/" {
 		return "timeline"
 	}
-	
+
 	return "unknown"
 }
 
@@ -117,4 +117,3 @@ func getErrorType(statusCode int) string {
 		return "unknown"
 	}
 }
-

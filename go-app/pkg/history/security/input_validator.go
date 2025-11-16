@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	
+
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 )
@@ -49,7 +49,7 @@ func NewInputValidator(logger *slog.Logger, config ValidatorConfig) *InputValida
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &InputValidator{
 		logger: logger,
 		config: config,
@@ -60,7 +60,7 @@ func NewInputValidator(logger *slog.Logger, config ValidatorConfig) *InputValida
 func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 	queryParams := r.URL.Query()
 	requestID := middleware.GetRequestID(r.Context())
-	
+
 	// Validate page parameter
 	if pageStr := queryParams.Get("page"); pageStr != "" {
 		page, err := strconv.Atoi(pageStr)
@@ -68,7 +68,7 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			return apierrors.ValidationError(fmt.Sprintf("page must be between 1 and %d", v.config.MaxPage)).WithRequestID(requestID)
 		}
 	}
-	
+
 	// Validate per_page parameter
 	if perPageStr := queryParams.Get("per_page"); perPageStr != "" {
 		perPage, err := strconv.Atoi(perPageStr)
@@ -76,7 +76,7 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			return apierrors.ValidationError(fmt.Sprintf("per_page must be between 1 and %d", v.config.MaxPerPage)).WithRequestID(requestID)
 		}
 	}
-	
+
 	// Validate sort_field
 	if sortField := queryParams.Get("sort_field"); sortField != "" {
 		allowed := false
@@ -90,7 +90,7 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			return apierrors.ValidationError(fmt.Sprintf("sort_field must be one of: %s", strings.Join(v.config.AllowedSortFields, ", "))).WithRequestID(requestID)
 		}
 	}
-	
+
 	// Validate time range
 	if fromStr := queryParams.Get("from"); fromStr != "" {
 		if err := v.validateTimeParam(fromStr, "from"); err != nil {
@@ -102,7 +102,7 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			return err
 		}
 	}
-	
+
 	// Validate time range span
 	if fromStr := queryParams.Get("from"); fromStr != "" && queryParams.Get("to") != "" {
 		from, err1 := time.Parse(time.RFC3339, fromStr)
@@ -114,14 +114,14 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			}
 		}
 	}
-	
+
 	// Validate query parameter lengths
 	for key, values := range queryParams {
 		for _, value := range values {
 			if len(value) > v.config.MaxQueryParamLength {
 				return apierrors.ValidationError(fmt.Sprintf("query parameter %s exceeds maximum length of %d", key, v.config.MaxQueryParamLength)).WithRequestID(requestID)
 			}
-			
+
 			// Check for suspicious patterns (SQL injection attempts)
 			if v.containsSQLInjection(value) {
 				v.logger.Warn("Potential SQL injection attempt detected",
@@ -130,7 +130,7 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 					"value", v.sanitizeForLog(value))
 				return apierrors.ValidationError("Invalid input detected").WithRequestID(requestID)
 			}
-			
+
 			// Check for XSS patterns
 			if v.containsXSS(value) {
 				v.logger.Warn("Potential XSS attempt detected",
@@ -141,12 +141,12 @@ func (v *InputValidator) ValidateQueryParams(r *http.Request) error {
 			}
 		}
 	}
-	
+
 	// Validate label count
 	if labels := queryParams["labels"]; len(labels) > v.config.MaxLabelCount {
 		return apierrors.ValidationError(fmt.Sprintf("too many labels: maximum %d allowed", v.config.MaxLabelCount)).WithRequestID(requestID)
 	}
-	
+
 	return nil
 }
 
@@ -155,12 +155,12 @@ func (v *InputValidator) validateTimeParam(timeStr, paramName string) error {
 	if len(timeStr) > v.config.MaxQueryParamLength {
 		return apierrors.ValidationError(fmt.Sprintf("%s parameter too long", paramName))
 	}
-	
+
 	_, err := time.Parse(time.RFC3339, timeStr)
 	if err != nil {
 		return apierrors.ValidationError(fmt.Sprintf("invalid %s format: must be RFC3339 (e.g., 2006-01-02T15:04:05Z07:00)", paramName))
 	}
-	
+
 	return nil
 }
 
@@ -179,14 +179,14 @@ func (v *InputValidator) containsSQLInjection(input string) bool {
 		"EXECUTE(",
 		"xp_cmdshell",
 	}
-	
+
 	upperInput := strings.ToUpper(input)
 	for _, pattern := range sqlPatterns {
 		if strings.Contains(upperInput, strings.ToUpper(pattern)) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -204,14 +204,14 @@ func (v *InputValidator) containsXSS(input string) bool {
 		"eval(",
 		"alert(",
 	}
-	
+
 	lowerInput := strings.ToLower(input)
 	for _, pattern := range xssPatterns {
 		if strings.Contains(lowerInput, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -229,12 +229,12 @@ func (v *InputValidator) ValidateFingerprint(fingerprint string) error {
 	if len(fingerprint) != 64 {
 		return apierrors.ValidationError("fingerprint must be 64 hex characters")
 	}
-	
+
 	hexPattern := regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 	if !hexPattern.MatchString(fingerprint) {
 		return apierrors.ValidationError("fingerprint must contain only hex characters")
 	}
-	
+
 	return nil
 }
 
@@ -243,19 +243,19 @@ func (v *InputValidator) ValidateURL(urlStr string) error {
 	if len(urlStr) > v.config.MaxQueryParamLength {
 		return apierrors.ValidationError("URL too long")
 	}
-	
+
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return apierrors.ValidationError("invalid URL format")
 	}
-	
+
 	// Prevent SSRF attacks - block internal IPs
 	if parsed.Hostname() != "" {
 		if v.isInternalIP(parsed.Hostname()) {
 			return apierrors.ValidationError("internal IPs not allowed")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -285,13 +285,13 @@ func (v *InputValidator) isInternalIP(hostname string) bool {
 		"192.168.",
 		"169.254.",
 	}
-	
+
 	for _, pattern := range internalPatterns {
 		if strings.HasPrefix(hostname, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -310,9 +310,8 @@ func (v *InputValidator) Middleware() func(http.Handler) http.Handler {
 				}
 				return
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
 }
-

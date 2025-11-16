@@ -284,3 +284,5 @@ export function teardown(data) {
     console.log('   Check results with: k6 cloud <run-id> or k6 analyze results.json');
 }
 
+
+

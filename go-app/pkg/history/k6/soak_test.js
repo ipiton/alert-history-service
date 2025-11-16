@@ -26,7 +26,7 @@ export default function () {
     { path: '/api/v2/history/top', params: { limit: 10 } },
     { path: '/api/v2/history/recent', params: { limit: 20 } },
   ];
-  
+
   const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
   const res = http.get(`${BASE_URL}${endpoint.path}`, {
     params: endpoint.params,
@@ -35,11 +35,10 @@ export default function () {
       'X-Request-ID': `k6-soak-${__VU}-${__ITER}`,
     },
   });
-  
+
   check(res, {
     'status is 200': (r) => r.status === 200,
   });
-  
+
   sleep(1);
 }
-

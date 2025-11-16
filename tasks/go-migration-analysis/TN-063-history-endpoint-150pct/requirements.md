@@ -1,10 +1,10 @@
 # TN-063: GET /history - Requirements Specification
 
-**Project**: Alert History Endpoint with Advanced Filters  
-**Version**: 1.0  
-**Date**: 2025-11-16  
-**Status**: Draft  
-**Target Quality**: 150% Enterprise Grade (A++)  
+**Project**: Alert History Endpoint with Advanced Filters
+**Version**: 1.0
+**Date**: 2025-11-16
+**Status**: Draft
+**Target Quality**: 150% Enterprise Grade (A++)
 
 ---
 
@@ -91,7 +91,7 @@ The Alert History Endpoint (`GET /api/v2/history`) provides comprehensive access
 ### 2.1 Core Endpoints (FR-001 to FR-007)
 
 #### FR-001: GET /api/v2/history - Main History Endpoint
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Retrieve paginated alert history with advanced filtering and sorting.
 
 **Requirements**:
@@ -184,7 +184,7 @@ Query Parameters (all optional):
 - ✅ Throughput > 10K req/s
 
 #### FR-002: GET /api/v2/history/{fingerprint} - Single Alert History
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Retrieve complete history for a single alert fingerprint.
 
 **Requirements**:
@@ -243,7 +243,7 @@ GET /api/v2/history/{fingerprint}?limit=100
 - ✅ p95 latency < 15ms
 
 #### FR-003: GET /api/v2/history/top - Top Firing Alerts
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Return the most frequently firing alerts in a time period.
 
 **Requirements**:
@@ -285,7 +285,7 @@ GET /api/v2/history/top?period=24h&limit=10
 - ✅ p95 latency < 20ms
 
 #### FR-004: GET /api/v2/history/flapping - Flapping Alerts Detection
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Detect alerts that frequently change state (firing ↔ resolved).
 
 **Requirements**:
@@ -326,7 +326,7 @@ GET /api/v2/history/flapping?period=7d&threshold=5&limit=10
 - ✅ p95 latency < 25ms
 
 #### FR-005: GET /api/v2/history/recent - Recent Alerts
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Retrieve the most recent alerts with simple filtering.
 
 **Requirements**:
@@ -358,7 +358,7 @@ GET /api/v2/history/recent?limit=50&offset=0&status=firing&severity=critical
 - ✅ Filters work correctly
 
 #### FR-006: GET /api/v2/history/stats - Aggregated Statistics
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Retrieve aggregated statistics over a time range.
 
 **Requirements**:
@@ -418,7 +418,7 @@ GET /api/v2/history/stats?from=2025-11-15T00:00:00Z&to=2025-11-16T00:00:00Z
 - ✅ Results cacheable
 
 #### FR-007: POST /api/v2/history/search - Advanced Search
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Description**: Advanced search endpoint with complex boolean logic.
 
 **Requirements**:
@@ -470,7 +470,7 @@ POST /api/v2/history/search
 ### 2.2 Filter System (FR-008 to FR-025)
 
 #### FR-008: Status Filter (IN Operator)
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support multiple status values: `firing`, `resolved`
 - Use IN operator in SQL: `status IN ('firing', 'resolved')`
@@ -488,7 +488,7 @@ POST /api/v2/history/search
 - ✅ Invalid status returns 400 error
 
 #### FR-009: Severity Filter (IN Operator)
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support multiple severity values: `critical`, `warning`, `info`, `noise`
 - Query JSONB field: `labels->>'severity' IN (...)`
@@ -507,7 +507,7 @@ POST /api/v2/history/search
 - ✅ Uses GIN index for performance
 
 #### FR-010: Namespace Filter (IN Operator)
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support multiple namespace values
 - Query JSONB field: `labels->>'namespace' IN (...)`
@@ -525,7 +525,7 @@ POST /api/v2/history/search
 - ✅ Uses expression index for performance
 
 #### FR-011: Fingerprint Filter (IN Operator)
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support multiple fingerprint values
 - Use indexed column for performance
@@ -544,7 +544,7 @@ POST /api/v2/history/search
 - ✅ Uses B-tree index for performance
 
 #### FR-012: Alert Name Exact Match Filter
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support exact match on alert_name column
 - Case-sensitive matching
@@ -561,7 +561,7 @@ POST /api/v2/history/search
 - ✅ Uses index for performance
 
 #### FR-013: Alert Name Pattern Filter (LIKE)
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support LIKE pattern matching: `alert_name LIKE 'KubePod%'`
 - Support wildcards: `%` (any chars), `_` (single char)
@@ -579,7 +579,7 @@ POST /api/v2/history/search
 - ✅ Performance acceptable (<20ms p95)
 
 #### FR-014: Alert Name Regex Filter
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Support regex pattern matching: `alert_name ~ '^KubePod.*Crash.*'`
 - Validate regex syntax before execution
@@ -599,7 +599,7 @@ POST /api/v2/history/search
 - ✅ Performance acceptable (<50ms p95)
 
 #### FR-015: Label Exact Match Filter (=)
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support multiple label key-value pairs
 - Use JSONB containment operator: `labels @> '{"key":"value"}'`
@@ -619,7 +619,7 @@ POST /api/v2/history/search
 - ✅ Max 20 labels enforced
 
 #### FR-016: Label Not Equal Filter (!=)
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support label key-value pairs that must NOT match
 - Use JSONB NOT containment: `NOT (labels @> '{"key":"value"}')`
@@ -637,7 +637,7 @@ POST /api/v2/history/search
 - ✅ Combined with exact match works
 
 #### FR-017: Label Regex Filter (=~)
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support regex matching on label values
 - Use PostgreSQL regex operator: `labels->>'key' ~ 'pattern'`
@@ -657,7 +657,7 @@ POST /api/v2/history/search
 - ✅ Performance acceptable
 
 #### FR-018: Label Not Regex Filter (!~)
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support regex NOT matching on label values
 - Use PostgreSQL NOT regex: `NOT (labels->>'key' ~ 'pattern')`
@@ -675,7 +675,7 @@ POST /api/v2/history/search
 - ✅ Combined with other filters works
 
 #### FR-019: Label Exists Filter
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Check if label key exists (regardless of value)
 - Use JSONB key existence operator: `labels ? 'key'`
@@ -693,7 +693,7 @@ POST /api/v2/history/search
 - ✅ Uses GIN index for performance
 
 #### FR-020: Label Not Exists Filter
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Check if label key does NOT exist
 - Use JSONB NOT key existence: `NOT (labels ? 'key')`
@@ -711,7 +711,7 @@ POST /api/v2/history/search
 - ✅ Combined with other filters works
 
 #### FR-021: Full-Text Search Filter
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Search across alert_name, annotations.summary, annotations.description
 - Use PostgreSQL ILIKE for simple matching
@@ -731,7 +731,7 @@ POST /api/v2/history/search
 - ✅ Performance acceptable (<30ms p95)
 
 #### FR-022: Time Range Filter
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support from and to timestamps (RFC3339 format)
 - Filter on starts_at column
@@ -753,7 +753,7 @@ POST /api/v2/history/search
 - ✅ Invalid timestamp returns 400 error
 
 #### FR-023: Duration Filter
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Filter alerts by duration (ends_at - starts_at)
 - Support min and max duration
@@ -774,7 +774,7 @@ POST /api/v2/history/search
 - ✅ Invalid duration format returns 400 error
 
 #### FR-024: Generator URL Filter
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Support exact match on generator_url
 - Support LIKE pattern matching
@@ -792,7 +792,7 @@ POST /api/v2/history/search
 - ✅ Handles null values
 
 #### FR-025: State Filters (is_flapping, is_resolved)
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - is_flapping: filter alerts with high flapping score
 - is_resolved: filter alerts with ends_at != null
@@ -812,7 +812,7 @@ POST /api/v2/history/search
 ### 2.3 Pagination & Sorting (FR-026 to FR-030)
 
 #### FR-026: Offset-Based Pagination
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Support page and per_page parameters
 - page: min 1, default 1
@@ -825,7 +825,7 @@ POST /api/v2/history/search
 - ✅ Metadata calculated correctly
 
 #### FR-027: Cursor-Based Pagination
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Support cursor parameter for large datasets
 - Cursor contains last seen starts_at + fingerprint
@@ -842,7 +842,7 @@ POST /api/v2/history/search
 - ✅ Cursor opaque to clients (base64 encoded)
 
 #### FR-028: Multi-Field Sorting
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Requirements**:
 - Support multiple sort fields
 - Format: "field:order,field:order"
@@ -863,7 +863,7 @@ POST /api/v2/history/search
 - ✅ Invalid order returns 400 error
 
 #### FR-029: Field Projection
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Requirements**:
 - Support fields parameter (select specific fields)
 - Support exclude_fields parameter
@@ -883,7 +883,7 @@ POST /api/v2/history/search
 - ✅ Reduces response size
 
 #### FR-030: Result Limits
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Requirements**:
 - Max per_page: 1000 alerts
 - Max time range: 90 days
@@ -935,7 +935,7 @@ POST /api/v2/history/search
 - L2 cache (Redis): 85%+ hit rate
 - Combined: 90%+ hit rate
 
-**Measurement**: 
+**Measurement**:
 - Prometheus counter `alert_history_api_history_cache_hits_total`
 - Prometheus counter `alert_history_api_history_cache_misses_total`
 
@@ -1117,7 +1117,7 @@ POST /api/v2/history/search
 - Client error rate (4xx): <1%
 - Timeout rate: <0.1%
 
-**Measurement**: 
+**Measurement**:
 - Prometheus counter `alert_history_api_history_errors_total`
 - Prometheus counter `alert_history_api_history_requests_total`
 
@@ -2021,12 +2021,11 @@ CREATE INDEX idx_alerts_alert_name ON alerts (alert_name, starts_at DESC);
 
 ---
 
-**Document Status**: ✅ COMPLETE  
-**Next Action**: Proceed to Phase 2 (Git Branch Setup)  
-**Approval Required**: Product Owner, Technical Lead, Security Team  
+**Document Status**: ✅ COMPLETE
+**Next Action**: Proceed to Phase 2 (Git Branch Setup)
+**Approval Required**: Product Owner, Technical Lead, Security Team
 
 **Change Log**:
 - 2025-11-16 20:00 UTC: Initial draft (Requirements complete)
 
 **Confidential**: Internal Use Only
-

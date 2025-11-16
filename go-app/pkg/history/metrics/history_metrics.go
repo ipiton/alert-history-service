@@ -14,28 +14,28 @@ type HistoryMetrics struct {
 	HTTPResponseSize       *prometheus.HistogramVec // Response size
 	HTTPErrorsTotal        *prometheus.CounterVec   // HTTP errors
 	HTTPActiveRequests     prometheus.Gauge         // Active requests
-	
+
 	// Filter Metrics (4 metrics)
 	FilterOperationsTotal  *prometheus.CounterVec   // Filter operations
 	FilterDuration          *prometheus.HistogramVec // Filter processing duration
 	FilterErrorsTotal       *prometheus.CounterVec   // Filter errors
 	FiltersApplied          *prometheus.HistogramVec // Number of filters applied per request
-	
+
 	// Query Metrics (3 metrics)
 	QueryDuration           *prometheus.HistogramVec // Query execution duration
 	QueryResults            *prometheus.HistogramVec // Query result count
 	QueryErrorsTotal        *prometheus.CounterVec   // Query errors
-	
+
 	// Cache Metrics (already exist, but tracked here)
 	CacheHitsTotal          *prometheus.CounterVec   // Cache hits
 	CacheMissesTotal        *prometheus.CounterVec   // Cache misses
 	CacheSize               *prometheus.GaugeVec    // Cache size
-	
+
 	// Security Metrics (3 metrics)
 	SecurityEventsTotal     *prometheus.CounterVec   // Security events
 	AuthFailuresTotal       *prometheus.CounterVec   // Authentication failures
 	RateLimitViolationsTotal *prometheus.CounterVec // Rate limit violations
-	
+
 	// Performance Metrics (2 metrics)
 	P95Latency              prometheus.Gauge         // p95 latency
 	P99Latency              prometheus.Gauge         // p99 latency
@@ -101,7 +101,7 @@ func NewHistoryMetrics() *HistoryMetrics {
 				Help:      "Number of active HTTP requests",
 			},
 		),
-		
+
 		// Filter Metrics
 		FilterOperationsTotal: promauto.NewCounterVec(
 			prometheus.CounterOpts{
@@ -141,7 +141,7 @@ func NewHistoryMetrics() *HistoryMetrics {
 			},
 			[]string{"endpoint"},
 		),
-		
+
 		// Query Metrics (reuse from repository, but add here for completeness)
 		QueryDuration: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -172,7 +172,7 @@ func NewHistoryMetrics() *HistoryMetrics {
 			},
 			[]string{"operation", "error_type"},
 		),
-		
+
 		// Cache Metrics (reference existing)
 		CacheHitsTotal: promauto.NewCounterVec(
 			prometheus.CounterOpts{
@@ -201,7 +201,7 @@ func NewHistoryMetrics() *HistoryMetrics {
 			},
 			[]string{"cache_layer"},
 		),
-		
+
 		// Security Metrics
 		SecurityEventsTotal: promauto.NewCounterVec(
 			prometheus.CounterOpts{
@@ -230,7 +230,7 @@ func NewHistoryMetrics() *HistoryMetrics {
 			},
 			[]string{"limit_type", "endpoint"},
 		),
-		
+
 		// Performance Metrics
 		P95Latency: promauto.NewGauge(
 			prometheus.GaugeOpts{
@@ -262,4 +262,3 @@ func init() {
 func Default() *HistoryMetrics {
 	return defaultHistoryMetrics
 }
-

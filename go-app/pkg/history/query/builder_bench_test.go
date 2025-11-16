@@ -2,7 +2,7 @@ package query
 
 import (
 	"testing"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -37,4 +37,3 @@ func BenchmarkBuilder_SetLimitOffset(b *testing.B) {
 		qb.SetOffset(0)
 	}
 }
-

@@ -3,7 +3,7 @@ package security
 import (
 	"log/slog"
 	"net/http"
-	
+
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 )
 
@@ -18,7 +18,7 @@ func NewRequestSizeLimiter(maxSize int64, logger *slog.Logger) *RequestSizeLimit
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &RequestSizeLimiter{
 		maxSize: maxSize,
 		logger:  logger,
@@ -38,12 +38,11 @@ func (r *RequestSizeLimiter) Middleware() func(http.Handler) http.Handler {
 				apierrors.WriteError(w, apierrors.ValidationError("Request body too large"))
 				return
 			}
-			
+
 			// Limit request body reader
 			req.Body = http.MaxBytesReader(w, req.Body, r.maxSize)
-			
+
 			next.ServeHTTP(w, req)
 		})
 	}
 }
-

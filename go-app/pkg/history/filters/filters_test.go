@@ -248,7 +248,7 @@ func TestTimeRangeFilter(t *testing.T) {
 func TestFingerprintFilter(t *testing.T) {
 	// Generate valid 64-character hex fingerprint
 	validFingerprint := "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890"
-	
+
 	tests := []struct {
 		name    string
 		params  map[string]interface{}

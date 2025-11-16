@@ -1,8 +1,8 @@
 # ADR-002: Enhanced Filter System Design
 
-**Status**: Accepted  
-**Date**: 2025-11-16  
-**Deciders**: Architecture Team  
+**Status**: Accepted
+**Date**: 2025-11-16
+**Deciders**: Architecture Team
 **Context**: TN-63 History Endpoint
 
 ---
@@ -102,6 +102,5 @@ We will implement a **Registry-based Filter System** with:
 
 ---
 
-**Approved by**: Architecture Team  
+**Approved by**: Architecture Team
 **Date**: 2025-11-16
-

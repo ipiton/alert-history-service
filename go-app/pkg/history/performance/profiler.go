@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"time"
-	
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -18,7 +18,7 @@ type Profiler struct {
 	enableMemProfile bool
 	cpuProfileFile   string
 	memProfileFile   string
-	
+
 	// Metrics
 	goroutines     prometheus.Gauge
 	memoryAlloc    prometheus.Gauge
@@ -32,7 +32,7 @@ func NewProfiler(logger *slog.Logger) *Profiler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &Profiler{
 		logger:           logger,
 		enableCPUProfile: false, // Enable via config
@@ -75,7 +75,7 @@ func (p *Profiler) StartCPUProfile(ctx context.Context) error {
 	if !p.enableCPUProfile {
 		return nil
 	}
-	
+
 	// CPU profiling would be started here
 	// For now, just log
 	p.logger.Info("CPU profiling enabled")
@@ -87,7 +87,7 @@ func (p *Profiler) StopCPUProfile() error {
 	if !p.enableCPUProfile {
 		return nil
 	}
-	
+
 	pprof.StopCPUProfile()
 	p.logger.Info("CPU profiling stopped")
 	return nil
@@ -98,7 +98,7 @@ func (p *Profiler) WriteMemProfile() error {
 	if !p.enableMemProfile {
 		return nil
 	}
-	
+
 	// Memory profiling would be written here
 	// For now, just update metrics
 	p.UpdateMetrics()
@@ -109,7 +109,7 @@ func (p *Profiler) WriteMemProfile() error {
 func (p *Profiler) UpdateMetrics() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	p.goroutines.Set(float64(runtime.NumGoroutine()))
 	p.memoryAlloc.Set(float64(m.Alloc))
 	p.memorySys.Set(float64(m.Sys))
@@ -121,7 +121,7 @@ func (p *Profiler) UpdateMetrics() {
 func (p *Profiler) StartMetricsCollection(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -136,7 +136,7 @@ func (p *Profiler) StartMetricsCollection(ctx context.Context, interval time.Dur
 func (p *Profiler) GetRuntimeStats() map[string]interface{} {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	return map[string]interface{}{
 		"goroutines":      runtime.NumGoroutine(),
 		"memory_alloc_mb": float64(m.Alloc) / 1024 / 1024,
@@ -145,4 +145,3 @@ func (p *Profiler) GetRuntimeStats() map[string]interface{} {
 		"gc_pause_ms":     float64(m.PauseTotalNs) / 1000000,
 	}
 }
-

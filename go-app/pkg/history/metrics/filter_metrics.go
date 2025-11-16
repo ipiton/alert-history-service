@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/filters"
 )
 
@@ -17,7 +17,7 @@ func (m *HistoryMetrics) RecordFilterOperation(filterType filters.FilterType, du
 		}
 		m.FilterErrorsTotal.WithLabelValues(string(filterType), errorType).Inc()
 	}
-	
+
 	m.FilterOperationsTotal.WithLabelValues(string(filterType), status).Inc()
 	m.FilterDuration.WithLabelValues(string(filterType)).Observe(duration.Seconds())
 }
@@ -26,4 +26,3 @@ func (m *HistoryMetrics) RecordFilterOperation(filterType filters.FilterType, du
 func (m *HistoryMetrics) RecordFiltersApplied(endpoint string, count int) {
 	m.FiltersApplied.WithLabelValues(endpoint).Observe(float64(count))
 }
-

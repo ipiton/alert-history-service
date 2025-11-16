@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 	"testing"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -37,13 +37,13 @@ func TestManager_GetSet(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.L1Enabled = true
 	cfg.L2Enabled = false // Disable L2 for unit tests
-	
+
 	manager, err := NewManager(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 	defer manager.Close()
-	
+
 	ctx := context.Background()
 	key := "test-key"
 	value := &core.HistoryResponse{
@@ -51,13 +51,13 @@ func TestManager_GetSet(t *testing.T) {
 		Page: 1,
 		PerPage: 50,
 	}
-	
+
 	// Test Set
 	err = manager.Set(ctx, key, value)
 	if err != nil {
 		t.Errorf("Set() error = %v", err)
 	}
-	
+
 	// Test Get
 	got, found := manager.Get(ctx, key)
 	if !found {
@@ -72,20 +72,20 @@ func TestManager_GetSet(t *testing.T) {
 // Note: Skipped due to Prometheus metrics registration issue in tests
 func TestManager_CacheMiss(t *testing.T) {
 	t.Skip("Skipping due to Prometheus metrics registration in parallel tests")
-	
+
 	cfg := DefaultConfig()
 	cfg.L1Enabled = true
 	cfg.L2Enabled = false
-	
+
 	manager, err := NewManager(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 	defer manager.Close()
-	
+
 	ctx := context.Background()
 	key := "non-existent-key"
-	
+
 	_, found := manager.Get(ctx, key)
 	if found {
 		t.Error("Get() returned true for non-existent key, want false")
@@ -100,22 +100,22 @@ func TestManager_GenerateCacheKey(t *testing.T) {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 	defer manager.Close()
-	
+
 	req := &core.HistoryRequest{
 		Pagination: &core.Pagination{
 			Page: 1,
 			PerPage: 50,
 		},
 	}
-	
+
 	key1 := manager.GenerateCacheKey(req)
 	key2 := manager.GenerateCacheKey(req)
-	
+
 	// Same request should generate same key
 	if key1 != key2 {
 		t.Errorf("GenerateCacheKey() generated different keys: %v != %v", key1, key2)
 	}
-	
+
 	// Key should start with prefix
 	if len(key1) == 0 {
 		t.Error("GenerateCacheKey() returned empty key")
@@ -127,20 +127,20 @@ func TestManager_Invalidate(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.L1Enabled = true
 	cfg.L2Enabled = false
-	
+
 	manager, err := NewManager(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 	defer manager.Close()
-	
+
 	ctx := context.Background()
 	key := "test-key"
 	value := &core.HistoryResponse{Total: 10}
-	
+
 	manager.Set(ctx, key, value)
 	manager.Invalidate(ctx, key)
-	
+
 	_, found := manager.Get(ctx, key)
 	if found {
 		t.Error("Get() returned true after Invalidate, want false")
@@ -152,22 +152,21 @@ func TestManager_Stats(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.L1Enabled = true
 	cfg.L2Enabled = false
-	
+
 	manager, err := NewManager(cfg, nil)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 	defer manager.Close()
-	
+
 	stats := manager.Stats()
-	
+
 	if stats == nil {
 		t.Error("Stats() returned nil")
 	}
-	
+
 	// Should have L1 stats
 	if stats["l1"] == nil {
 		t.Error("Stats() missing L1 stats")
 	}
 }
-

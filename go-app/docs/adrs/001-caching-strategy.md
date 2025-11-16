@@ -1,8 +1,8 @@
 # ADR-001: 2-Tier Caching Strategy
 
-**Status**: Accepted  
-**Date**: 2025-11-16  
-**Deciders**: Architecture Team  
+**Status**: Accepted
+**Date**: 2025-11-16
+**Deciders**: Architecture Team
 **Context**: TN-63 History Endpoint
 
 ---
@@ -91,6 +91,5 @@ We will implement a **2-tier caching strategy**:
 
 ---
 
-**Approved by**: Architecture Team  
+**Approved by**: Architecture Team
 **Date**: 2025-11-16
-

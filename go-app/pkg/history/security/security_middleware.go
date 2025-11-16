@@ -38,23 +38,23 @@ func NewSecurityMiddleware(logger *slog.Logger, config SecurityConfig) *Security
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	mw := &SecurityMiddleware{
 		logger: logger,
 	}
-	
+
 	if config.EnableInputValidation {
 		mw.inputValidator = NewInputValidator(logger, config.ValidatorConfig)
 	}
-	
+
 	if config.EnableSizeLimiting {
 		mw.requestSizeLimit = NewRequestSizeLimiter(config.MaxRequestSize, logger)
 	}
-	
+
 	if config.EnableAuditLogging {
 		mw.auditLogger = NewAuditLogger(logger)
 	}
-	
+
 	return mw
 }
 
@@ -65,17 +65,17 @@ func (s *SecurityMiddleware) Apply(handler http.Handler) http.Handler {
 	if s.requestSizeLimit != nil {
 		handler = s.requestSizeLimit.Middleware()(handler)
 	}
-	
+
 	// 2. Input validation (after size check)
 	if s.inputValidator != nil {
 		handler = s.inputValidator.Middleware()(handler)
 	}
-	
+
 	// 3. Audit logging wrapper (logs all requests)
 	if s.auditLogger != nil {
 		handler = s.auditLoggingMiddleware(handler)
 	}
-	
+
 	return handler
 }
 
@@ -84,9 +84,9 @@ func (s *SecurityMiddleware) auditLoggingMiddleware(next http.Handler) http.Hand
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Create response writer wrapper to capture status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		next.ServeHTTP(rw, r)
-		
+
 		// Log security events based on status code
 		ctx := r.Context()
 		if rw.statusCode == http.StatusUnauthorized {
@@ -126,4 +126,3 @@ func (s *SecurityMiddleware) GetAuditLogger() *AuditLogger {
 func (s *SecurityMiddleware) GetInputValidator() *InputValidator {
 	return s.inputValidator
 }
-

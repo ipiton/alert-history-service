@@ -30,7 +30,7 @@ export default function () {
     per_page: 50,
     status: 'firing',
   };
-  
+
   const historyUrl = `${BASE_URL}/api/v2/history`;
   const historyRes = http.get(historyUrl, {
     params: historyParams,
@@ -39,7 +39,7 @@ export default function () {
       'X-Request-ID': `k6-${__VU}-${__ITER}`,
     },
   });
-  
+
   const historyCheck = check(historyRes, {
     'history status is 200': (r) => r.status === 200,
     'history has alerts': (r) => {
@@ -51,12 +51,12 @@ export default function () {
       }
     },
   });
-  
+
   errorRate.add(!historyCheck);
   historyLatency.add(historyRes.timings.duration);
-  
+
   sleep(1);
-  
+
   // Test 2: GET /api/v2/history/top - Top alerts
   const topRes = http.get(`${BASE_URL}/api/v2/history/top`, {
     params: { limit: 10 },
@@ -65,13 +65,13 @@ export default function () {
       'X-Request-ID': `k6-${__VU}-${__ITER}`,
     },
   });
-  
+
   check(topRes, {
     'top status is 200': (r) => r.status === 200,
   });
-  
+
   sleep(1);
-  
+
   // Test 3: GET /api/v2/history/recent - Recent alerts
   const recentRes = http.get(`${BASE_URL}/api/v2/history/recent`, {
     params: { limit: 20 },
@@ -80,11 +80,11 @@ export default function () {
       'X-Request-ID': `k6-${__VU}-${__ITER}`,
     },
   });
-  
+
   check(recentRes, {
     'recent status is 200': (r) => r.status === 200,
   });
-  
+
   sleep(1);
 }
 
@@ -107,4 +107,3 @@ function textSummary(data, options) {
   ============================================
   `;
 }
-

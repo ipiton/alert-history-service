@@ -127,4 +127,3 @@ REINDEX INDEX CONCURRENTLY idx_alerts_status_severity_time;
 2. Enable cache warming
 3. Increase cache size
 4. Analyze popular queries
-

@@ -103,4 +103,3 @@ ANALYZE alerts;
 -- DROP INDEX IF EXISTS idx_alerts_resolved;
 -- DROP INDEX IF EXISTS idx_alerts_fingerprint_timeline;
 -- DROP INDEX IF EXISTS idx_alerts_alert_name_pattern;
-

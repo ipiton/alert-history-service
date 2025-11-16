@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 )
 
@@ -20,7 +20,7 @@ func NewAuditLogger(logger *slog.Logger) *AuditLogger {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &AuditLogger{
 		logger: logger,
 	}
@@ -29,14 +29,14 @@ func NewAuditLogger(logger *slog.Logger) *AuditLogger {
 // LogSecurityEvent logs a security event
 func (a *AuditLogger) LogSecurityEvent(ctx context.Context, event SecurityEvent) {
 	requestID := middleware.GetRequestID(ctx)
-	
+
 	attrs := []interface{}{
 		"event_type", event.Type,
 		"timestamp", time.Now().UTC().Format(time.RFC3339),
 		"request_id", requestID,
 		"severity", event.Severity,
 	}
-	
+
 	if event.UserID != "" {
 		attrs = append(attrs, "user_id", event.UserID)
 	}
@@ -55,7 +55,7 @@ func (a *AuditLogger) LogSecurityEvent(ctx context.Context, event SecurityEvent)
 	if event.Details != nil {
 		attrs = append(attrs, "details", event.Details)
 	}
-	
+
 	switch event.Severity {
 	case "critical":
 		a.logger.Error("Security event", attrs...)
@@ -141,12 +141,12 @@ func (a *AuditLogger) extractIP(r *http.Request) string {
 			return strings.TrimSpace(ips[0])
 		}
 	}
-	
+
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri
 	}
-	
+
 	// Fallback to RemoteAddr
 	ip := r.RemoteAddr
 	if idx := strings.LastIndex(ip, ":"); idx != -1 {
@@ -166,4 +166,3 @@ type SecurityEvent struct {
 	Message    string
 	Details    map[string]interface{}
 }
-

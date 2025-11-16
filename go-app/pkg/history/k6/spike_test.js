@@ -31,11 +31,10 @@ export default function () {
       'X-Request-ID': `k6-spike-${__VU}-${__ITER}`,
     },
   });
-  
+
   check(res, {
     'status is 200': (r) => r.status === 200,
   });
-  
+
   sleep(0.1);
 }
-

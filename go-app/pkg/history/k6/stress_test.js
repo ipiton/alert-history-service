@@ -29,7 +29,7 @@ export default function () {
     '/api/v2/history/recent?limit=20',
     '/api/v2/history/stats',
   ];
-  
+
   const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
   const res = http.get(`${BASE_URL}${endpoint}`, {
     headers: {
@@ -37,11 +37,10 @@ export default function () {
       'X-Request-ID': `k6-stress-${__VU}-${__ITER}`,
     },
   });
-  
+
   check(res, {
     'status is 200 or 429': (r) => r.status === 200 || r.status === 429,
   });
-  
+
   sleep(0.5);
 }
-

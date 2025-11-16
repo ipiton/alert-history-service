@@ -1,6 +1,6 @@
 # Runbook: Low Cache Hit Rate
 
-**Severity**: P2 (Medium)  
+**Severity**: P2 (Medium)
 **Last Updated**: 2025-11-16
 
 ---
@@ -20,7 +20,7 @@
 
 ```promql
 # Cache hit rate
-rate(alert_history_api_history_cache_hits_total[5m]) / 
+rate(alert_history_api_history_cache_hits_total[5m]) /
 (rate(alert_history_api_history_cache_hits_total[5m]) + rate(alert_history_api_history_cache_misses_total[5m]))
 
 # Cache size
@@ -119,4 +119,3 @@ If cache hit rate remains low:
 
 - [High Latency](./high-latency.md)
 - [Database Performance Issues](./database-performance.md)
-

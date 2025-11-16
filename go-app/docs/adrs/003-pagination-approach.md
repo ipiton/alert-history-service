@@ -1,8 +1,8 @@
 # ADR-003: Pagination Strategy
 
-**Status**: Accepted  
-**Date**: 2025-11-16  
-**Deciders**: Architecture Team  
+**Status**: Accepted
+**Date**: 2025-11-16
+**Deciders**: Architecture Team
 **Context**: TN-63 History Endpoint
 
 ---
@@ -97,6 +97,5 @@ We will implement **offset-based pagination** with:
 
 ---
 
-**Approved by**: Architecture Team  
+**Approved by**: Architecture Team
 **Date**: 2025-11-16
-

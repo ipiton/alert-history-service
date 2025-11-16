@@ -112,9 +112,9 @@ func TestBuilder_SetLimitOffset(t *testing.T) {
 	qb := NewBuilder()
 	qb.SetLimit(50)
 	qb.SetOffset(50)
-	
+
 	sql, _ := qb.Build()
-	
+
 	if !contains(sql, "LIMIT") || !contains(sql, "OFFSET") {
 		t.Error("SetLimit/SetOffset() did not add LIMIT/OFFSET")
 	}
@@ -124,13 +124,13 @@ func TestBuilder_SetLimitOffset(t *testing.T) {
 func TestBuilder_AddOrderBy(t *testing.T) {
 	qb := NewBuilder()
 	qb.AddOrderBy("starts_at", core.SortOrderDesc)
-	
+
 	sql, _ := qb.Build()
-	
+
 	if !contains(sql, "ORDER BY") {
 		t.Error("AddOrderBy() did not add ORDER BY clause")
 	}
-	
+
 	if !contains(sql, "starts_at") {
 		t.Errorf("AddOrderBy() SQL = %v, want contains 'starts_at'", sql)
 	}

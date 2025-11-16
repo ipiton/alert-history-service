@@ -1,6 +1,6 @@
 # Runbook: High Latency in History API
 
-**Severity**: P1 (High)  
+**Severity**: P1 (High)
 **Last Updated**: 2025-11-16
 
 ---
@@ -26,7 +26,7 @@ histogram_quantile(0.95, rate(alert_history_api_history_http_request_duration_se
 histogram_quantile(0.99, rate(alert_history_api_history_http_request_duration_seconds_bucket[5m]))
 
 # Cache hit rate
-rate(alert_history_api_history_cache_hits_total[5m]) / 
+rate(alert_history_api_history_cache_hits_total[5m]) /
 (rate(alert_history_api_history_cache_hits_total[5m]) + rate(alert_history_api_history_cache_misses_total[5m]))
 
 # Query duration
@@ -168,4 +168,3 @@ If latency remains high after all steps:
 - [High Error Rate](./high-error-rate.md)
 - [Low Cache Hit Rate](./low-cache-hit-rate.md)
 - [Database Performance Issues](./database-performance.md)
-

@@ -12,20 +12,20 @@ func TestStack_Apply(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	
+
 	config := DefaultStackConfig(nil)
 	config.EnableAuth = false // Disable auth for unit tests
 	config.EnableAuthz = false
 	config.EnableRateLimit = false
-	
+
 	stack := NewStack(config)
 	wrapped := stack.Apply(handler)
-	
+
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
-	
+
 	wrapped.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Stack.Apply() status = %v, want %v", w.Code, http.StatusOK)
 	}
@@ -37,20 +37,20 @@ func TestStack_ApplyFunc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}
-	
+
 	config := DefaultStackConfig(nil)
 	config.EnableAuth = false
 	config.EnableAuthz = false
 	config.EnableRateLimit = false
-	
+
 	stack := NewStack(config)
 	wrapped := stack.ApplyFunc(handlerFunc)
-	
+
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
-	
+
 	wrapped.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Stack.ApplyFunc() status = %v, want %v", w.Code, http.StatusOK)
 	}
@@ -59,7 +59,7 @@ func TestStack_ApplyFunc(t *testing.T) {
 // TestStackConfig_Default tests default configuration
 func TestStackConfig_Default(t *testing.T) {
 	config := DefaultStackConfig(nil)
-	
+
 	if !config.EnableRecovery {
 		t.Error("DefaultStackConfig() EnableRecovery = false, want true")
 	}
@@ -73,4 +73,3 @@ func TestStackConfig_Default(t *testing.T) {
 		t.Error("DefaultStackConfig() EnableMetrics = false, want true")
 	}
 }
-

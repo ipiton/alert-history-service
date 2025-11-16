@@ -202,4 +202,3 @@ cp go-app/pkg/history/grafana/alerting_rules.yml /etc/prometheus/rules/alert_his
 - Review filter errors
 - Check authentication failures
 - Verify database connectivity
-

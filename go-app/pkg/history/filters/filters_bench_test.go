@@ -2,7 +2,7 @@ package filters
 
 import (
 	"testing"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -11,7 +11,7 @@ func BenchmarkStatusFilter_ApplyToQuery(b *testing.B) {
 	filter, _ := NewStatusFilter(map[string]interface{}{
 		"values": []string{"firing"},
 	})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		qb := query.NewBuilder()
@@ -24,7 +24,7 @@ func BenchmarkSeverityFilter_ApplyToQuery(b *testing.B) {
 	filter, _ := NewSeverityFilter(map[string]interface{}{
 		"values": []string{"critical", "warning"},
 	})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		qb := query.NewBuilder()
@@ -38,7 +38,7 @@ func BenchmarkFilterRegistry_Create(b *testing.B) {
 	params := map[string]interface{}{
 		"values": []string{"firing"},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = registry.Create(FilterTypeStatus, params)
@@ -53,10 +53,9 @@ func BenchmarkFilterRegistry_CreateFromQueryParams(b *testing.B) {
 		"severity": {"critical"},
 		"namespace": {"production"},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = registry.CreateFromQueryParams(queryParams)
 	}
 }
-

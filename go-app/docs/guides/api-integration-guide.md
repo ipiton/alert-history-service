@@ -1,6 +1,6 @@
 # Alert History API Integration Guide
 
-**Version**: 2.0.0  
+**Version**: 2.0.0
 **Last Updated**: 2025-11-16
 
 ---
@@ -359,14 +359,14 @@ class AlertHistoryClient:
     def __init__(self, base_url, api_key):
         self.base_url = base_url
         self.headers = {"X-API-Key": api_key}
-    
+
     def get_history(self, status=None, severity=None, page=1, per_page=50):
         params = {"page": page, "per_page": per_page}
         if status:
             params["status"] = status
         if severity:
             params["severity"] = severity
-        
+
         response = requests.get(
             f"{self.base_url}/api/v2/history",
             headers=self.headers,
@@ -374,7 +374,7 @@ class AlertHistoryClient:
         )
         response.raise_for_status()
         return response.json()
-    
+
     def get_recent_alerts(self, limit=50):
         response = requests.get(
             f"{self.base_url}/api/v2/history/recent",
@@ -428,21 +428,21 @@ func (c *AlertHistoryClient) GetHistory(status, severity string, page, perPage i
         q.Set("severity", severity)
     }
     u.RawQuery = q.Encode()
-    
+
     req, _ := http.NewRequest("GET", u.String(), nil)
     req.Header.Set("X-API-Key", c.APIKey)
-    
+
     resp, err := http.DefaultClient.Do(req)
     if err != nil {
         return nil, err
     }
     defer resp.Body.Close()
-    
+
     var result HistoryResponse
     if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
         return nil, err
     }
-    
+
     return &result, nil
 }
 
@@ -490,4 +490,3 @@ fmt.Printf("Found %d alerts\n", alerts.Total)
 - [OpenAPI Specification](../api/history/openapi.yaml)
 - [Architecture Decision Records](../adrs/)
 - [Runbooks](../runbooks/)
-

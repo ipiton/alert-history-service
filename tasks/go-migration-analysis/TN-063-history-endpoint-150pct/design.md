@@ -1,10 +1,10 @@
 # TN-063: GET /history - Design Document
 
-**Project**: Alert History Endpoint with Advanced Filters  
-**Version**: 1.0  
-**Date**: 2025-11-16  
-**Status**: Draft  
-**Target Quality**: 150% Enterprise Grade (A++)  
+**Project**: Alert History Endpoint with Advanced Filters
+**Version**: 1.0
+**Date**: 2025-11-16
+**Status**: Draft
+**Target Quality**: 150% Enterprise Grade (A++)
 
 ---
 
@@ -193,7 +193,7 @@ func NewFilterRegistry() *FilterRegistry {
 	registry := &FilterRegistry{
 		filters: make(map[FilterType]FilterFactory),
 	}
-	
+
 	// Register all filter types
 	registry.Register(FilterTypeStatus, NewStatusFilter)
 	registry.Register(FilterTypeSeverity, NewSeverityFilter)
@@ -205,7 +205,7 @@ func NewFilterRegistry() *FilterRegistry {
 	registry.Register(FilterTypeDuration, NewDurationFilter)
 	registry.Register(FilterTypeSearch, NewSearchFilter)
 	// ... register more filters
-	
+
 	return registry
 }
 
@@ -226,7 +226,7 @@ func (r *FilterRegistry) Create(typ FilterType, params map[string]interface{}) (
 // BuildFilters builds all filters from query parameters
 func (r *FilterRegistry) BuildFilters(queryParams map[string][]string) ([]Filter, error) {
 	var filters []Filter
-	
+
 	// Parse status filter
 	if values, ok := queryParams["status"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeStatus, map[string]interface{}{
@@ -237,7 +237,7 @@ func (r *FilterRegistry) BuildFilters(queryParams map[string][]string) ([]Filter
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse severity filter
 	if values, ok := queryParams["severity"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeSeverity, map[string]interface{}{
@@ -248,9 +248,9 @@ func (r *FilterRegistry) BuildFilters(queryParams map[string][]string) ([]Filter
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// ... parse more filters
-	
+
 	return filters, nil
 }
 ```
@@ -276,11 +276,11 @@ func NewStatusFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid status filter params")
 	}
-	
+
 	filter := &StatusFilter{
 		values: make([]core.AlertStatus, 0, len(values)),
 	}
-	
+
 	for _, v := range values {
 		status := core.AlertStatus(v)
 		if status != core.StatusFiring && status != core.StatusResolved {
@@ -288,7 +288,7 @@ func NewStatusFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.values = append(filter.values, status)
 	}
-	
+
 	return filter, nil
 }
 
@@ -358,17 +358,17 @@ func NewLabelsFilter(params map[string]interface{}) (Filter, error) {
 		exists:    []string{},
 		notExists: []string{},
 	}
-	
+
 	// Parse exact match labels
 	if exact, ok := params["exact"].(map[string]string); ok {
 		filter.exact = exact
 	}
-	
+
 	// Parse not equal labels
 	if notEqual, ok := params["not_equal"].(map[string]string); ok {
 		filter.notEqual = notEqual
 	}
-	
+
 	// Parse regex labels
 	if regex, ok := params["regex"].(map[string]string); ok {
 		// Validate regex patterns
@@ -379,7 +379,7 @@ func NewLabelsFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.regex = regex
 	}
-	
+
 	// Parse not regex labels
 	if notRegex, ok := params["not_regex"].(map[string]string); ok {
 		// Validate regex patterns
@@ -390,17 +390,17 @@ func NewLabelsFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.notRegex = notRegex
 	}
-	
+
 	// Parse exists labels
 	if exists, ok := params["exists"].([]string); ok {
 		filter.exists = exists
 	}
-	
+
 	// Parse not exists labels
 	if notExists, ok := params["not_exists"].([]string); ok {
 		filter.notExists = notExists
 	}
-	
+
 	return filter, nil
 }
 
@@ -413,7 +413,7 @@ func (f *LabelsFilter) Validate() error {
 	if totalLabels > 20 {
 		return fmt.Errorf("too many label filters: max 20, got %d", totalLabels)
 	}
-	
+
 	for key, value := range f.exact {
 		if len(key) > 255 {
 			return fmt.Errorf("label key too long: max 255 chars")
@@ -422,7 +422,7 @@ func (f *LabelsFilter) Validate() error {
 			return fmt.Errorf("label value too long: max 255 chars")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -431,38 +431,38 @@ func (f *LabelsFilter) ApplyToQuery(qb *QueryBuilder) error {
 	for key, value := range f.exact {
 		qb.AddWhere("labels @> jsonb_build_object(?, ?)", key, value)
 	}
-	
+
 	// Apply not equal filters
 	for key, value := range f.notEqual {
 		qb.AddWhere("NOT (labels @> jsonb_build_object(?, ?))", key, value)
 	}
-	
+
 	// Apply regex filters
 	for key, pattern := range f.regex {
 		qb.AddWhere("labels->>? ~ ?", key, pattern)
 	}
-	
+
 	// Apply not regex filters
 	for key, pattern := range f.notRegex {
 		qb.AddWhere("NOT (labels->>? ~ ?)", key, pattern)
 	}
-	
+
 	// Apply exists filters
 	for _, key := range f.exists {
 		qb.AddWhere("labels ? ?", key)
 	}
-	
+
 	// Apply not exists filters
 	for _, key := range f.notExists {
 		qb.AddWhere("NOT (labels ? ?)", key)
 	}
-	
+
 	return nil
 }
 
 func (f *LabelsFilter) CacheKey() string {
 	var parts []string
-	
+
 	// Sort keys for consistent cache keys
 	if len(f.exact) > 0 {
 		keys := make([]string, 0, len(f.exact))
@@ -474,9 +474,9 @@ func (f *LabelsFilter) CacheKey() string {
 			parts = append(parts, fmt.Sprintf("l=%s:%s", k, f.exact[k]))
 		}
 	}
-	
+
 	// ... similar for other operators
-	
+
 	return strings.Join(parts, "&")
 }
 ```
@@ -503,7 +503,7 @@ type QueryBuilder struct {
 	orderBy      []string
 	limit        int
 	offset       int
-	
+
 	// Performance optimization flags
 	useGINIndex   bool  // Use GIN index for JSONB queries
 	usePartialIdx bool  // Use partial index for common queries
@@ -528,7 +528,7 @@ func (qb *QueryBuilder) AddWhere(clause string, args ...interface{}) {
 		qb.argCounter++
 		clause = strings.Replace(clause, "?", fmt.Sprintf("$%d", qb.argCounter), 1)
 	}
-	
+
 	qb.whereClauses = append(qb.whereClauses, clause)
 	qb.args = append(qb.args, args...)
 }
@@ -561,36 +561,36 @@ func (qb *QueryBuilder) ApplyFilters(filters []filters.Filter) error {
 // Build builds the final SQL query
 func (qb *QueryBuilder) Build() (string, []interface{}) {
 	var parts []string
-	
+
 	// SELECT clause
 	parts = append(parts, qb.baseQuery)
-	
+
 	// WHERE clause
 	if len(qb.whereClauses) > 1 {  // Skip "1=1" if there are no other clauses
 		parts = append(parts, "WHERE "+strings.Join(qb.whereClauses, " AND "))
 	}
-	
+
 	// ORDER BY clause
 	if len(qb.orderBy) > 0 {
 		parts = append(parts, "ORDER BY "+strings.Join(qb.orderBy, ", "))
 	} else {
 		parts = append(parts, "ORDER BY starts_at DESC")  // Default sort
 	}
-	
+
 	// LIMIT clause
 	if qb.limit > 0 {
 		qb.argCounter++
 		parts = append(parts, fmt.Sprintf("LIMIT $%d", qb.argCounter))
 		qb.args = append(qb.args, qb.limit)
 	}
-	
+
 	// OFFSET clause
 	if qb.offset > 0 {
 		qb.argCounter++
 		parts = append(parts, fmt.Sprintf("OFFSET $%d", qb.argCounter))
 		qb.args = append(qb.args, qb.offset)
 	}
-	
+
 	query := strings.Join(parts, " ")
 	return query, qb.args
 }
@@ -598,15 +598,15 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 // BuildCount builds a COUNT query
 func (qb *QueryBuilder) BuildCount() (string, []interface{}) {
 	var parts []string
-	
+
 	// SELECT COUNT(*) clause
 	parts = append(parts, "SELECT COUNT(*) FROM alerts")
-	
+
 	// WHERE clause (reuse from main query)
 	if len(qb.whereClauses) > 1 {
 		parts = append(parts, "WHERE "+strings.Join(qb.whereClauses, " AND "))
 	}
-	
+
 	query := strings.Join(parts, " ")
 	return query, qb.args
 }
@@ -614,14 +614,14 @@ func (qb *QueryBuilder) BuildCount() (string, []interface{}) {
 // OptimizationHints returns query optimization hints
 func (qb *QueryBuilder) OptimizationHints() []string {
 	var hints []string
-	
+
 	if qb.useGINIndex {
 		hints = append(hints, "Use GIN index for JSONB queries")
 	}
 	if qb.usePartialIdx {
 		hints = append(hints, "Use partial index for status=firing")
 	}
-	
+
 	return hints
 }
 ```
@@ -641,7 +641,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	
+
 	"github.com/dgraph-io/ristretto"
 	"github.com/redis/go-redis/v9"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -692,7 +692,7 @@ func NewCacheManager(cfg *CacheConfig, logger *slog.Logger) (*CacheManager, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to create L1 cache: %w", err)
 	}
-	
+
 	// Initialize L2 cache (Redis)
 	l2Cache := redis.NewClient(&redis.Options{
 		Addr:         cfg.RedisAddr,
@@ -705,14 +705,14 @@ func NewCacheManager(cfg *CacheConfig, logger *slog.Logger) (*CacheManager, erro
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,
 	})
-	
+
 	// Test Redis connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := l2Cache.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
-	
+
 	return &CacheManager{
 		l1Cache:     l1Cache,
 		l2Cache:     l2Cache,
@@ -727,16 +727,16 @@ func NewCacheManager(cfg *CacheConfig, logger *slog.Logger) (*CacheManager, erro
 // Get retrieves a value from cache (L1 first, then L2)
 func (cm *CacheManager) Get(ctx context.Context, key string) (*core.HistoryResponse, bool) {
 	start := time.Now()
-	
+
 	// Try L1 cache first
 	if value, found := cm.l1Cache.Get(key); found {
 		cm.metrics.Hits.WithLabelValues("l1").Inc()
 		cm.metrics.Latency.WithLabelValues("l1", "hit").Observe(time.Since(start).Seconds())
 		return value.(*core.HistoryResponse), true
 	}
-	
+
 	cm.metrics.Misses.WithLabelValues("l1").Inc()
-	
+
 	// Try L2 cache (Redis)
 	l2Start := time.Now()
 	data, err := cm.l2Cache.Get(ctx, key).Bytes()
@@ -750,7 +750,7 @@ func (cm *CacheManager) Get(ctx context.Context, key string) (*core.HistoryRespo
 		cm.logger.Error("L2 cache get error", "error", err, "key", key)
 		return nil, false
 	}
-	
+
 	// Decompress if needed
 	if cm.compression {
 		data, err = cm.decompress(data)
@@ -760,7 +760,7 @@ func (cm *CacheManager) Get(ctx context.Context, key string) (*core.HistoryRespo
 			return nil, false
 		}
 	}
-	
+
 	// Deserialize
 	var response core.HistoryResponse
 	if err := json.Unmarshal(data, &response); err != nil {
@@ -768,31 +768,31 @@ func (cm *CacheManager) Get(ctx context.Context, key string) (*core.HistoryRespo
 		cm.logger.Error("Failed to unmarshal L2 cache data", "error", err)
 		return nil, false
 	}
-	
+
 	cm.metrics.Hits.WithLabelValues("l2").Inc()
 	cm.metrics.Latency.WithLabelValues("l2", "hit").Observe(time.Since(l2Start).Seconds())
-	
+
 	// Populate L1 cache for next time
 	cm.l1Cache.SetWithTTL(key, &response, 1, cm.l1TTL)
-	
+
 	return &response, true
 }
 
 // Set stores a value in both L1 and L2 caches
 func (cm *CacheManager) Set(ctx context.Context, key string, value *core.HistoryResponse) error {
 	start := time.Now()
-	
+
 	// Store in L1 cache (in-memory)
 	cm.l1Cache.SetWithTTL(key, value, 1, cm.l1TTL)
 	cm.metrics.Latency.WithLabelValues("l1", "set").Observe(time.Since(start).Seconds())
-	
+
 	// Serialize for L2 cache
 	data, err := json.Marshal(value)
 	if err != nil {
 		cm.metrics.Errors.WithLabelValues("l2", "marshal").Inc()
 		return fmt.Errorf("failed to marshal cache value: %w", err)
 	}
-	
+
 	// Compress if enabled
 	if cm.compression {
 		data, err = cm.compress(data)
@@ -801,7 +801,7 @@ func (cm *CacheManager) Set(ctx context.Context, key string, value *core.History
 			return fmt.Errorf("failed to compress cache value: %w", err)
 		}
 	}
-	
+
 	// Store in L2 cache (Redis)
 	l2Start := time.Now()
 	if err := cm.l2Cache.Set(ctx, key, data, cm.l2TTL).Err(); err != nil {
@@ -809,7 +809,7 @@ func (cm *CacheManager) Set(ctx context.Context, key string, value *core.History
 		return fmt.Errorf("failed to set L2 cache: %w", err)
 	}
 	cm.metrics.Latency.WithLabelValues("l2", "set").Observe(time.Since(l2Start).Seconds())
-	
+
 	return nil
 }
 
@@ -817,13 +817,13 @@ func (cm *CacheManager) Set(ctx context.Context, key string, value *core.History
 func (cm *CacheManager) Invalidate(ctx context.Context, key string) error {
 	// Remove from L1
 	cm.l1Cache.Del(key)
-	
+
 	// Remove from L2
 	if err := cm.l2Cache.Del(ctx, key).Err(); err != nil && err != redis.Nil {
 		cm.metrics.Errors.WithLabelValues("l2", "del").Inc()
 		return fmt.Errorf("failed to invalidate L2 cache: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -833,14 +833,14 @@ func (cm *CacheManager) InvalidatePattern(ctx context.Context, pattern string) e
 	// Scan for matching keys
 	var cursor uint64
 	var deletedCount int
-	
+
 	for {
 		keys, newCursor, err := cm.l2Cache.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
 			cm.metrics.Errors.WithLabelValues("l2", "scan").Inc()
 			return fmt.Errorf("failed to scan keys: %w", err)
 		}
-		
+
 		// Delete matching keys
 		if len(keys) > 0 {
 			if err := cm.l2Cache.Del(ctx, keys...).Err(); err != nil {
@@ -849,13 +849,13 @@ func (cm *CacheManager) InvalidatePattern(ctx context.Context, pattern string) e
 			}
 			deletedCount += len(keys)
 		}
-		
+
 		cursor = newCursor
 		if cursor == 0 {
 			break
 		}
 	}
-	
+
 	cm.logger.Info("Invalidated cache pattern", "pattern", pattern, "deleted_count", deletedCount)
 	return nil
 }
@@ -868,11 +868,11 @@ func (cm *CacheManager) GenerateCacheKey(req *core.HistoryRequest) string {
 		cm.logger.Error("Failed to marshal request for cache key", "error", err)
 		return ""
 	}
-	
+
 	// Generate SHA-256 hash
 	hash := sha256.Sum256(data)
 	hashStr := base64.URLEncoding.EncodeToString(hash[:])
-	
+
 	// Format: "history:v2:{hash}"
 	return fmt.Sprintf("history:v2:%s", hashStr)
 }
@@ -881,14 +881,14 @@ func (cm *CacheManager) GenerateCacheKey(req *core.HistoryRequest) string {
 func (cm *CacheManager) compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
-	
+
 	if _, err := gzipWriter.Write(data); err != nil {
 		return nil, err
 	}
 	if err := gzipWriter.Close(); err != nil {
 		return nil, err
 	}
-	
+
 	return buf.Bytes(), nil
 }
 
@@ -900,14 +900,14 @@ func (cm *CacheManager) decompress(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer gzipReader.Close()
-	
+
 	return io.ReadAll(gzipReader)
 }
 
 // Stats returns cache statistics
 func (cm *CacheManager) Stats() map[string]interface{} {
 	l1Metrics := cm.l1Cache.Metrics
-	
+
 	return map[string]interface{}{
 		"l1": map[string]interface{}{
 			"hits":      l1Metrics.Hits(),
@@ -937,7 +937,7 @@ import (
 	"context"
 	"log/slog"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -967,10 +967,10 @@ func NewCacheWarmer(
 func (cw *CacheWarmer) Start(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	// Warm cache immediately on start
 	cw.warmCache(ctx)
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -992,7 +992,7 @@ func (cw *CacheWarmer) Stop() {
 func (cw *CacheWarmer) warmCache(ctx context.Context) {
 	cw.logger.Info("Starting cache warming")
 	start := time.Now()
-	
+
 	// Define popular query patterns
 	popularQueries := []struct {
 		name string
@@ -1023,7 +1023,7 @@ func (cw *CacheWarmer) warmCache(ctx context.Context) {
 		},
 		// Add more popular query patterns...
 	}
-	
+
 	// Warm cache for each popular query
 	warmed := 0
 	for _, pq := range popularQueries {
@@ -1032,7 +1032,7 @@ func (cw *CacheWarmer) warmCache(ctx context.Context) {
 		if _, found := cw.cacheManager.Get(ctx, cacheKey); found {
 			continue  // Already cached
 		}
-		
+
 		// Query from database
 		response, err := cw.repository.GetHistory(ctx, pq.req)
 		if err != nil {
@@ -1041,7 +1041,7 @@ func (cw *CacheWarmer) warmCache(ctx context.Context) {
 				"error", err)
 			continue
 		}
-		
+
 		// Store in cache
 		if err := cw.cacheManager.Set(ctx, cacheKey, response); err != nil {
 			cw.logger.Warn("Failed to cache warmed query",
@@ -1049,10 +1049,10 @@ func (cw *CacheWarmer) warmCache(ctx context.Context) {
 				"error", err)
 			continue
 		}
-		
+
 		warmed++
 	}
-	
+
 	duration := time.Since(start)
 	cw.logger.Info("Cache warming complete",
 		"warmed_queries", warmed,
@@ -1068,9 +1068,8 @@ func ptrString(s string) *string {
 
 ## Continued in next response due to length...
 
-**Document Status**: 🔄 IN PROGRESS (50% Complete)  
-**Next Section**: Middleware Stack Design, Security Design, Performance Optimization  
-**Estimated Completion**: 2 more responses  
+**Document Status**: 🔄 IN PROGRESS (50% Complete)
+**Next Section**: Middleware Stack Design, Security Design, Performance Optimization
+**Estimated Completion**: 2 more responses
 
 Shall I continue with the remaining sections?
-

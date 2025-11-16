@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/pkg/history/cache"
 	"github.com/vitaliisemenov/alert-history/pkg/history/filters"
@@ -13,7 +13,7 @@ import (
 // TestIntegration_FilterAndCache tests filter + cache integration
 func TestIntegration_FilterAndCache(t *testing.T) {
 	t.Skip("Integration test - requires database connection")
-	
+
 	// This test would:
 	// 1. Create repository with real DB connection
 	// 2. Create filter registry
@@ -26,23 +26,23 @@ func TestIntegration_FilterAndCache(t *testing.T) {
 // TestIntegration_FilterRegistryAndQueryBuilder tests filter registry + query builder integration
 func TestIntegration_FilterRegistryAndQueryBuilder(t *testing.T) {
 	registry := filters.NewRegistry(nil)
-	
+
 	// Create filters from query params
 	queryParams := map[string][]string{
 		"status":   {"firing"},
 		"severity": {"critical"},
 		"namespace": {"production"},
 	}
-	
+
 	filters, err := registry.CreateFromQueryParams(queryParams)
 	if err != nil {
 		t.Fatalf("CreateFromQueryParams() error = %v", err)
 	}
-	
+
 	if len(filters) != 3 {
 		t.Errorf("CreateFromQueryParams() count = %v, want 3", len(filters))
 	}
-	
+
 	// Verify filters can be applied to query builder
 	for _, filter := range filters {
 		if err := filter.Validate(); err != nil {
@@ -54,7 +54,7 @@ func TestIntegration_FilterRegistryAndQueryBuilder(t *testing.T) {
 // TestIntegration_HandlerWithCache tests handler + cache integration
 func TestIntegration_HandlerWithCache(t *testing.T) {
 	t.Skip("Integration test - requires HTTP server and database")
-	
+
 	// This test would:
 	// 1. Start HTTP server with handlers
 	// 2. Make GET /api/v2/history request
@@ -67,7 +67,7 @@ func TestIntegration_HandlerWithCache(t *testing.T) {
 // TestIntegration_MiddlewareStack tests middleware stack integration
 func TestIntegration_MiddlewareStack(t *testing.T) {
 	t.Skip("Integration test - requires HTTP server")
-	
+
 	// This test would:
 	// 1. Create middleware stack
 	// 2. Apply to handler
@@ -81,7 +81,7 @@ func TestIntegration_MiddlewareStack(t *testing.T) {
 // TestIntegration_EndToEnd tests end-to-end flow
 func TestIntegration_EndToEnd(t *testing.T) {
 	t.Skip("Integration test - requires full stack")
-	
+
 	// This test would:
 	// 1. Setup database with test data
 	// 2. Start HTTP server
@@ -96,7 +96,7 @@ func TestIntegration_EndToEnd(t *testing.T) {
 // TestIntegration_ErrorHandling tests error handling across layers
 func TestIntegration_ErrorHandling(t *testing.T) {
 	t.Skip("Integration test - requires database")
-	
+
 	// This test would:
 	// 1. Test invalid filter parameters
 	// 2. Test database connection errors
@@ -108,7 +108,7 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 // TestIntegration_Performance tests performance characteristics
 func TestIntegration_Performance(t *testing.T) {
 	t.Skip("Performance test - requires database with data")
-	
+
 	// This test would:
 	// 1. Insert large dataset (10K+ alerts)
 	// 2. Measure query performance
@@ -120,7 +120,7 @@ func TestIntegration_Performance(t *testing.T) {
 // TestIntegration_ConcurrentRequests tests concurrent request handling
 func TestIntegration_ConcurrentRequests(t *testing.T) {
 	t.Skip("Concurrency test - requires HTTP server")
-	
+
 	// This test would:
 	// 1. Start HTTP server
 	// 2. Make 100 concurrent requests
@@ -132,7 +132,7 @@ func TestIntegration_ConcurrentRequests(t *testing.T) {
 // TestIntegration_FilterCombinations tests various filter combinations
 func TestIntegration_FilterCombinations(t *testing.T) {
 	registry := filters.NewRegistry(nil)
-	
+
 	testCases := []struct {
 		name        string
 		queryParams map[string][]string
@@ -156,7 +156,7 @@ func TestIntegration_FilterCombinations(t *testing.T) {
 			wantCount: 3,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			filters, err := registry.CreateFromQueryParams(tc.queryParams)
@@ -170,4 +170,3 @@ func TestIntegration_FilterCombinations(t *testing.T) {
 		})
 	}
 }
-

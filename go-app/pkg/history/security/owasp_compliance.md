@@ -191,4 +191,3 @@ This document details OWASP Top 10 (2021) compliance for the GET /history endpoi
 - [x] A10: SSRF - ✅ COMPLIANT
 
 **Overall Status**: ✅ **FULLY COMPLIANT**
-

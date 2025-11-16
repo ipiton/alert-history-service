@@ -3,14 +3,14 @@ info:
   title: Alert History API
   description: |
     Comprehensive API for querying alert history with advanced filtering, pagination, and analytics.
-    
+
     ## Features
     - 18+ filter types (status, severity, namespace, labels, time range, etc.)
     - Pagination and sorting
     - 2-tier caching (L1 in-memory + L2 Redis)
     - Performance optimized (p95 < 10ms)
     - OWASP Top 10 compliant
-    
+
     ## Authentication
     All endpoints require API key authentication via `X-API-Key` header.
   version: 2.0.0
@@ -41,7 +41,7 @@ paths:
       summary: Get alert history
       description: |
         Retrieve paginated alert history with advanced filtering and sorting.
-        
+
         Supports 18+ filter types including status, severity, namespace, labels, time range, and more.
       operationId: getHistory
       parameters:
@@ -698,4 +698,3 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
