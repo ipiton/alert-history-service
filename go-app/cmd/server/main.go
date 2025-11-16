@@ -903,6 +903,15 @@ func main() {
 				"GET /history/stats - Aggregated statistics",
 				"GET /history/recent - Recent alerts",
 			})
+
+		// TN-064: Register comprehensive report endpoint
+		mux.HandleFunc("/api/v2/report", historyHandlerV2.HandleReport)
+		mux.HandleFunc("/report", historyHandlerV2.HandleReport) // Legacy alias
+		slog.Info("✅ Report endpoint registered",
+			"primary", "GET /api/v2/report",
+			"alias", "GET /report",
+			"description", "Comprehensive analytics report (TN-064)",
+		)
 	} else {
 		slog.Warn("⚠️ Analytics endpoints NOT available (database not connected or MOCK_MODE)")
 	}
