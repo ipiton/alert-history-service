@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	
-	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 )
 
 // MetricsMiddleware wraps HTTP handler with metrics collection
