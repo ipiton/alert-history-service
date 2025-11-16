@@ -226,3 +226,8 @@ func (mm *MetricsManager) GetPath() string {
 func (mm *MetricsManager) Enrichment() *EnrichmentMetrics {
 	return mm.enrichmentMetrics
 }
+
+// Metrics returns the HTTP metrics if enabled, otherwise returns nil.
+func (mm *MetricsManager) Metrics() *HTTPMetrics {
+	return mm.metrics
+}
