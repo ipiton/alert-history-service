@@ -23,7 +23,7 @@ groups:
 
       - alert: ProxyWebhookHighLatency
         expr: |
-          histogram_quantile(0.95, 
+          histogram_quantile(0.95,
             rate(alert_history_proxy_http_request_duration_seconds_bucket[5m])
           ) > 1.0
         for: 5m
@@ -83,8 +83,8 @@ groups:
       - alert: ProxyWebhookLowSuccessRate
         expr: |
           (
-            rate(alert_history_proxy_alerts_processed_total{result="success"}[5m]) 
-            / 
+            rate(alert_history_proxy_alerts_processed_total{result="success"}[5m])
+            /
             rate(alert_history_proxy_alerts_processed_total[5m])
           ) < 0.95
         for: 15m
@@ -119,4 +119,3 @@ groups:
             Current concurrent requests: {{ $value }} (threshold: 50)
             Monitor for potential resource constraints. Consider scaling if sustained.
           dashboard_url: https://grafana.company.com/d/proxy-webhook
-

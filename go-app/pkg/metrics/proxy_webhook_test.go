@@ -332,4 +332,3 @@ func BenchmarkRecordClassificationDuration(b *testing.B) {
 		metrics.RecordClassificationDuration(0.5, false)
 	}
 }
-

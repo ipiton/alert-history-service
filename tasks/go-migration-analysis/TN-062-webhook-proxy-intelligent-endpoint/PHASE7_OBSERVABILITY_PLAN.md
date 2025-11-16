@@ -1,7 +1,7 @@
 # TN-062: Phase 7 - Observability Enhancement Plan
 
-**Date**: 2025-11-16  
-**Status**: 🔄 IN PROGRESS  
+**Date**: 2025-11-16
+**Status**: 🔄 IN PROGRESS
 **Target**: 18+ Prometheus Metrics + Grafana Dashboard
 
 ---
@@ -179,15 +179,15 @@ Examples:
 1. **Request Rate** (Graph)
    - Metric: `rate(alert_history_proxy_http_requests_total[5m])`
    - Shows: Requests per second
-   
+
 2. **Error Rate** (Graph)
    - Metric: `rate(alert_history_proxy_http_errors_total[5m])`
    - Shows: Errors per second
-   
+
 3. **P95 Latency** (Graph)
    - Metric: `histogram_quantile(0.95, rate(alert_history_proxy_http_request_duration_seconds_bucket[5m]))`
    - Shows: 95th percentile latency
-   
+
 4. **Active Requests** (Gauge)
    - Metric: `alert_history_proxy_http_requests_in_flight`
    - Shows: Current concurrency
@@ -196,11 +196,11 @@ Examples:
 1. **Alerts Processed** (Graph)
    - Metric: `rate(alert_history_proxy_alerts_processed_total[5m])`
    - Shows: Alerts per second by result
-   
+
 2. **Pipeline Durations** (Heatmap)
    - Metrics: Classification, Filtering, Publishing
    - Shows: Duration distribution
-   
+
 3. **Success Rate** (Stat)
    - Metric: `rate(alert_history_proxy_alerts_processed_total{result="success"}[5m]) / rate(alert_history_proxy_alerts_processed_total[5m])`
    - Shows: % successful
@@ -209,11 +209,11 @@ Examples:
 1. **Error Types** (Pie chart)
    - Metric: `alert_history_proxy_http_errors_total`
    - Shows: Error distribution
-   
+
 2. **Classification Errors** (Graph)
    - Metric: `rate(alert_history_proxy_classification_errors_total[5m])`
    - Shows: LLM failure rate
-   
+
 3. **Publishing Failures** (Graph)
    - Metric: `rate(alert_history_proxy_publishing_errors_total[5m])`
    - Shows: Publishing failures by target
@@ -222,11 +222,11 @@ Examples:
 1. **Request Size Distribution** (Histogram)
    - Metric: `alert_history_proxy_http_request_size_bytes`
    - Shows: Payload size distribution
-   
+
 2. **Batch Sizes** (Graph)
    - Metric: `alert_history_proxy_batch_size`
    - Shows: Alerts per batch
-   
+
 3. **Publishing Targets Health** (Table)
    - Metric: `alert_history_proxy_publishing_targets_total`
    - Shows: Target status by type
@@ -261,7 +261,7 @@ annotations:
 ```yaml
 alert: ProxyWebhookHighLatency
 expr: |
-  histogram_quantile(0.95, 
+  histogram_quantile(0.95,
     rate(alert_history_proxy_http_request_duration_seconds_bucket[5m])
   ) > 1.0
 for: 5m
@@ -303,7 +303,7 @@ annotations:
 ```yaml
 alert: ProxyWebhookLowSuccessRate
 expr: |
-  rate(alert_history_proxy_alerts_processed_total{result="success"}[5m]) 
+  rate(alert_history_proxy_alerts_processed_total{result="success"}[5m])
   / rate(alert_history_proxy_alerts_processed_total[5m]) < 0.95
 for: 15m
 severity: warning
@@ -343,19 +343,19 @@ type ProxyWebhookMetrics struct {
     httpResponseSize *prometheus.HistogramVec
     httpRequestsInFlight prometheus.Gauge
     httpErrorsTotal *prometheus.CounterVec
-    
+
     // Processing metrics
     alertsReceivedTotal *prometheus.CounterVec
     alertsProcessedTotal *prometheus.CounterVec
     classificationDuration *prometheus.HistogramVec
     filteringDuration *prometheus.HistogramVec
     publishingDuration *prometheus.HistogramVec
-    
+
     // Error metrics
     classificationErrorsTotal *prometheus.CounterVec
     filteringErrorsTotal *prometheus.CounterVec
     publishingErrorsTotal *prometheus.CounterVec
-    
+
     // Performance metrics
     pipelineDuration *prometheus.HistogramVec
     batchSize prometheus.Histogram
@@ -454,7 +454,6 @@ groups:
 
 ---
 
-**Status**: 🔄 IN PROGRESS  
-**Target**: 18+ metrics + Dashboard + 6 alerts  
+**Status**: 🔄 IN PROGRESS
+**Target**: 18+ metrics + Dashboard + 6 alerts
 **Timeline**: 5h estimated
-
