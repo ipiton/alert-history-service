@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/core"
@@ -16,10 +16,10 @@ import (
 
 // Handler handles HTTP requests for alert history endpoints
 type Handler struct {
-	repository   core.AlertHistoryRepository
+	repository     core.AlertHistoryRepository
 	filterRegistry *filters.Registry
-	cacheManager  *cache.Manager
-	logger        *slog.Logger
+	cacheManager   *cache.Manager
+	logger         *slog.Logger
 }
 
 // NewHandler creates a new history handler
@@ -32,7 +32,7 @@ func NewHandler(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	return &Handler{
 		repository:     repository,
 		filterRegistry: filterRegistry,
@@ -45,15 +45,15 @@ func NewHandler(
 func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := middleware.GetRequestID(r.Context())
-	
+
 	// Parse query parameters
 	queryParams := r.URL.Query()
-	
+
 	// Build filters from query parameters
 	// TODO: Implement CreateFromQueryParams in FilterRegistry
 	// For now, parse basic filters manually
 	alertFilters := &core.AlertFilters{}
-	
+
 	// Parse status filter
 	if statusStr := queryParams.Get("status"); statusStr != "" {
 		status := core.AlertStatus(statusStr)
@@ -61,17 +61,17 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			alertFilters.Status = &status
 		}
 	}
-	
+
 	// Parse severity filter
 	if severityStr := queryParams.Get("severity"); severityStr != "" {
 		alertFilters.Severity = &severityStr
 	}
-	
+
 	// Parse namespace filter
 	if namespaceStr := queryParams.Get("namespace"); namespaceStr != "" {
 		alertFilters.Namespace = &namespaceStr
 	}
-	
+
 	// Parse time range
 	if fromStr := queryParams.Get("from"); fromStr != "" {
 		if from, err := time.Parse(time.RFC3339, fromStr); err == nil {
@@ -88,7 +88,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			alertFilters.TimeRange.To = &to
 		}
 	}
-	
+
 	// Parse pagination
 	page := 1
 	if pageStr := queryParams.Get("page"); pageStr != "" {
@@ -96,7 +96,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			page = p
 		}
 	}
-	
+
 	perPage := 50
 	if perPageStr := queryParams.Get("per_page"); perPageStr != "" {
 		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 {
@@ -106,7 +106,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	// Parse sorting
 	var sorting *core.Sorting
 	if sortField := queryParams.Get("sort_field"); sortField != "" {
@@ -118,7 +118,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			sorting.Order = core.SortOrder(sortOrder)
 		}
 	}
-	
+
 	// Build HistoryRequest
 	req := &core.HistoryRequest{
 		Filters:    alertFilters,
@@ -128,25 +128,25 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		},
 		Sorting: sorting,
 	}
-	
+
 	// Generate cache key
 	cacheKey := h.cacheManager.GenerateCacheKey(req)
-	
+
 	// Try cache first
 	if cached, found := h.cacheManager.Get(r.Context(), cacheKey); found {
 		h.logger.Debug("Cache hit",
 			"request_id", requestID,
 			"cache_key", cacheKey)
-		
+
 		h.sendJSON(w, http.StatusOK, cached)
 		return
 	}
-	
+
 	// Cache miss - query database
 	h.logger.Debug("Cache miss, querying database",
 		"request_id", requestID,
 		"cache_key", cacheKey)
-	
+
 	response, err := h.repository.GetHistory(r.Context(), req)
 	if err != nil {
 		h.logger.Error("Failed to get history",
@@ -155,7 +155,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		apierrors.WriteError(w, apierrors.InternalError("Failed to retrieve alert history").WithRequestID(requestID))
 		return
 	}
-	
+
 	// Store in cache
 	if err := h.cacheManager.Set(r.Context(), cacheKey, response); err != nil {
 		h.logger.Warn("Failed to cache result",
@@ -163,7 +163,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 			"error", err)
 		// Continue - caching failure is not critical
 	}
-	
+
 	duration := time.Since(start)
 	h.logger.Info("History request completed",
 		"request_id", requestID,
@@ -173,7 +173,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		"returned", len(response.Alerts),
 		"duration_ms", duration.Milliseconds(),
 		"cache_hit", false)
-	
+
 	h.sendJSON(w, http.StatusOK, response)
 }
 
@@ -182,9 +182,8 @@ func (h *Handler) sendJSON(w http.ResponseWriter, status int, data interface{}) 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set(middleware.APIVersionHeader, "2.0.0")
 	w.WriteHeader(status)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.logger.Error("Failed to encode JSON response", "error", err)
 	}
 }
-
