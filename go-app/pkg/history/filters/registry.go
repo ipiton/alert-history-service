@@ -16,12 +16,12 @@ func NewRegistry(logger *slog.Logger) *Registry {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	
+
 	registry := &Registry{
 		factories: make(map[FilterType]FilterFactory),
 		logger:    logger,
 	}
-	
+
 	// Register all filter factories
 	registry.Register(FilterTypeStatus, NewStatusFilter)
 	registry.Register(FilterTypeSeverity, NewSeverityFilter)
@@ -42,10 +42,10 @@ func NewRegistry(logger *slog.Logger) *Registry {
 	registry.Register(FilterTypeGeneratorURL, NewGeneratorURLFilter)
 	registry.Register(FilterTypeIsFlapping, NewIsFlappingFilter)
 	registry.Register(FilterTypeIsResolved, NewIsResolvedFilter)
-	
+
 	// Legacy support: register "labels" as "labels_exact"
 	registry.Register(FilterTypeLabels, NewLabelsExactFilter)
-	
+
 	return registry
 }
 
@@ -63,19 +63,19 @@ func (r *Registry) Create(typ FilterType, params map[string]interface{}) (Filter
 	if !ok {
 		return nil, fmt.Errorf("unknown filter type: %s", typ)
 	}
-	
+
 	filter, err := factory(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create filter %s: %w", typ, err)
 	}
-	
+
 	return filter, nil
 }
 
 // CreateFromQueryParams creates filters from HTTP query parameters
 func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Filter, error) {
 	var filters []Filter
-	
+
 	// Parse status filter
 	if values, ok := queryParams["status"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeStatus, map[string]interface{}{
@@ -89,7 +89,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse severity filter
 	if values, ok := queryParams["severity"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeSeverity, map[string]interface{}{
@@ -103,7 +103,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse namespace filter
 	if values, ok := queryParams["namespace"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeNamespace, map[string]interface{}{
@@ -117,7 +117,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse fingerprint filter
 	if values, ok := queryParams["fingerprints"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeFingerprint, map[string]interface{}{
@@ -131,7 +131,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse alert_name filter
 	if values, ok := queryParams["alert_name"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeAlertName, map[string]interface{}{
@@ -145,7 +145,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse alert_name_pattern filter
 	if values, ok := queryParams["alert_name_pattern"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeAlertNamePattern, map[string]interface{}{
@@ -159,7 +159,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse alert_name_regex filter
 	if values, ok := queryParams["alert_name_regex"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeAlertNameRegex, map[string]interface{}{
@@ -173,7 +173,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels filters (exact match - legacy support)
 	if labels, ok := queryParams["labels"]; ok && len(labels) > 0 {
 		// Parse label key-value pairs from format: "key=value" or "key:value"
@@ -193,7 +193,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 				labelMap[key] = value
 			}
 		}
-		
+
 		if len(labelMap) > 0 {
 			filter, err := r.Create(FilterTypeLabelsExact, map[string]interface{}{
 				"labels": labelMap,
@@ -207,7 +207,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 			filters = append(filters, filter)
 		}
 	}
-	
+
 	// Parse labels_exact filter (new format: labels_exact[key]=value)
 	labelExactMap := parseLabelFilters(queryParams, "labels_exact")
 	if len(labelExactMap) > 0 {
@@ -222,7 +222,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels_ne filter
 	labelNeMap := parseLabelFilters(queryParams, "labels_ne")
 	if len(labelNeMap) > 0 {
@@ -237,7 +237,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels_regex filter
 	labelRegexMap := parseLabelFilters(queryParams, "labels_regex")
 	if len(labelRegexMap) > 0 {
@@ -252,7 +252,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels_not_regex filter
 	labelNotRegexMap := parseLabelFilters(queryParams, "labels_not_regex")
 	if len(labelNotRegexMap) > 0 {
@@ -267,7 +267,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels_exists filter
 	if values, ok := queryParams["labels_exists"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeLabelsExists, map[string]interface{}{
@@ -281,7 +281,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse labels_not_exists filter
 	if values, ok := queryParams["labels_not_exists"]; ok && len(values) > 0 {
 		filter, err := r.Create(FilterTypeLabelsNotExists, map[string]interface{}{
@@ -295,7 +295,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse time range filter
 	hasTimeRange := false
 	timeRangeParams := make(map[string]interface{})
@@ -317,7 +317,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse search filter
 	if values, ok := queryParams["search"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeSearch, map[string]interface{}{
@@ -331,7 +331,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse duration filters
 	durationParams := make(map[string]interface{})
 	if values, ok := queryParams["duration_min"]; ok && len(values) > 0 && len(values[0]) > 0 {
@@ -350,7 +350,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse generator_url filter
 	if values, ok := queryParams["generator_url"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeGeneratorURL, map[string]interface{}{
@@ -364,7 +364,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse is_flapping filter
 	if values, ok := queryParams["is_flapping"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeIsFlapping, map[string]interface{}{
@@ -378,7 +378,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	// Parse is_resolved filter
 	if values, ok := queryParams["is_resolved"]; ok && len(values) > 0 && len(values[0]) > 0 {
 		filter, err := r.Create(FilterTypeIsResolved, map[string]interface{}{
@@ -392,7 +392,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 		}
 		filters = append(filters, filter)
 	}
-	
+
 	return filters, nil
 }
 
@@ -400,7 +400,7 @@ func (r *Registry) CreateFromQueryParams(queryParams map[string][]string) ([]Fil
 // Supports formats: labels_exact[key]=value or labels_exact[]=key=value
 func parseLabelFilters(queryParams map[string][]string, prefix string) map[string]string {
 	result := make(map[string]string)
-	
+
 	// Try format: labels_exact[key]=value
 	for key, values := range queryParams {
 		if len(key) > len(prefix)+2 && key[:len(prefix)] == prefix && key[len(prefix)] == '[' {
@@ -411,7 +411,7 @@ func parseLabelFilters(queryParams map[string][]string, prefix string) map[strin
 			}
 		}
 	}
-	
+
 	// Try format: labels_exact[]=key=value
 	if values, ok := queryParams[prefix+"[]"]; ok {
 		for _, value := range values {
@@ -424,7 +424,7 @@ func parseLabelFilters(queryParams map[string][]string, prefix string) map[strin
 			}
 		}
 	}
-	
+
 	return result
 }
 
@@ -439,4 +439,3 @@ func findChar(s string, chars ...rune) int {
 	}
 	return -1
 }
-

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
@@ -20,15 +20,15 @@ func NewStatusFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid status filter params: expected []string")
 	}
-	
+
 	if len(values) == 0 {
 		return nil, fmt.Errorf("status filter requires at least one value")
 	}
-	
+
 	filter := &StatusFilter{
 		values: make([]core.AlertStatus, 0, len(values)),
 	}
-	
+
 	for _, v := range values {
 		status := core.AlertStatus(v)
 		if status != core.StatusFiring && status != core.StatusResolved {
@@ -36,7 +36,7 @@ func NewStatusFilter(params map[string]interface{}) (Filter, error) {
 		}
 		filter.values = append(filter.values, status)
 	}
-	
+
 	return filter, nil
 }
 
@@ -48,13 +48,13 @@ func (f *StatusFilter) Validate() error {
 	if len(f.values) == 0 {
 		return fmt.Errorf("status filter requires at least one value")
 	}
-	
+
 	for _, v := range f.values {
 		if v != core.StatusFiring && v != core.StatusResolved {
 			return fmt.Errorf("invalid status: %s", v)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -87,4 +87,3 @@ func (f *StatusFilter) CacheKey() string {
 	sort.Strings(values) // Sort for consistent cache keys
 	return fmt.Sprintf("status:%s", strings.Join(values, ","))
 }
-

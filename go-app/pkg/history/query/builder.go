@@ -3,7 +3,7 @@ package query
 import (
 	"fmt"
 	"strings"
-	
+
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
@@ -16,7 +16,7 @@ type Builder struct {
 	orderBy      []string
 	limit        int
 	offset       int
-	
+
 	// Performance optimization flags
 	useGINIndex   bool // Use GIN index for JSONB queries
 	usePartialIdx bool // Use partial index for common queries
@@ -42,7 +42,7 @@ func (qb *Builder) AddWhere(clause string, args ...interface{}) {
 		qb.argCounter++
 		clause = strings.Replace(clause, "?", fmt.Sprintf("$%d", qb.argCounter), 1)
 	}
-	
+
 	qb.whereClauses = append(qb.whereClauses, clause)
 	qb.args = append(qb.args, args...)
 }
@@ -60,7 +60,7 @@ func (qb *Builder) AddOrderBy(field string, order core.SortOrder) {
 		"alert_name": true,
 		"fingerprint": true,
 	}
-	
+
 	if !validFields[field] {
 		// For severity, we need to use labels->>'severity'
 		if field == "severity" {
@@ -91,36 +91,36 @@ func (qb *Builder) SetOffset(offset int) {
 // Build builds the final SQL query
 func (qb *Builder) Build() (string, []interface{}) {
 	var parts []string
-	
+
 	// SELECT clause
 	parts = append(parts, qb.baseQuery)
-	
+
 	// WHERE clause
 	if len(qb.whereClauses) > 1 { // Skip "1=1" if there are no other clauses
 		parts = append(parts, "WHERE "+strings.Join(qb.whereClauses, " AND "))
 	}
-	
+
 	// ORDER BY clause
 	if len(qb.orderBy) > 0 {
 		parts = append(parts, "ORDER BY "+strings.Join(qb.orderBy, ", "))
 	} else {
 		parts = append(parts, "ORDER BY starts_at DESC") // Default sort
 	}
-	
+
 	// LIMIT clause
 	if qb.limit > 0 {
 		qb.argCounter++
 		parts = append(parts, fmt.Sprintf("LIMIT $%d", qb.argCounter))
 		qb.args = append(qb.args, qb.limit)
 	}
-	
+
 	// OFFSET clause
 	if qb.offset > 0 {
 		qb.argCounter++
 		parts = append(parts, fmt.Sprintf("OFFSET $%d", qb.argCounter))
 		qb.args = append(qb.args, qb.offset)
 	}
-	
+
 	query := strings.Join(parts, " ")
 	return query, qb.args
 }
@@ -128,15 +128,15 @@ func (qb *Builder) Build() (string, []interface{}) {
 // BuildCount builds a COUNT query (for pagination total)
 func (qb *Builder) BuildCount() (string, []interface{}) {
 	var parts []string
-	
+
 	// SELECT COUNT(*) clause
 	parts = append(parts, "SELECT COUNT(*) FROM alerts")
-	
+
 	// WHERE clause (reuse from main query)
 	if len(qb.whereClauses) > 1 {
 		parts = append(parts, "WHERE "+strings.Join(qb.whereClauses, " AND "))
 	}
-	
+
 	query := strings.Join(parts, " ")
 	return query, qb.args
 }
@@ -144,14 +144,14 @@ func (qb *Builder) BuildCount() (string, []interface{}) {
 // OptimizationHints returns query optimization hints
 func (qb *Builder) OptimizationHints() []string {
 	var hints []string
-	
+
 	if qb.useGINIndex {
 		hints = append(hints, "Use GIN index for JSONB queries")
 	}
 	if qb.usePartialIdx {
 		hints = append(hints, "Use partial index for status=firing")
 	}
-	
+
 	return hints
 }
 
@@ -164,4 +164,3 @@ func (qb *Builder) MarkGINIndexUsage() {
 func (qb *Builder) MarkPartialIndexUsage() {
 	qb.usePartialIdx = true
 }
-

@@ -10,13 +10,13 @@ const (
 	FilterTypeNamespace    FilterType = "namespace"
 	FilterTypeTimeRange    FilterType = "time_range"
 	FilterTypeLabels       FilterType = "labels"
-	
+
 	// Advanced Filters (P1 - High)
 	FilterTypeFingerprint  FilterType = "fingerprint"
 	FilterTypeAlertName    FilterType = "alert_name"
 	FilterTypeAlertNamePattern FilterType = "alert_name_pattern"
 	FilterTypeAlertNameRegex   FilterType = "alert_name_regex"
-	
+
 	// Label Operators (P1 - High)
 	FilterTypeLabelsExact    FilterType = "labels_exact"
 	FilterTypeLabelsNotEqual FilterType = "labels_not_equal"
@@ -24,7 +24,7 @@ const (
 	FilterTypeLabelsNotRegex FilterType = "labels_not_regex"
 	FilterTypeLabelsExists   FilterType = "labels_exists"
 	FilterTypeLabelsNotExists FilterType = "labels_not_exists"
-	
+
 	// Advanced Features (P2 - Medium)
 	FilterTypeSearch      FilterType = "search"
 	FilterTypeDuration    FilterType = "duration"
@@ -64,4 +64,3 @@ func (ft FilterType) IsValid() bool {
 	}
 	return validTypes[ft]
 }
-

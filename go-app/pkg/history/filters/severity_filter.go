@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	"github.com/vitaliisemenov/alert-history/pkg/history/query"
 )
 
@@ -19,29 +19,29 @@ func NewSeverityFilter(params map[string]interface{}) (Filter, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid severity filter params: expected []string")
 	}
-	
+
 	if len(values) == 0 {
 		return nil, fmt.Errorf("severity filter requires at least one value")
 	}
-	
+
 	filter := &SeverityFilter{
 		values: make([]string, 0, len(values)),
 	}
-	
+
 	validSeverities := map[string]bool{
 		"critical": true,
 		"warning":  true,
 		"info":     true,
 		"noise":    true,
 	}
-	
+
 	for _, v := range values {
 		if !validSeverities[v] {
 			return nil, fmt.Errorf("invalid severity: %s (must be one of: critical, warning, info, noise)", v)
 		}
 		filter.values = append(filter.values, v)
 	}
-	
+
 	return filter, nil
 }
 
@@ -53,27 +53,27 @@ func (f *SeverityFilter) Validate() error {
 	if len(f.values) == 0 {
 		return fmt.Errorf("severity filter requires at least one value")
 	}
-	
+
 	validSeverities := map[string]bool{
 		"critical": true,
 		"warning":  true,
 		"info":     true,
 		"noise":    true,
 	}
-	
+
 	for _, v := range f.values {
 		if !validSeverities[v] {
 			return fmt.Errorf("invalid severity: %s", v)
 		}
 	}
-	
+
 	return nil
 }
 
 func (f *SeverityFilter) ApplyToQuery(qb *query.Builder) error {
 	// Mark for GIN index usage (labels JSONB field)
 	qb.MarkGINIndexUsage()
-	
+
 	if len(f.values) == 1 {
 		// Single value: use equality
 		qb.AddWhere("labels->>'severity' = ?", f.values[0])
@@ -96,4 +96,3 @@ func (f *SeverityFilter) CacheKey() string {
 	sort.Strings(values) // Sort for consistent cache keys
 	return fmt.Sprintf("severity:%s", strings.Join(values, ","))
 }
-
