@@ -366,3 +366,5 @@ func TestCache_IndexConsistency(t *testing.T) {
 	assert.Len(t, expireds, 0, "Should have 0 expired after delete")
 }
 
+
+

@@ -1,0 +1,700 @@
+openapi: 3.0.3
+info:
+  title: Alert History API
+  description: |
+    Comprehensive API for querying alert history with advanced filtering, pagination, and analytics.
+
+    ## Features
+    - 18+ filter types (status, severity, namespace, labels, time range, etc.)
+    - Pagination and sorting
+    - 2-tier caching (L1 in-memory + L2 Redis)
+    - Performance optimized (p95 < 10ms)
+    - OWASP Top 10 compliant
+
+    ## Authentication
+    All endpoints require API key authentication via `X-API-Key` header.
+  version: 2.0.0
+  contact:
+    name: Alert History API Support
+    email: support@alert-history.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.alert-history.example.com/api/v2
+    description: Production server
+  - url: https://staging-api.alert-history.example.com/api/v2
+    description: Staging server
+  - url: http://localhost:8080/api/v2
+    description: Local development server
+
+tags:
+  - name: History
+    description: Alert history queries and analytics
+
+paths:
+  /history:
+    get:
+      tags:
+        - History
+      summary: Get alert history
+      description: |
+        Retrieve paginated alert history with advanced filtering and sorting.
+
+        Supports 18+ filter types including status, severity, namespace, labels, time range, and more.
+      operationId: getHistory
+      parameters:
+        - name: status
+          in: query
+          description: Filter by alert status
+          schema:
+            type: string
+            enum: [firing, resolved]
+          example: firing
+        - name: severity
+          in: query
+          description: Filter by severity level
+          schema:
+            type: string
+            enum: [critical, warning, info, noise]
+          example: critical
+        - name: namespace
+          in: query
+          description: Filter by namespace
+          schema:
+            type: string
+          example: production
+        - name: from
+          in: query
+          description: Start time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-01T00:00:00Z"
+        - name: to
+          in: query
+          description: End time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-16T23:59:59Z"
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+          example: 1
+        - name: per_page
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          example: 50
+        - name: sort_field
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum: [starts_at, ends_at, created_at, status, severity]
+            default: starts_at
+          example: starts_at
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          example: desc
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+              examples:
+                success:
+                  value:
+                    alerts:
+                      - fingerprint: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890"
+                        alert_name: "HighCPUUsage"
+                        status: "firing"
+                        severity: "critical"
+                        namespace: "production"
+                        labels:
+                          instance: "server-01"
+                          job: "node-exporter"
+                        starts_at: "2025-11-16T10:00:00Z"
+                    total: 100
+                    page: 1
+                    per_page: 50
+                    total_pages: 2
+                    has_next: true
+                    has_prev: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      security:
+        - ApiKeyAuth: []
+
+  /history/{fingerprint}:
+    get:
+      tags:
+        - History
+      summary: Get alert timeline
+      description: Retrieve all alerts with the same fingerprint (alert timeline)
+      operationId: getAlertTimeline
+      parameters:
+        - name: fingerprint
+          in: path
+          required: true
+          description: Alert fingerprint (64 hex characters)
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{64}$'
+          example: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890"
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 100
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fingerprint:
+                    type: string
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - ApiKeyAuth: []
+
+  /history/top:
+    get:
+      tags:
+        - History
+      summary: Get top alerts
+      description: Get most frequently firing alerts
+      operationId: getTopAlerts
+      parameters:
+        - name: from
+          in: query
+          description: Start time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopAlert'
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  /history/flapping:
+    get:
+      tags:
+        - History
+      summary: Get flapping alerts
+      description: Get alerts that frequently change state
+      operationId: getFlappingAlerts
+      parameters:
+        - name: from
+          in: query
+          description: Start time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+        - name: threshold
+          in: query
+          description: Minimum transition count
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 5
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FlappingAlert'
+                  count:
+                    type: integer
+                  threshold:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  /history/recent:
+    get:
+      tags:
+        - History
+      summary: Get recent alerts
+      description: Get most recent alerts across all fingerprints
+      operationId: getRecentAlerts
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  /history/stats:
+    get:
+      tags:
+        - History
+      summary: Get aggregated statistics
+      description: Get statistical aggregations over a time range
+      operationId: getStats
+      parameters:
+        - name: from
+          in: query
+          description: Start time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End time (RFC3339 format)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregatedStats'
+      security:
+        - ApiKeyAuth: []
+
+  /history/search:
+    post:
+      tags:
+        - History
+      summary: Advanced search
+      description: Perform advanced search with JSON body
+      operationId: searchAlerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              basic:
+                value:
+                  query: "HighCPUUsage"
+                  pagination:
+                    page: 1
+                    per_page: 50
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      security:
+        - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    Alert:
+      type: object
+      required:
+        - fingerprint
+        - alert_name
+        - status
+        - starts_at
+      properties:
+        fingerprint:
+          type: string
+          description: Alert fingerprint (64 hex characters)
+          example: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890"
+        alert_name:
+          type: string
+          description: Alert name
+          example: "HighCPUUsage"
+        status:
+          type: string
+          enum: [firing, resolved]
+          example: "firing"
+        severity:
+          type: string
+          enum: [critical, warning, info, noise]
+          example: "critical"
+        namespace:
+          type: string
+          example: "production"
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            instance: "server-01"
+            job: "node-exporter"
+        annotations:
+          type: object
+          additionalProperties:
+            type: string
+        starts_at:
+          type: string
+          format: date-time
+          example: "2025-11-16T10:00:00Z"
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-11-16T11:00:00Z"
+        generator_url:
+          type: string
+          format: uri
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          nullable: true
+
+    HistoryResponse:
+      type: object
+      required:
+        - alerts
+        - total
+        - page
+        - per_page
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+        total:
+          type: integer
+          description: Total number of alerts matching filters
+          example: 100
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Items per page
+          example: 50
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 2
+        has_next:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        has_prev:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+
+    TopAlert:
+      type: object
+      properties:
+        fingerprint:
+          type: string
+        alert_name:
+          type: string
+        namespace:
+          type: string
+          nullable: true
+        fire_count:
+          type: integer
+        last_fired_at:
+          type: string
+          format: date-time
+        avg_duration:
+          type: number
+          format: float
+          nullable: true
+
+    FlappingAlert:
+      type: object
+      properties:
+        fingerprint:
+          type: string
+        alert_name:
+          type: string
+        namespace:
+          type: string
+          nullable: true
+        transition_count:
+          type: integer
+        flapping_score:
+          type: number
+          format: float
+        last_transition_at:
+          type: string
+          format: date-time
+
+    AggregatedStats:
+      type: object
+      properties:
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        total_alerts:
+          type: integer
+        firing_alerts:
+          type: integer
+        resolved_alerts:
+          type: integer
+        alerts_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        alerts_by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+        alerts_by_namespace:
+          type: object
+          additionalProperties:
+            type: integer
+        unique_fingerprints:
+          type: integer
+        avg_resolution_time:
+          type: string
+          nullable: true
+
+    TimeRange:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+          nullable: true
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query string
+        filters:
+          type: object
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            per_page:
+              type: integer
+        sorting:
+          type: object
+          properties:
+            field:
+              type: string
+            order:
+              type: string
+              enum: [asc, desc]
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - timestamp
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Invalid query parameter"
+            details:
+              type: object
+            request_id:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            documentation_url:
+              type: string
+              format: uri
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid query parameter: page must be between 1 and 10000"
+              request_id: "req-12345"
+              timestamp: "2025-11-16T12:00:00Z"
+
+    Unauthorized:
+      description: Unauthorized - missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "AUTHENTICATION_ERROR"
+              message: "Invalid or missing API key"
+              timestamp: "2025-11-16T12:00:00Z"
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                description: Seconds to wait before retrying
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

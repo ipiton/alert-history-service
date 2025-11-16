@@ -1,0 +1,116 @@
+groups:
+  - name: alert_history_api_history
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HistoryAPIHighErrorRate
+        expr: |
+          rate(alert_history_api_history_http_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected in history API"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 0.1)"
+
+      # High Latency (p95 > 10ms)
+      - alert: HistoryAPIHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(alert_history_api_history_http_request_duration_seconds_bucket[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected in history API"
+          description: "p95 latency is {{ $value }}s (threshold: 10ms)"
+
+      # Low Cache Hit Rate
+      - alert: HistoryAPILowCacheHitRate
+        expr: |
+          (
+            rate(alert_history_api_history_cache_hits_total[5m]) /
+            (rate(alert_history_api_history_cache_hits_total[5m]) + rate(alert_history_api_history_cache_misses_total[5m]))
+          ) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # High Query Duration
+      - alert: HistoryAPIHighQueryDuration
+        expr: |
+          histogram_quantile(0.95, rate(alert_history_api_history_query_duration_seconds_bucket[5m])) > 0.005
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High query duration detected"
+          description: "p95 query duration is {{ $value }}s (threshold: 5ms)"
+
+      # Authentication Failures Spike
+      - alert: HistoryAPIAuthFailureSpike
+        expr: |
+          rate(alert_history_api_history_security_auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Authentication failure spike detected"
+          description: "Auth failures: {{ $value }} failures/sec (possible attack)"
+
+      # Rate Limit Violations Spike
+      - alert: HistoryAPIRateLimitSpike
+        expr: |
+          rate(alert_history_api_history_security_rate_limit_violations_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit violations spike detected"
+          description: "Rate limit violations: {{ $value }} violations/sec"
+
+      # High Active Requests
+      - alert: HistoryAPIHighActiveRequests
+        expr: |
+          alert_history_api_history_http_active_requests > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active requests"
+          description: "Active requests: {{ $value }} (threshold: 1000)"
+
+      # Query Errors Spike
+      - alert: HistoryAPIQueryErrorsSpike
+        expr: |
+          rate(alert_history_api_history_query_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Query errors spike detected"
+          description: "Query errors: {{ $value }} errors/sec (possible database issue)"
+
+      # Filter Errors Spike
+      - alert: HistoryAPIFilterErrorsSpike
+        expr: |
+          rate(alert_history_api_history_filters_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Filter errors spike detected"
+          description: "Filter errors: {{ $value }} errors/sec"
+
+      # Cache Size High
+      - alert: HistoryAPICacheSizeHigh
+        expr: |
+          alert_history_api_history_cache_size_entries > 90000
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Cache size approaching limit"
+          description: "Cache size: {{ $value }} entries (threshold: 90K)"
