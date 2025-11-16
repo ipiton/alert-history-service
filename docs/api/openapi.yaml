@@ -3,7 +3,7 @@ info:
   title: Alert History - Intelligent Proxy Webhook API
   description: |
     Enterprise-grade intelligent proxy webhook endpoint for Alertmanager with advanced capabilities:
-    
+
     ## Features
     - **LLM-Powered Classification**: Automatic alert categorization using AI
     - **Advanced Filtering**: 7 filter types (severity, time, geo, label, regex, frequency, health)
@@ -11,14 +11,14 @@ info:
     - **High Performance**: p95 < 50ms, 66K+ req/s throughput
     - **Enterprise Security**: OWASP Top 10 compliant (95%), security headers
     - **Comprehensive Observability**: 18 Prometheus metrics, 6 alerting rules
-    
+
     ## Quality Standard
     This API achieves **150% Enterprise Quality** across all dimensions:
     - Performance: 3,333x faster than targets
     - Security: Grade A (95% OWASP compliance)
     - Tests: 50+ unit tests, 30+ benchmarks
     - Documentation: Complete OpenAPI 3.0 spec
-    
+
   version: 1.0.0
   contact:
     name: Alert History Team
@@ -48,29 +48,29 @@ paths:
       summary: Intelligent Proxy Webhook
       description: |
         Process Alertmanager webhooks with intelligent classification, filtering, and publishing.
-        
+
         This endpoint receives alerts from Alertmanager, processes them through three pipelines:
         1. **Classification Pipeline**: LLM-powered categorization with two-tier caching
         2. **Filtering Pipeline**: Rule-based filtering (7 filter types)
         3. **Publishing Pipeline**: Parallel publishing to configured targets
-        
+
         ## Processing Flow
         ```
         Request → Validation → Classification → Filtering → Publishing → Response
         ```
-        
+
         ## Performance
         - Average processing time: ~15µs (without external calls)
         - With LLM (cached): ~100µs
         - With LLM (uncached): ~15ms
         - With publishing: ~15-50ms (depending on targets)
-        
+
         ## Reliability
         - Automatic retries (3 attempts)
         - Circuit breaker for LLM
         - Graceful degradation
         - Continue on partial failures
-        
+
       operationId: processProxyWebhook
       tags:
         - Webhook
@@ -85,7 +85,7 @@ paths:
             type: string
             format: uuid
           example: "550e8400-e29b-41d4-a716-446655440000"
-          
+
       requestBody:
         description: Alertmanager webhook payload
         required: true
@@ -116,7 +116,7 @@ paths:
                   commonLabels:
                     severity: "critical"
                   externalURL: "https://alertmanager.company.com"
-                  
+
               multipleAlerts:
                 summary: Multiple alerts in batch
                 value:
@@ -140,7 +140,7 @@ paths:
                         summary: "Disk space below 20%"
                       startsAt: "2025-11-16T10:01:00Z"
                   groupKey: "{}:{alertname=\"HighMemoryUsage\"}"
-                  
+
               resolvedAlert:
                 summary: Resolved alert
                 value:
@@ -156,7 +156,7 @@ paths:
                         summary: "CPU usage back to normal"
                       startsAt: "2025-11-16T10:00:00Z"
                       endsAt: "2025-11-16T10:15:00Z"
-                      
+
       responses:
         '200':
           description: Request processed successfully
@@ -208,7 +208,7 @@ paths:
                       successful_targets: 2
                       failed_targets: 0
                       total_publish_time_ms: 250
-                      
+
                 partial:
                   summary: Some alerts failed
                   value:
@@ -251,7 +251,7 @@ paths:
                       total_targets: 1
                       successful_targets: 1
                       failed_targets: 0
-                      
+
         '400':
           description: Bad request - validation failed
           content:
@@ -272,7 +272,7 @@ paths:
                           error: "required field missing"
                       timestamp: "2025-11-16T10:00:00Z"
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
-                      
+
                 payloadTooLarge:
                   summary: Payload too large
                   value:
@@ -281,7 +281,7 @@ paths:
                       message: "Request body exceeds 10MB limit"
                       timestamp: "2025-11-16T10:00:00Z"
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
-                      
+
         '401':
           description: Unauthorized - authentication failed
           content:
@@ -297,7 +297,7 @@ paths:
                       message: "Invalid or missing API key"
                       timestamp: "2025-11-16T10:00:00Z"
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
-                      
+
         '429':
           description: Too many requests - rate limit exceeded
           headers:
@@ -326,7 +326,7 @@ paths:
                       message: "Rate limit exceeded: 100 requests per second"
                       timestamp: "2025-11-16T10:00:00Z"
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
-                      
+
         '500':
           description: Internal server error
           content:
@@ -342,7 +342,7 @@ paths:
                       message: "An internal error occurred"
                       timestamp: "2025-11-16T10:00:00Z"
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
-                      
+
         '503':
           description: Service unavailable
           content:
@@ -408,13 +408,13 @@ components:
       in: header
       name: X-API-Key
       description: API key authentication
-      
+
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: JWT token authentication
-      
+
   schemas:
     ProxyWebhookRequest:
       type: object
@@ -466,7 +466,7 @@ components:
         truncatedAlerts:
           type: integer
           description: Number of truncated alerts
-          
+
     AlertPayload:
       type: object
       required:
@@ -511,7 +511,7 @@ components:
         fingerprint:
           type: string
           description: Alert fingerprint (auto-generated if not provided)
-          
+
     ProxyWebhookResponse:
       type: object
       required:
@@ -546,7 +546,7 @@ components:
           description: Per-alert processing results
         publishing_summary:
           $ref: '#/components/schemas/PublishingSummary'
-          
+
     AlertsProcessingSummary:
       type: object
       required:
@@ -571,7 +571,7 @@ components:
         total_failed:
           type: integer
           description: Alerts that failed processing
-          
+
     AlertProcessingResult:
       type: object
       required:
@@ -598,7 +598,7 @@ components:
         error:
           type: string
           description: Error message (if failed)
-          
+
     ClassificationResult:
       type: object
       properties:
@@ -622,7 +622,7 @@ components:
         duration_ms:
           type: number
           description: Classification duration
-          
+
     FilteringResult:
       type: object
       required:
@@ -640,7 +640,7 @@ components:
         reason:
           type: string
           description: Reason for filtering (if denied)
-          
+
     PublishingResult:
       type: object
       properties:
@@ -659,7 +659,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TargetPublishingResult'
-            
+
     TargetPublishingResult:
       type: object
       required:
@@ -686,7 +686,7 @@ components:
         error:
           type: string
           description: Error message (if failed)
-          
+
     PublishingSummary:
       type: object
       required:
@@ -706,7 +706,7 @@ components:
         total_publish_time_ms:
           type: number
           description: Total publishing time
-          
+
     ErrorResponse:
       type: object
       required:
@@ -714,7 +714,7 @@ components:
       properties:
         error:
           $ref: '#/components/schemas/ErrorDetail'
-          
+
     ErrorDetail:
       type: object
       required:
@@ -751,7 +751,7 @@ components:
         request_id:
           type: string
           description: Request tracking ID
-          
+
     FieldErrorDetail:
       type: object
       required:
@@ -765,4 +765,3 @@ components:
         error:
           type: string
           description: Field-specific error message
-

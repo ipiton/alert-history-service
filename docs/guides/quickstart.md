@@ -1,7 +1,7 @@
 # Quick Start Guide: Intelligent Proxy Webhook
 
-**Time to first alert**: 5 minutes  
-**Difficulty**: Beginner  
+**Time to first alert**: 5 minutes
+**Difficulty**: Beginner
 **Prerequisites**: Alertmanager installed
 
 ---
@@ -162,7 +162,7 @@ filters:
     config:
       label: "alertname"
       regex: "^Test.*"
-      
+
   - name: "only_critical"
     type: "severity"
     action: "allow"
@@ -181,7 +181,7 @@ publishing:
       type: "rootly"
       endpoint: "https://api.rootly.com/v1/events"
       api_key: "${ROOTLY_API_KEY}"
-      
+
     - name: "on-call-pagerduty"
       type: "pagerduty"
       routing_key: "${PAGERDUTY_ROUTING_KEY}"
@@ -199,7 +199,7 @@ publishing:
 # Test authentication
 curl -I -H "X-API-Key: ah_your_key_here" \
   https://api.alerthistory.io/v1/health
-  
+
 # Should return: HTTP/1.1 200 OK
 ```
 
@@ -211,7 +211,7 @@ curl -I -H "X-API-Key: ah_your_key_here" \
 # Check rate limit headers
 curl -I -H "X-API-Key: ah_your_key_here" \
   https://api.alerthistory.io/v1/webhook/proxy
-  
+
 # X-RateLimit-Limit: 100
 # X-RateLimit-Remaining: 95
 ```
@@ -306,7 +306,7 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   group_by: ['alertname', 'cluster', 'service']
-  
+
   # Route critical alerts immediately
   routes:
     - match:
@@ -331,10 +331,9 @@ route:
 
 ## Summary
 
-✅ **5 minutes** to first alert  
-✅ **15-50ms** processing time  
-✅ **150% quality** standard  
+✅ **5 minutes** to first alert
+✅ **15-50ms** processing time
+✅ **150% quality** standard
 ✅ **Production-ready** out of the box
 
 **Next**: Read the [Integration Guide](./integration-guide.md) for advanced features.
-

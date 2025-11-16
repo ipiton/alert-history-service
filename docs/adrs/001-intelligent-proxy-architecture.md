@@ -1,8 +1,8 @@
 # ADR-001: Intelligent Proxy Architecture
 
-**Status**: ✅ Accepted  
-**Date**: 2025-11-16  
-**Deciders**: Technical Lead, Senior Architect, Product Owner  
+**Status**: ✅ Accepted
+**Date**: 2025-11-16
+**Deciders**: Technical Lead, Senior Architect, Product Owner
 **Related**: TN-062
 
 ---
@@ -155,29 +155,29 @@ We will implement an **Intelligent Proxy Webhook** with a **3-pipeline architect
 
 ### Positive
 
-✅ **Modularity**: Easy to add/remove/modify pipelines  
-✅ **Testability**: Each pipeline tested independently  
-✅ **Performance**: Exceeds targets by 3,333x (p95 ~15ms vs 50ms)  
-✅ **Scalability**: Horizontal scaling of each pipeline  
-✅ **Observability**: 18 Prometheus metrics, per-pipeline tracking  
-✅ **Maintainability**: Clear separation of concerns  
-✅ **Reliability**: Graceful degradation, circuit breakers  
+✅ **Modularity**: Easy to add/remove/modify pipelines
+✅ **Testability**: Each pipeline tested independently
+✅ **Performance**: Exceeds targets by 3,333x (p95 ~15ms vs 50ms)
+✅ **Scalability**: Horizontal scaling of each pipeline
+✅ **Observability**: 18 Prometheus metrics, per-pipeline tracking
+✅ **Maintainability**: Clear separation of concerns
+✅ **Reliability**: Graceful degradation, circuit breakers
 
 ### Negative
 
-⚠️ **Complexity**: More components than simple webhook  
+⚠️ **Complexity**: More components than simple webhook
 - **Mitigation**: Comprehensive documentation (Phase 8)
 - **Mitigation**: Integration tests for full pipeline
 
-⚠️ **Latency**: Sequential execution adds latency  
+⚠️ **Latency**: Sequential execution adds latency
 - **Mitigation**: Still 3,333x faster than target ✅
 - **Mitigation**: Aggressive caching (95%+ hit rate)
 
-⚠️ **Dependencies**: More external services (LLM, K8s for targets)  
+⚠️ **Dependencies**: More external services (LLM, K8s for targets)
 - **Mitigation**: Fallback behavior for all services
 - **Mitigation**: Stub implementations for dev/test
 
-⚠️ **Cost**: LLM calls cost money  
+⚠️ **Cost**: LLM calls cost money
 - **Mitigation**: Two-tier caching (95%+ hit rate)
 - **Mitigation**: Optional (can disable classification)
 
@@ -275,11 +275,11 @@ proxy:
     enabled: true
     timeout: 5s
     fallback_enabled: true
-    
+
   filtering:
     enabled: true
     default_action: allow
-    
+
   publishing:
     enabled: true
     parallel: true
@@ -312,12 +312,12 @@ proxy:
 
 ## Security Considerations
 
-✅ **Authentication**: API Key or JWT on all requests  
-✅ **Input Validation**: Struct validation with `go-playground/validator`  
-✅ **Rate Limiting**: Per-IP and global limits  
-✅ **Circuit Breakers**: Prevent cascade failures  
-✅ **Security Headers**: OWASP-compliant headers  
-✅ **Secrets Management**: K8s Secrets for API keys  
+✅ **Authentication**: API Key or JWT on all requests
+✅ **Input Validation**: Struct validation with `go-playground/validator`
+✅ **Rate Limiting**: Per-IP and global limits
+✅ **Circuit Breakers**: Prevent cascade failures
+✅ **Security Headers**: OWASP-compliant headers
+✅ **Secrets Management**: K8s Secrets for API keys
 
 **Grade**: A (95% OWASP Top 10 compliant)
 
@@ -383,7 +383,6 @@ proxy:
 
 ---
 
-**Status**: Production-Ready  
-**Grade**: A++ (150% Quality)  
+**Status**: Production-Ready
+**Grade**: A++ (150% Quality)
 **Last Updated**: 2025-11-16
-

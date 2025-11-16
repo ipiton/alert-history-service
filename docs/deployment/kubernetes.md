@@ -1,8 +1,8 @@
 # Kubernetes Deployment Guide
 
-**Service**: Alert History - Intelligent Proxy Webhook  
-**Target**: Production Kubernetes Cluster  
-**Difficulty**: Intermediate  
+**Service**: Alert History - Intelligent Proxy Webhook
+**Target**: Production Kubernetes Cluster
+**Difficulty**: Intermediate
 **Time**: 30 minutes
 
 ---
@@ -122,15 +122,15 @@ data:
       read_timeout: 30s
       write_timeout: 30s
       shutdown_timeout: 10s
-      
+
     proxy:
       enabled: true
-      
+
       http:
         max_request_size: 10485760  # 10MB
         request_timeout: 30s
         max_alerts_per_req: 100
-        
+
       classification:
         enabled: true
         timeout: 5s
@@ -138,12 +138,12 @@ data:
         fallback_enabled: true
         fallback_category: "unknown"
         fallback_severity: "medium"
-        
+
       filtering:
         enabled: true
         default_action: "allow"
         rules_file: "/etc/config/filter-rules.yaml"
-        
+
       publishing:
         enabled: true
         parallel: true
@@ -153,33 +153,33 @@ data:
         retry_max_attempts: 3
         retry_initial_interval: 1s
         continue_on_error: true
-        
+
     middleware:
       rate_limiting:
         enabled: true
         per_ip_limit: 100
         global_limit: 1000
         burst: 50
-        
+
       authentication:
         enabled: true
         type: "api_key"  # or "jwt"
-        
+
       security_headers:
         enabled: true
-        
+
       metrics:
         enabled: true
         path: "/metrics"
-        
+
     logging:
       level: "info"  # debug, info, warn, error
       format: "json"  # json, text
-      
+
     metrics:
       enabled: true
       namespace: "alert_history"
-      
+
   filter-rules.yaml: |
     filters:
       - name: "ignore_test_alerts"
@@ -188,14 +188,14 @@ data:
         config:
           label: "alertname"
           regex: "^Test.*"
-          
+
       - name: "only_production"
         type: "label"
         action: "deny"
         config:
           label: "environment"
           regex: "^(dev|staging)$"
-          
+
       - name: "severity_threshold"
         type: "severity"
         action: "allow"
@@ -545,7 +545,7 @@ spec:
         severity: critical
       annotations:
         summary: "High error rate on proxy webhook"
-        
+
     - alert: ProxyWebhookHighLatency
       expr: histogram_quantile(0.95, rate(alert_history_proxy_http_request_duration_seconds_bucket[5m])) > 1.0
       for: 5m
@@ -763,4 +763,3 @@ kubectl set image deployment/alert-history alert-history=alerthistory/alert-hist
 - **Helm Charts**: https://github.com/alerthistory/charts
 - **Issues**: https://github.com/alerthistory/alert-history/issues
 - **Community**: https://slack.alerthistory.io
-

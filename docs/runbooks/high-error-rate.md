@@ -1,9 +1,9 @@
 # Runbook: High Error Rate on Proxy Webhook
 
-**Alert Name**: `ProxyWebhookHighErrorRate`  
-**Severity**: 🔴 Critical (P0)  
-**Service**: Alert History  
-**Component**: Proxy Webhook  
+**Alert Name**: `ProxyWebhookHighErrorRate`
+**Severity**: 🔴 Critical (P0)
+**Service**: Alert History
+**Component**: Proxy Webhook
 **Last Updated**: 2025-11-16
 
 ---
@@ -327,7 +327,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    # Update secret
    kubectl patch secret alertmanager-secrets \
      -p '{"data":{"api-key":"'"$(echo -n 'ah_new_key_here' | base64)"'"}}'
-   
+
    # Restart Alertmanager
    kubectl rollout restart deployment/alertmanager
    ```
@@ -354,12 +354,12 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # Edit config
    kubectl edit configmap alert-history-config
-   
+
    # Update:
    rate_limiting:
      per_ip_limit: 200  # was: 100
      global_limit: 2000  # was: 1000
-   
+
    # Restart
    kubectl rollout restart deployment/alert-history
    ```
@@ -387,7 +387,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
 1. **Check pod status**:
    ```bash
    kubectl get pods -l app=alert-history
-   
+
    # If CrashLoopBackOff:
    kubectl logs -l app=alert-history --previous
    ```
@@ -396,10 +396,10 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # PostgreSQL
    kubectl exec -it postgres-0 -- psql -U postgres -c "SELECT 1"
-   
+
    # Redis
    kubectl exec -it redis-0 -- redis-cli ping
-   
+
    # LLM Service
    curl -s https://llm-service/health
    ```
@@ -408,7 +408,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # Increase replicas
    kubectl scale deployment alert-history --replicas=5
-   
+
    # Increase resources
    kubectl edit deployment alert-history
    # Update:
@@ -422,7 +422,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # Check recent deployments
    kubectl rollout history deployment/alert-history
-   
+
    # Rollback to previous
    kubectl rollout undo deployment/alert-history
    ```
@@ -437,7 +437,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # Classification
    curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate(alert_history_proxy_classification_duration_seconds_bucket[5m]))'
-   
+
    # Publishing
    curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate(alert_history_proxy_publishing_duration_seconds_bucket[5m]))'
    ```
@@ -446,7 +446,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=histogram_quantile(0.95, rate
    ```bash
    # LLM health
    curl -s https://llm-service/health
-   
+
    # LLM latency
    curl -s 'http://prometheus:9090/api/v1/query?query=llm_request_duration_seconds'
    ```
@@ -629,6 +629,5 @@ Updates:
 
 ---
 
-**Questions?** Contact: team@alerthistory.io  
+**Questions?** Contact: team@alerthistory.io
 **Last Updated**: 2025-11-16
-
