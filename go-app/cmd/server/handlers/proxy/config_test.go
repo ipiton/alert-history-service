@@ -54,8 +54,8 @@ func TestDefaultProxyWebhookConfig(t *testing.T) {
 	assert.Equal(t, 10, config.MaxConcurrentAlerts)
 	assert.Equal(t, 10, config.MaxPublishingTargets)
 
-	// Error handling
-	assert.False(t, config.ContinueOnError)
+	// Error handling (default: continue on error for resilience)
+	assert.True(t, config.ContinueOnError)
 }
 
 // TestProxyWebhookConfig_Validate tests configuration validation
@@ -109,7 +109,7 @@ func TestProxyWebhookConfig_Validate(t *testing.T) {
 				MaxAlertsPerReq: 0, // Invalid
 			},
 			expectError: true,
-			errorMsg:    "max_alerts_per_request",
+			errorMsg:    "max_alerts_per_req",
 		},
 		{
 			name: "invalid classification timeout - zero",
@@ -355,12 +355,15 @@ func TestProxyWebhookConfig_ResourceLimits(t *testing.T) {
 			config := ProxyWebhookConfig{
 				MaxRequestSize:        tt.maxRequestSize,
 				RequestTimeout:        30 * time.Second,
-				MaxAlertsPerReq:   tt.maxAlertsPerReq,
+				MaxAlertsPerReq:       tt.maxAlertsPerReq,
 				ClassificationTimeout: 5 * time.Second,
 				FilteringTimeout:      1 * time.Second,
 				PublishingTimeout:     10 * time.Second,
 				MaxConcurrentAlerts:   tt.maxConcurrentAlert,
 				MaxPublishingTargets:  10,
+				Filtering: FilteringPipelineConfig{
+					DefaultAction: "allow",
+				},
 			}
 
 			err := config.Validate()

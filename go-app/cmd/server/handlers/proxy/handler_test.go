@@ -120,8 +120,9 @@ func TestProxyWebhookHandler_Success(t *testing.T) {
 		Status:   "firing",
 		Alerts: []AlertPayload{
 			{
-				Status: "firing",
-				Labels: map[string]string{"alertname": "TestAlert"},
+				Status:   "firing",
+				Labels:   map[string]string{"alertname": "TestAlert"},
+				StartsAt: time.Now(),
 			},
 		},
 	}
@@ -134,7 +135,7 @@ func TestProxyWebhookHandler_Success(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var resp ProxyWebhookResponse
 	err := json.NewDecoder(w.Body).Decode(&resp)
 	require.NoError(t, err)
