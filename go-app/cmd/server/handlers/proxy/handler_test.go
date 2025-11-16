@@ -111,7 +111,7 @@ func TestProxyWebhookHTTPHandler_ServeHTTP_Success(t *testing.T) {
 
 	// Assert response
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response ProxyWebhookResponse
 	err = json.NewDecoder(w.Body).Decode(&response)
 	require.NoError(t, err)
@@ -665,4 +665,3 @@ func BenchmarkProxyWebhookHTTPHandler_ParseRequest(b *testing.B) {
 		_ = json.Unmarshal(jsonBody, &parsed)
 	}
 }
-

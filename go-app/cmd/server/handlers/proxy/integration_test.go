@@ -108,7 +108,7 @@ func TestIntegration_ClassificationPipeline(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, 1, resp.AlertsSummary.TotalClassified)
-	
+
 	// Verify classification result
 	if len(resp.AlertResults) > 0 && resp.AlertResults[0].Classification != nil {
 		class := resp.AlertResults[0].Classification
@@ -208,7 +208,7 @@ func TestIntegration_PublishingPipeline(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	
+
 	// Verify publishing metrics
 	assert.GreaterOrEqual(t, resp.PublishingSummary.TotalTargets, 0)
 	if resp.PublishingSummary.TotalTargets > 0 {
@@ -252,10 +252,10 @@ func TestIntegration_BatchProcessing(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, 50, resp.AlertsSummary.TotalReceived)
-	
+
 	// Performance: should process 50 alerts in reasonable time
 	assert.Less(t, duration, 10*time.Second, "Batch processing took too long")
-	
+
 	t.Logf("Processed 50 alerts in %v (avg %v per alert)",
 		duration, duration/50)
 }
@@ -290,7 +290,7 @@ func TestIntegration_ErrorRecovery(t *testing.T) {
 	// Should not fail entirely due to fallback mechanisms
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	
+
 	// Verify fallback classification was used
 	if len(resp.AlertResults) > 0 && resp.AlertResults[0].Classification != nil {
 		assert.Equal(t, "default", resp.AlertResults[0].Classification.Source)
@@ -479,7 +479,7 @@ func newMockFilterEngine() services.FilterEngine {
 
 func newMockTargetManager(targetCount int) publishing.TargetDiscoveryManager {
 	mock := new(MockTargetDiscoveryManager)
-	
+
 	targets := make([]*core.PublishingTarget, targetCount)
 	for i := 0; i < targetCount; i++ {
 		targets[i] = &core.PublishingTarget{
@@ -488,7 +488,7 @@ func newMockTargetManager(targetCount int) publishing.TargetDiscoveryManager {
 			Enabled: true,
 		}
 	}
-	
+
 	mock.On("ListTargets").Return(targets)
 	mock.On("GetTargetCount").Return(targetCount)
 	return mock
@@ -504,4 +504,3 @@ func newMockParallelPublisher() publishing.ParallelPublisher {
 		}, nil)
 	return mock
 }
-

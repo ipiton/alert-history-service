@@ -260,15 +260,15 @@ func TestProxyWebhookService_ProcessWebhook_Success(t *testing.T) {
 
 	// Setup mock expectations
 	mockAlertProc.On("ProcessAlert", mock.Anything, mock.Anything).Return(nil)
-	
+
 	mockClassSvc.On("ClassifyAlert", mock.Anything, mock.Anything).Return(&core.ClassificationResult{
 		Severity:   core.SeverityWarning,
 		Category:   "test",
 		Confidence: 0.9,
 	}, nil)
-	
+
 	mockFilter.On("ShouldBlock", mock.Anything, mock.Anything).Return(false, "")
-	
+
 	mockTargets.On("ListTargets").Return([]*core.PublishingTarget{
 		{
 			Name:    "test-target",
@@ -277,7 +277,7 @@ func TestProxyWebhookService_ProcessWebhook_Success(t *testing.T) {
 			URL:     "https://slack.com/webhook",
 		},
 	})
-	
+
 	mockPublisher.On("PublishToMultiple", mock.Anything, mock.Anything, mock.Anything).Return(&publishing.ParallelPublishResult{
 		SuccessCount: 1,
 		FailureCount: 0,
@@ -348,13 +348,13 @@ func TestProxyWebhookService_ProcessWebhook_Filtered(t *testing.T) {
 	}
 
 	mockAlertProc.On("ProcessAlert", mock.Anything, mock.Anything).Return(nil)
-	
+
 	mockClassSvc.On("ClassifyAlert", mock.Anything, mock.Anything).Return(&core.ClassificationResult{
 		Severity:   core.SeverityInfo,
 		Category:   "noise",
 		Confidence: 0.3,
 	}, nil)
-	
+
 	// Filter blocks the alert
 	mockFilter.On("ShouldBlock", mock.Anything, mock.Anything).Return(true, "noise")
 
@@ -409,12 +409,12 @@ func TestProxyWebhookService_ProcessWebhook_ClassificationFallback(t *testing.T)
 	}
 
 	mockAlertProc.On("ProcessAlert", mock.Anything, mock.Anything).Return(nil)
-	
+
 	// Classification fails
 	mockClassSvc.On("ClassifyAlert", mock.Anything, mock.Anything).Return(nil, errors.New("LLM unavailable"))
-	
+
 	mockFilter.On("ShouldBlock", mock.Anything, mock.Anything).Return(false, "")
-	
+
 	mockTargets.On("ListTargets").Return([]*core.PublishingTarget{})
 
 	ctx := context.Background()
@@ -424,7 +424,7 @@ func TestProxyWebhookService_ProcessWebhook_ClassificationFallback(t *testing.T)
 	require.NotNil(t, resp)
 	assert.Equal(t, 1, resp.AlertsSummary.TotalReceived)
 	assert.Equal(t, 1, resp.AlertsSummary.TotalClassified) // Fallback classification counted
-	
+
 	// Verify fallback classification was used (severity from labels)
 	assert.Len(t, resp.AlertResults, 1)
 	if len(resp.AlertResults) > 0 && resp.AlertResults[0].Classification != nil {
@@ -477,12 +477,12 @@ func TestProxyWebhookService_ProcessWebhook_PartialSuccess(t *testing.T) {
 		Confidence: 0.8,
 	}, nil)
 	mockFilter.On("ShouldBlock", mock.Anything, mock.Anything).Return(false, "")
-	
+
 	mockTargets.On("ListTargets").Return([]*core.PublishingTarget{
 		{Name: "target1", Type: "slack", Enabled: true},
 		{Name: "target2", Type: "pagerduty", Enabled: true},
 	})
-	
+
 	// Partial success: 1 success, 1 failure
 	mockPublisher.On("PublishToMultiple", mock.Anything, mock.Anything, mock.Anything).Return(&publishing.ParallelPublishResult{
 		SuccessCount: 1,
@@ -545,7 +545,7 @@ func TestProxyWebhookService_ProcessWebhook_NoTargets(t *testing.T) {
 		Confidence: 0.8,
 	}, nil)
 	mockFilter.On("ShouldBlock", mock.Anything, mock.Anything).Return(false, "")
-	
+
 	// No targets available
 	mockTargets.On("ListTargets").Return([]*core.PublishingTarget{})
 
@@ -859,4 +859,3 @@ func BenchmarkProxyWebhookService_ProcessWebhook_Batch(b *testing.B) {
 		_, _ = svc.ProcessWebhook(ctx, req)
 	}
 }
-

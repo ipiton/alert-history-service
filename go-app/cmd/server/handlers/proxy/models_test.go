@@ -639,4 +639,3 @@ func BenchmarkClassificationResult_ConfidenceBucket(b *testing.B) {
 		_ = cr.ConfidenceBucket()
 	}
 }
-

@@ -445,4 +445,3 @@ func BenchmarkProxyWebhookConfig_Validate(b *testing.B) {
 		_ = config.Validate()
 	}
 }
-
