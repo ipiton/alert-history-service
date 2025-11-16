@@ -1,9 +1,9 @@
 # Migration Guide: TN-061 → TN-062
 
-**Migrating from**: Universal Webhook (TN-061)  
-**Migrating to**: Intelligent Proxy Webhook (TN-062)  
-**Difficulty**: Easy  
-**Downtime**: Zero (blue-green deployment)  
+**Migrating from**: Universal Webhook (TN-061)
+**Migrating to**: Intelligent Proxy Webhook (TN-062)
+**Difficulty**: Easy
+**Downtime**: Zero (blue-green deployment)
 **Time**: 15-30 minutes
 
 ---
@@ -185,7 +185,7 @@ route:
     - match_re:
         alertname: "^(Test|Canary).*"
       receiver: 'tn062-proxy'
-      
+
 receivers:
   # Existing TN-061 (90% traffic)
   - name: 'default-tn061'
@@ -193,7 +193,7 @@ receivers:
       - url: 'https://api.alerthistory.io/v1/webhook'
         http_config:
           bearer_token: 'ah_your_key'
-  
+
   # New TN-062 (10% traffic)
   - name: 'tn062-proxy'
     webhook_configs:
@@ -421,11 +421,11 @@ kubectl delete deployment alert-history
 
 ### What Stayed the Same
 
-✅ **Authentication**: Same API keys work  
-✅ **Request Format**: Alertmanager webhook format unchanged  
-✅ **Database**: Same PostgreSQL schema  
-✅ **Monitoring**: Prometheus compatible  
-✅ **Deployment**: Same Kubernetes patterns  
+✅ **Authentication**: Same API keys work
+✅ **Request Format**: Alertmanager webhook format unchanged
+✅ **Database**: Same PostgreSQL schema
+✅ **Monitoring**: Prometheus compatible
+✅ **Deployment**: Same Kubernetes patterns
 
 ---
 
@@ -624,8 +624,7 @@ kubectl scale deployment alert-history-proxy --replicas=5
 
 ---
 
-**Migration Success Rate**: 100% (all customers successfully migrated)  
-**Average Migration Time**: 22 minutes  
-**Zero downtime**: ✅  
+**Migration Success Rate**: 100% (all customers successfully migrated)
+**Average Migration Time**: 22 minutes
+**Zero downtime**: ✅
 **Last Updated**: 2025-11-16
-

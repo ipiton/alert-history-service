@@ -1,8 +1,8 @@
 # Integration Guide: Intelligent Proxy Webhook
 
-**Target Audience**: Developers integrating with the API  
-**Difficulty**: Intermediate  
-**Prerequisites**: Familiarity with Alertmanager, REST APIs  
+**Target Audience**: Developers integrating with the API
+**Difficulty**: Intermediate
+**Prerequisites**: Familiarity with Alertmanager, REST APIs
 **Time**: 30-60 minutes
 
 ---
@@ -524,12 +524,12 @@ webhook_configs:
 
 ```promql
 # Success rate
-rate(alertmanager_notifications_total{integration="webhook"}[5m]) 
-/ 
+rate(alertmanager_notifications_total{integration="webhook"}[5m])
+/
 rate(alertmanager_notifications_failed_total{integration="webhook"}[5m])
 
 # Latency
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(alertmanager_notification_duration_seconds_bucket{integration="webhook"}[5m])
 )
 ```
@@ -546,8 +546,8 @@ histogram_quantile(0.95,
 
 ```promql
 # Cache hit rate
-rate(alert_history_proxy_classification_duration_seconds_count{cached="true"}[5m]) 
-/ 
+rate(alert_history_proxy_classification_duration_seconds_count{cached="true"}[5m])
+/
 rate(alert_history_proxy_classification_duration_seconds_count[5m])
 ```
 
@@ -613,7 +613,7 @@ route:
         severity: critical
       receiver: 'intelligent-proxy-critical'
       continue: true
-      
+
     # Warning -> Slack only
     - match:
         severity: warning
@@ -627,7 +627,7 @@ receivers:
           bearer_token: 'ah_critical_key'
         headers:
           X-Priority: critical
-          
+
   - name: 'intelligent-proxy-warning'
     webhook_configs:
       - url: 'https://api.alerthistory.io/v1/webhook/proxy'
@@ -653,7 +653,7 @@ class AlertHistoryClient:
             'X-API-Key': api_key,
             'Content-Type': 'application/json'
         })
-    
+
     def send_alert(self, alert_name, severity, summary, labels=None, annotations=None):
         """Send a single alert"""
         payload = {
@@ -673,7 +673,7 @@ class AlertHistoryClient:
                 "startsAt": datetime.utcnow().isoformat() + "Z"
             }]
         }
-        
+
         response = self.session.post(
             f"{self.base_url}/webhook/proxy",
             json=payload,
@@ -681,7 +681,7 @@ class AlertHistoryClient:
         )
         response.raise_for_status()
         return response.json()
-    
+
     def send_batch(self, alerts):
         """Send multiple alerts in batch"""
         payload = {
@@ -697,7 +697,7 @@ class AlertHistoryClient:
                 for alert in alerts
             ]
         }
-        
+
         response = self.session.post(
             f"{self.base_url}/webhook/proxy",
             json=payload,
@@ -770,13 +770,13 @@ kubectl logs -n alert-history -l app=alert-history | grep "validation failed"
 **Diagnosis**:
 ```promql
 # Check classification latency
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(alert_history_proxy_classification_duration_seconds_bucket[5m])
 )
 
 # Check cache hit rate
-rate(alert_history_proxy_classification_duration_seconds_count{cached="true"}[5m]) 
-/ 
+rate(alert_history_proxy_classification_duration_seconds_count{cached="true"}[5m])
+/
 rate(alert_history_proxy_classification_duration_seconds_count[5m])
 ```
 
@@ -823,6 +823,5 @@ kubectl logs -n alert-history -l app=alert-history | grep "filtered"
 
 ---
 
-**Last Updated**: 2025-11-16  
+**Last Updated**: 2025-11-16
 **Version**: 1.0.0
-
