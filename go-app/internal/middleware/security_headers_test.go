@@ -12,7 +12,7 @@ import (
 // TestSecurityHeadersMiddleware_DefaultHeaders tests that default security headers are applied.
 func TestSecurityHeadersMiddleware_DefaultHeaders(t *testing.T) {
 	middleware := NewSecurityHeadersMiddleware(nil)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -38,7 +38,7 @@ func TestSecurityHeadersMiddleware_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 	middleware := NewSecurityHeadersMiddleware(config)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -64,7 +64,7 @@ func TestSecurityHeadersMiddleware_CustomHeaders(t *testing.T) {
 		},
 	}
 	middleware := NewSecurityHeadersMiddleware(config)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -77,7 +77,7 @@ func TestSecurityHeadersMiddleware_CustomHeaders(t *testing.T) {
 	// Verify custom headers
 	assert.Equal(t, "custom-value", w.Header().Get("X-Custom-Header"))
 	assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options")) // Overridden
-	
+
 	// Verify other default headers still set
 	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 }
@@ -85,7 +85,7 @@ func TestSecurityHeadersMiddleware_CustomHeaders(t *testing.T) {
 // TestSecurityHeadersMiddleware_MultipleRequests tests that headers are applied to all requests.
 func TestSecurityHeadersMiddleware_MultipleRequests(t *testing.T) {
 	middleware := NewSecurityHeadersMiddleware(nil)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -105,7 +105,7 @@ func TestSecurityHeadersMiddleware_MultipleRequests(t *testing.T) {
 // TestSecurityHeadersMiddleware_PreservesHandlerResponse tests that the middleware doesn't interfere with the handler.
 func TestSecurityHeadersMiddleware_PreservesHandlerResponse(t *testing.T) {
 	middleware := NewSecurityHeadersMiddleware(nil)
-	
+
 	expectedBody := "test response"
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -122,7 +122,7 @@ func TestSecurityHeadersMiddleware_PreservesHandlerResponse(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, expectedBody, w.Body.String())
 	assert.Equal(t, "text/plain", w.Header().Get("Content-Type"))
-	
+
 	// And security headers are added
 	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 }
@@ -140,7 +140,7 @@ func TestDefaultSecurityHeadersConfig(t *testing.T) {
 // TestSecurityHeadersMiddleware_ServerHeaderRemoval tests that Server header is removed.
 func TestSecurityHeadersMiddleware_ServerHeaderRemoval(t *testing.T) {
 	middleware := NewSecurityHeadersMiddleware(nil)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Simulate server setting its header
 		w.Header().Set("Server", "Go HTTP Server")
@@ -164,7 +164,7 @@ func TestSecurityHeadersMiddleware_ServerHeaderRemoval(t *testing.T) {
 // BenchmarkSecurityHeadersMiddleware benchmarks the middleware performance.
 func BenchmarkSecurityHeadersMiddleware(b *testing.B) {
 	middleware := NewSecurityHeadersMiddleware(nil)
-	
+
 	handler := middleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -177,4 +177,3 @@ func BenchmarkSecurityHeadersMiddleware(b *testing.B) {
 		handler.ServeHTTP(w, req)
 	}
 }
-

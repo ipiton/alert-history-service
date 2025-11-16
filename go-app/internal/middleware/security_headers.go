@@ -95,4 +95,3 @@ func (m *SecurityHeadersMiddleware) setSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Server", "")
 	w.Header().Del("X-Powered-By")
 }
-
