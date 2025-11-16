@@ -3,8 +3,6 @@ package security
 import (
 	"log/slog"
 	"net/http"
-	
-	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 )
 
 // SecurityMiddleware combines all security middleware
