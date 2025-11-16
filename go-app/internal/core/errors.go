@@ -1,6 +1,9 @@
 package core
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // Filter validation errors
 var (
@@ -38,3 +41,25 @@ var (
 	ErrAlertNotFound  = errors.New("alert not found")
 	ErrDuplicateAlert = errors.New("alert already exists")
 )
+
+// TN-064: Validation and timeout errors for report endpoint
+
+// ValidationError represents a validation error with field context
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + ": " + e.Message
+}
+
+// TimeoutError represents a timeout error with operation context
+type TimeoutError struct {
+	Operation string
+	Duration  time.Duration
+}
+
+func (e *TimeoutError) Error() string {
+	return "timeout after " + e.Duration.String() + " in operation: " + e.Operation
+}

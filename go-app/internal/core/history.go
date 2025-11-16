@@ -182,3 +182,36 @@ type FlappingAlert struct {
 	FlappingScore    float64   `json:"flapping_score"`
 	LastTransitionAt time.Time `json:"last_transition_at"`
 }
+
+// ============================================================================
+// TN-064: Report Analytics Endpoint Types
+// ============================================================================
+
+// ReportRequest represents request parameters for GET /api/v2/report
+type ReportRequest struct {
+	TimeRange     *TimeRange `json:"time_range,omitempty"`
+	Namespace     *string    `json:"namespace,omitempty"`
+	Severity      *string    `json:"severity,omitempty"`
+	TopLimit      int        `json:"top_limit" validate:"min=1,max=100"`
+	MinFlapCount  int        `json:"min_flap_count" validate:"min=1,max=100"`
+	IncludeRecent bool       `json:"include_recent"`
+}
+
+// ReportResponse represents the complete analytics report
+type ReportResponse struct {
+	Metadata       *ReportMetadata    `json:"metadata"`
+	Summary        *AggregatedStats   `json:"summary"`
+	TopAlerts      []*TopAlert        `json:"top_alerts"`
+	FlappingAlerts []*FlappingAlert   `json:"flapping_alerts"`
+	RecentAlerts   []*Alert           `json:"recent_alerts,omitempty"`
+}
+
+// ReportMetadata contains report generation metadata
+type ReportMetadata struct {
+	GeneratedAt      time.Time `json:"generated_at"`
+	RequestID        string    `json:"request_id"`
+	ProcessingTimeMs int64     `json:"processing_time_ms"`
+	CacheHit         bool      `json:"cache_hit"`
+	PartialFailure   bool      `json:"partial_failure"`
+	Errors           []string  `json:"errors,omitempty"`
+}
