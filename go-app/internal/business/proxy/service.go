@@ -11,17 +11,19 @@ import (
 	"github.com/vitaliisemenov/alert-history/go-app/cmd/server/handlers/proxy"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 )
 
 // ProxyWebhookService implements the ProxyWebhookService interface.
 type ProxyWebhookService struct {
 	// Core dependencies
-	alertProcessor    services.AlertProcessor        // TN-061 (storage)
-	classificationSvc services.ClassificationService // TN-033
-	// filterEngine      services.FilterEngine          // TN-035 (to be added)
-	// targetManager     services.DynamicTargetManager  // TN-047 (to be added)
-	// parallelPublisher services.ParallelPublisher     // TN-058 (to be added)
+	alertProcessor    services.AlertProcessor                                     // TN-061 (storage)
+	classificationSvc services.ClassificationService                              // TN-033
+	filterEngine      services.FilterEngine                                       // TN-035
+	targetManager     publishing.TargetDiscoveryManager                           // TN-047
+	parallelPublisher publishing.ParallelPublisher                                // TN-058
+
 
 	// Configuration
 	config  *proxy.ProxyWebhookConfig
@@ -59,12 +61,12 @@ type ProxyStats struct {
 type ServiceConfig struct {
 	AlertProcessor    services.AlertProcessor
 	ClassificationSvc services.ClassificationService
-	// FilterEngine      services.FilterEngine
-	// TargetManager     services.DynamicTargetManager
-	// ParallelPublisher services.ParallelPublisher
-	Config  *proxy.ProxyWebhookConfig
-	Logger  *slog.Logger
-	Metrics *metrics.MetricsRegistry
+	FilterEngine      services.FilterEngine
+	TargetManager     publishing.TargetDiscoveryManager
+	ParallelPublisher publishing.ParallelPublisher
+	Config            *proxy.ProxyWebhookConfig
+	Logger            *slog.Logger
+	Metrics           *metrics.MetricsRegistry
 }
 
 // NewProxyWebhookService creates a new proxy webhook service.
@@ -75,6 +77,15 @@ func NewProxyWebhookService(cfg ServiceConfig) (*ProxyWebhookService, error) {
 	}
 	if cfg.ClassificationSvc == nil {
 		return nil, fmt.Errorf("classification service is required")
+	}
+	if cfg.FilterEngine == nil {
+		return nil, fmt.Errorf("filter engine is required")
+	}
+	if cfg.TargetManager == nil {
+		return nil, fmt.Errorf("target manager is required")
+	}
+	if cfg.ParallelPublisher == nil {
+		return nil, fmt.Errorf("parallel publisher is required")
 	}
 	if cfg.Config == nil {
 		cfg.Config = proxy.DefaultProxyWebhookConfig()
@@ -91,6 +102,9 @@ func NewProxyWebhookService(cfg ServiceConfig) (*ProxyWebhookService, error) {
 	svc := &ProxyWebhookService{
 		alertProcessor:    cfg.AlertProcessor,
 		classificationSvc: cfg.ClassificationSvc,
+		filterEngine:      cfg.FilterEngine,
+		targetManager:     cfg.TargetManager,
+		parallelPublisher: cfg.ParallelPublisher,
 		config:            cfg.Config,
 		logger:            cfg.Logger,
 		metrics:           &ProxyMetrics{},
@@ -102,6 +116,7 @@ func NewProxyWebhookService(cfg ServiceConfig) (*ProxyWebhookService, error) {
 		"filtering_enabled", cfg.Config.EnableFiltering,
 		"publishing_enabled", cfg.Config.EnablePublishing,
 		"max_concurrent_alerts", cfg.Config.MaxConcurrentAlerts,
+		"targets_available", cfg.TargetManager.GetTargetCount(),
 	)
 
 	return svc, nil
@@ -128,7 +143,7 @@ func (s *ProxyWebhookService) ProcessWebhook(
 
 	// Process each alert through pipelines
 	results := make([]proxy.AlertProcessingResult, 0, len(req.Alerts))
-	
+
 	// Process alerts (sequential for now, can parallelize later with semaphore)
 	for _, alertPayload := range req.Alerts {
 		result, err := s.processAlert(ctx, &alertPayload, req.Receiver)
@@ -136,7 +151,7 @@ func (s *ProxyWebhookService) ProcessWebhook(
 			// Fail fast if configured
 			return nil, fmt.Errorf("failed to process alert: %w", err)
 		}
-		
+
 		if result != nil {
 			results = append(results, *result)
 		}
@@ -345,15 +360,38 @@ func (s *ProxyWebhookService) filterAlert(
 	ctx, cancel := context.WithTimeout(ctx, s.config.FilteringTimeout)
 	defer cancel()
 
-	// TODO: Integrate with TN-035 FilterEngine
-	// For now, use simple severity-based filtering
-	
-	// Example: Filter out info alerts
-	if classification.Severity == "info" {
-		return proxy.FilterActionDeny, "severity 'info' filtered by default rule", nil
+	// Convert proxy.ClassificationResult to core.ClassificationResult
+	var coreClassification *core.ClassificationResult
+	if classification != nil {
+		coreClassification = &core.ClassificationResult{
+			Severity:   severityStringToCore(classification.Severity),
+			Category:   classification.Category,
+			Confidence: classification.Confidence,
+		}
 	}
 
-	return proxy.FilterActionAllow, "severity allowed", nil
+	// Call TN-035 FilterEngine
+	blocked, reason := s.filterEngine.ShouldBlock(alert, coreClassification)
+
+	if blocked {
+		return proxy.FilterActionDeny, reason, nil
+	}
+
+	return proxy.FilterActionAllow, "filter passed", nil
+}
+
+// severityStringToCore converts string severity to core.Severity
+func severityStringToCore(severity string) core.Severity {
+	switch severity {
+	case "critical":
+		return core.SeverityCritical
+	case "warning":
+		return core.SeverityWarning
+	case "info":
+		return core.SeverityInfo
+	default:
+		return core.SeverityUnknown
+	}
 }
 
 // publishAlert runs publishing pipeline.
@@ -362,6 +400,8 @@ func (s *ProxyWebhookService) publishAlert(
 	alert *core.Alert,
 	classification *proxy.ClassificationResult,
 ) ([]proxy.TargetPublishingResult, error) {
+	startTime := time.Now()
+
 	// Check if publishing is enabled
 	if !s.config.EnablePublishing {
 		return []proxy.TargetPublishingResult{}, nil
@@ -371,16 +411,81 @@ func (s *ProxyWebhookService) publishAlert(
 	ctx, cancel := context.WithTimeout(ctx, s.config.PublishingTimeout)
 	defer cancel()
 
-	// TODO: Integrate with TN-058 ParallelPublisher
-	// For now, return empty results (no targets configured)
-	
-	s.logger.Debug("Publishing pipeline",
+	// Get all enabled targets from TN-047 TargetDiscoveryManager
+	targets := s.targetManager.ListTargets()
+	if len(targets) == 0 {
+		s.logger.Warn("No publishing targets available",
+			"fingerprint", alert.Fingerprint)
+		return []proxy.TargetPublishingResult{}, nil
+	}
+
+	// Filter enabled targets
+	enabledTargets := make([]*core.PublishingTarget, 0, len(targets))
+	for _, target := range targets {
+		if target.Enabled {
+			enabledTargets = append(enabledTargets, target)
+		}
+	}
+
+	if len(enabledTargets) == 0 {
+		s.logger.Warn("No enabled targets available",
+			"fingerprint", alert.Fingerprint,
+			"total_targets", len(targets))
+		return []proxy.TargetPublishingResult{}, nil
+	}
+
+	// Convert to EnrichedAlert for TN-058 ParallelPublisher
+	enrichedAlert := &core.EnrichedAlert{
+		Alert: alert,
+		Classification: &core.ClassificationResult{
+			Severity:   severityStringToCore(classification.Severity),
+			Category:   classification.Category,
+			Confidence: classification.Confidence,
+		},
+		EnrichmentMetadata: map[string]string{
+			"source":    "proxy_webhook",
+			"timestamp": time.Now().Format(time.RFC3339),
+		},
+		ProcessingTimestamp: time.Now(),
+	}
+
+	// Publish to all enabled targets in parallel using TN-058
+	result, err := s.parallelPublisher.PublishToMultiple(ctx, enrichedAlert, enabledTargets)
+	if err != nil {
+		s.logger.Error("Parallel publishing failed",
+			"fingerprint", alert.Fingerprint,
+			"error", err,
+			"targets", len(enabledTargets))
+		// Continue with partial results if available
+	}
+
+	// Convert publishing.TargetPublishResult to proxy.TargetPublishingResult
+	proxyResults := make([]proxy.TargetPublishingResult, 0)
+	if result != nil {
+		for _, pubResult := range result.Results {
+			proxyResult := proxy.TargetPublishingResult{
+				TargetName:     pubResult.TargetName,
+				TargetType:     pubResult.TargetType,
+				Success:        pubResult.Success,
+				StatusCode:     pubResult.StatusCode,
+				ErrorMessage:   pubResult.ErrorMessage,
+				ErrorCode:      pubResult.ErrorCode,
+				RetryCount:     pubResult.RetryCount,
+				ProcessingTime: pubResult.Duration,
+			}
+			proxyResults = append(proxyResults, proxyResult)
+		}
+	}
+
+	s.logger.Info("Publishing pipeline complete",
 		"fingerprint", alert.Fingerprint,
-		"classification", classification.Severity,
+		"targets", len(enabledTargets),
+		"successful", result.SuccessCount,
+		"failed", result.FailureCount,
+		"duration", time.Since(startTime),
 	)
 
-	// Placeholder: No actual publishing yet
-	return []proxy.TargetPublishingResult{}, nil
+	return proxyResults, nil
 }
 
 // aggregateResults builds final response from pipeline results.
@@ -490,11 +595,15 @@ func (s *ProxyWebhookService) Health(ctx context.Context) error {
 		return fmt.Errorf("classification service unhealthy: %w", err)
 	}
 
-	// TODO: Check other dependencies when integrated
-	// - FilterEngine
-	// - TargetManager
-	// - ParallelPublisher
+	// FilterEngine doesn't have Health() method - skip health check
+
+	// Check target manager (has targets discovered)
+	if s.targetManager.GetTargetCount() == 0 {
+		s.logger.Warn("No publishing targets discovered (non-critical)")
+		// Not critical - we can continue without publishing
+	}
+
+	// ParallelPublisher doesn't have Health() method - skip health check
 
 	return nil
 }
-

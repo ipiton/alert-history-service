@@ -1,10 +1,10 @@
 # TN-062: POST /webhook/proxy - Technical Design Specification
 
-**Project**: Intelligent Proxy Webhook Endpoint  
-**Version**: 1.0  
-**Date**: 2025-11-15  
-**Status**: Draft  
-**Target Quality**: 150% Enterprise Grade (A++)  
+**Project**: Intelligent Proxy Webhook Endpoint
+**Version**: 1.0
+**Date**: 2025-11-15
+**Status**: Draft
+**Target Quality**: 150% Enterprise Grade (A++)
 
 ---
 
@@ -231,7 +231,7 @@ type ProxyWebhookConfig struct {
 type ProxyWebhookService interface {
     // ProcessWebhook processes a proxy webhook request end-to-end
     ProcessWebhook(ctx context.Context, req *ProxyWebhookRequest) (*ProxyWebhookResponse, error)
-    
+
     // Health checks service health
     Health(ctx context.Context) error
 }
@@ -244,12 +244,12 @@ type proxyWebhookService struct {
     filterEngine         FilterEngine              // TN-035
     targetManager        DynamicTargetManager      // TN-047
     parallelPublisher    ParallelPublisher         // TN-058
-    
+
     // Configuration
     config               *ProxyServiceConfig
     logger               *slog.Logger
     metrics              *ProxyMetrics
-    
+
     // Internal state
     mu                   sync.RWMutex
     stats                *ProxyStats
@@ -316,18 +316,18 @@ type ProxyServiceConfig struct {
     ClassificationConfig ClassificationPipelineConfig
     FilteringConfig      FilteringPipelineConfig
     PublishingConfig     PublishingPipelineConfig
-    
+
     // Behavior configuration
     EnableClassification bool          `yaml:"enable_classification"`
     EnableFiltering      bool          `yaml:"enable_filtering"`
     EnablePublishing     bool          `yaml:"enable_publishing"`
     ContinueOnError      bool          `yaml:"continue_on_error"` // Continue on partial failures
-    
+
     // Timeouts
     ClassificationTimeout time.Duration `yaml:"classification_timeout"` // 5s
     FilteringTimeout      time.Duration `yaml:"filtering_timeout"`      // 1s
     PublishingTimeout     time.Duration `yaml:"publishing_timeout"`     // 10s (5s per target)
-    
+
     // Concurrency
     MaxConcurrentAlerts   int `yaml:"max_concurrent_alerts"`   // 10 (within batch)
     MaxPublishingTargets  int `yaml:"max_publishing_targets"`  // 10 (concurrent publishes)
@@ -363,26 +363,26 @@ type ProxyMetrics struct {
     RequestsTotal       *prometheus.CounterVec   // {status, source}
     RequestDuration     *prometheus.HistogramVec // {path, method}
     ActiveRequests      prometheus.Gauge
-    
+
     // Alert processing metrics
     AlertsReceived      *prometheus.CounterVec // {receiver}
     AlertsProcessed     *prometheus.CounterVec // {result} (success, filtered, failed)
     AlertsClassified    *prometheus.CounterVec // {severity, confidence, source}
     AlertsFiltered      *prometheus.CounterVec // {reason, action}
     AlertsPublished     *prometheus.CounterVec // {target, result}
-    
+
     // Timing metrics
     ClassificationTime  *prometheus.HistogramVec // {cache_hit}
     FilteringTime       prometheus.Histogram
     PublishingTime      *prometheus.HistogramVec // {target}
     TotalProcessingTime prometheus.Histogram
-    
+
     // Error metrics
     ErrorsTotal         *prometheus.CounterVec // {type, severity}
     ClassificationErrors *prometheus.CounterVec // {reason}
     FilteringErrors     *prometheus.CounterVec // {reason}
     PublishingErrors    *prometheus.CounterVec // {target, reason}
-    
+
     // Resource metrics
     Goroutines          prometheus.Gauge
     MemoryBytes         *prometheus.GaugeVec // {type} (heap, stack, etc.)
@@ -417,25 +417,25 @@ func (s *proxyWebhookService) classifyAlert(
     alert *core.Alert,
 ) (*ClassificationResult, time.Duration, error) {
     startTime := time.Now()
-    
+
     // Check if classification is enabled
     if !s.config.EnableClassification {
         return s.defaultClassification(alert), time.Since(startTime), nil
     }
-    
+
     // Add timeout to context
     ctx, cancel := context.WithTimeout(ctx, s.config.ClassificationTimeout)
     defer cancel()
-    
+
     // Call classification service (handles caching, circuit breaker, fallback)
     result, err := s.classificationSvc.ClassifyAlert(ctx, alert)
     duration := time.Since(startTime)
-    
+
     // Record metrics
     s.metrics.ClassificationTime.WithLabelValues(
         strconv.FormatBool(result.Source == "cache"),
     ).Observe(duration.Seconds())
-    
+
     if err != nil {
         s.logger.Warn("Classification failed, using default",
             "fingerprint", alert.Fingerprint,
@@ -443,13 +443,13 @@ func (s *proxyWebhookService) classifyAlert(
         s.metrics.ClassificationErrors.WithLabelValues("service_error").Inc()
         return s.defaultClassification(alert), duration, nil
     }
-    
+
     s.metrics.AlertsClassified.WithLabelValues(
         string(result.Severity),
         result.ConfidenceBucket(), // high/medium/low
         result.Source,
     ).Inc()
-    
+
     return result, duration, nil
 }
 
@@ -466,7 +466,7 @@ func (s *proxyWebhookService) defaultClassification(alert *core.Alert) *Classifi
             severity = core.SeverityInfo
         }
     }
-    
+
     return &ClassificationResult{
         Severity:    severity,
         Category:    "unknown",
@@ -519,11 +519,11 @@ func (s *proxyWebhookService) filterAlert(
     if !s.config.EnableFiltering {
         return FilterActionAllow, "filtering disabled", nil
     }
-    
+
     // Add timeout to context
     ctx, cancel := context.WithTimeout(ctx, s.config.FilteringTimeout)
     defer cancel()
-    
+
     // Build filter context
     filterCtx := &FilterContext{
         Alert:          alert,
@@ -531,7 +531,7 @@ func (s *proxyWebhookService) filterAlert(
         Receiver:       receiver,
         Timestamp:      time.Now(),
     }
-    
+
     // Evaluate filters
     result, err := s.filterEngine.EvaluateAlert(ctx, filterCtx)
     if err != nil {
@@ -539,26 +539,26 @@ func (s *proxyWebhookService) filterAlert(
             "fingerprint", alert.Fingerprint,
             "error", err)
         s.metrics.FilteringErrors.WithLabelValues("evaluation_error").Inc()
-        
+
         // Default action on error (configurable)
         if s.config.FilteringConfig.DefaultAction == "deny" {
             return FilterActionDeny, "filter error (default deny)", err
         }
         return FilterActionAllow, "filter error (default allow)", err
     }
-    
+
     // Record metrics
     s.metrics.AlertsFiltered.WithLabelValues(
         result.Reason,
         string(result.Action),
     ).Inc()
-    
+
     // Log filter decision
     s.logger.Info("Filter decision",
         "fingerprint", alert.Fingerprint,
         "action", result.Action,
         "reason", result.Reason)
-    
+
     return result.Action, result.Reason, nil
 }
 ```
@@ -574,17 +574,17 @@ type SeverityFilter struct {
 
 func (f *SeverityFilter) Evaluate(ctx *FilterContext) FilterAction {
     severity := ctx.Classification.Severity
-    
+
     // Check deny list first
     if contains(f.DenyList, severity) {
         return FilterActionDeny
     }
-    
+
     // Check allow list
     if len(f.AllowList) > 0 && !contains(f.AllowList, severity) {
         return FilterActionDeny
     }
-    
+
     return FilterActionAllow
 }
 ```
@@ -598,14 +598,14 @@ type NamespaceFilter struct {
 
 func (f *NamespaceFilter) Evaluate(ctx *FilterContext) FilterAction {
     namespace := ctx.Alert.Labels["namespace"]
-    
+
     // Check exclude patterns first
     for _, pattern := range f.ExcludePatterns {
         if matched, _ := regexp.MatchString(pattern, namespace); matched {
             return FilterActionDeny
         }
     }
-    
+
     // Check include patterns
     if len(f.IncludePatterns) > 0 {
         for _, pattern := range f.IncludePatterns {
@@ -615,7 +615,7 @@ func (f *NamespaceFilter) Evaluate(ctx *FilterContext) FilterAction {
         }
         return FilterActionDeny // No include pattern matched
     }
-    
+
     return FilterActionAllow
 }
 ```
@@ -633,21 +633,21 @@ func (f *TimeWindowFilter) Evaluate(ctx *FilterContext) FilterAction {
     if !f.BusinessHours {
         return FilterActionAllow
     }
-    
+
     loc, _ := time.LoadLocation(f.Timezone)
     now := ctx.Timestamp.In(loc)
     hour := now.Hour()
-    
+
     // Check if within business hours
     if hour >= f.StartHour && hour < f.EndHour {
         return FilterActionAllow
     }
-    
+
     // Outside business hours - check severity
     if ctx.Classification.Severity == core.SeverityCritical {
         return FilterActionAllow // Always allow critical
     }
-    
+
     return FilterActionDeny // Deny non-critical outside hours
 }
 ```
@@ -686,27 +686,27 @@ func (s *proxyWebhookService) publishAlert(
     if !s.config.EnablePublishing {
         return []TargetPublishingResult{}, nil
     }
-    
+
     // Add timeout to context
     ctx, cancel := context.WithTimeout(ctx, s.config.PublishingTimeout)
     defer cancel()
-    
+
     // Get active targets
     activeTargets, err := s.targetManager.GetActiveTargets(ctx)
     if err != nil {
         s.logger.Error("Failed to get active targets", "error", err)
         return nil, fmt.Errorf("target discovery failed: %w", err)
     }
-    
+
     if len(activeTargets) == 0 {
         s.logger.Warn("No active targets available")
         return []TargetPublishingResult{}, nil
     }
-    
+
     s.logger.Info("Publishing alert",
         "fingerprint", alert.Fingerprint,
         "targets", len(activeTargets))
-    
+
     // Publish to all active targets in parallel
     results, err := s.parallelPublisher.PublishToMultiple(
         ctx,
@@ -714,23 +714,23 @@ func (s *proxyWebhookService) publishAlert(
         classification,
         activeTargets,
     )
-    
+
     // Record metrics
     for _, result := range results {
         status := "success"
         if !result.Success {
             status = "failed"
         }
-        
+
         s.metrics.AlertsPublished.WithLabelValues(
             result.TargetName,
             status,
         ).Inc()
-        
+
         s.metrics.PublishingTime.WithLabelValues(
             result.TargetName,
         ).Observe(result.ProcessingTime.Seconds())
-        
+
         if !result.Success {
             s.metrics.PublishingErrors.WithLabelValues(
                 result.TargetName,
@@ -738,7 +738,7 @@ func (s *proxyWebhookService) publishAlert(
             ).Inc()
         }
     }
-    
+
     return results, nil
 }
 ```
@@ -766,29 +766,29 @@ func (p *parallelPublisher) PublishToMultiple(
     // Create wait group for parallel execution
     var wg sync.WaitGroup
     results := make([]TargetPublishingResult, len(targets))
-    
+
     // Limit concurrency
     sem := make(chan struct{}, p.config.MaxConcurrency)
-    
+
     // Publish to each target in parallel
     for i, target := range targets {
         wg.Add(1)
         go func(idx int, tgt PublishingTarget) {
             defer wg.Done()
-            
+
             // Acquire semaphore
             sem <- struct{}{}
             defer func() { <-sem }()
-            
+
             // Publish to single target
             result := p.publishToTarget(ctx, alert, classification, tgt)
             results[idx] = result
         }(i, target)
     }
-    
+
     // Wait for all publishes to complete
     wg.Wait()
-    
+
     return results, nil
 }
 
@@ -803,11 +803,11 @@ func (p *parallelPublisher) publishToTarget(
         TargetName: target.Name,
         TargetType: target.Type,
     }
-    
+
     // Add per-target timeout
     ctx, cancel := context.WithTimeout(ctx, p.config.TimeoutPerTarget)
     defer cancel()
-    
+
     // Format alert for target
     formatted, err := p.formatter.Format(alert, classification, target.Type)
     if err != nil {
@@ -817,7 +817,7 @@ func (p *parallelPublisher) publishToTarget(
         result.ProcessingTime = time.Since(startTime)
         return result
     }
-    
+
     // Get target-specific publisher
     publisher := p.registry.GetPublisher(target.Type)
     if publisher == nil {
@@ -827,7 +827,7 @@ func (p *parallelPublisher) publishToTarget(
         result.ProcessingTime = time.Since(startTime)
         return result
     }
-    
+
     // Publish with retry
     err = p.publishWithRetry(ctx, publisher, target, formatted)
     if err != nil {
@@ -835,7 +835,7 @@ func (p *parallelPublisher) publishToTarget(
         result.ErrorMessage = err.Error()
         result.ErrorCode = classifyPublishingError(err)
         result.RetryCount = p.config.RetryMaxAttempts
-        
+
         // Submit to DLQ
         if p.config.DLQEnabled {
             p.submitToDLQ(alert, target, err)
@@ -844,7 +844,7 @@ func (p *parallelPublisher) publishToTarget(
         result.Success = true
         result.StatusCode = 200 // Simplified
     }
-    
+
     result.ProcessingTime = time.Since(startTime)
     return result
 }
@@ -856,7 +856,7 @@ func (p *parallelPublisher) publishWithRetry(
     payload []byte,
 ) error {
     var lastErr error
-    
+
     for attempt := 0; attempt < p.config.RetryMaxAttempts; attempt++ {
         if attempt > 0 {
             // Exponential backoff: 100ms → 500ms → 2s
@@ -867,20 +867,20 @@ func (p *parallelPublisher) publishWithRetry(
                 return ctx.Err()
             }
         }
-        
+
         err := publisher.Publish(ctx, target, payload)
         if err == nil {
             return nil // Success
         }
-        
+
         lastErr = err
-        
+
         // Check if retryable
         if !isRetryableError(err) {
             return err
         }
     }
-    
+
     return fmt.Errorf("max retries exceeded: %w", lastErr)
 }
 ```
@@ -901,14 +901,14 @@ func (s *proxyWebhookService) aggregateResults(
         Timestamp:      time.Now(),
         ProcessingTime: totalTime,
     }
-    
+
     // Calculate summary counts
     summary := AlertsProcessingSummary{
         TotalReceived: len(results),
     }
-    
+
     publishingSummary := PublishingSummary{}
-    
+
     for _, result := range results {
         switch result.Status {
         case "success":
@@ -920,11 +920,11 @@ func (s *proxyWebhookService) aggregateResults(
         case "failed":
             summary.TotalFailed++
         }
-        
+
         if result.Classification != nil {
             summary.TotalClassified++
         }
-        
+
         // Aggregate publishing results
         for _, pubResult := range result.PublishingResults {
             publishingSummary.TotalTargets++
@@ -936,11 +936,11 @@ func (s *proxyWebhookService) aggregateResults(
             publishingSummary.TotalPublishTime += pubResult.ProcessingTime
         }
     }
-    
+
     response.AlertsSummary = summary
     response.AlertResults = results
     response.PublishingSummary = publishingSummary
-    
+
     // Determine overall status
     if summary.TotalFailed == 0 && summary.TotalFiltered == 0 {
         response.Status = "success"
@@ -958,7 +958,7 @@ func (s *proxyWebhookService) aggregateResults(
             publishingSummary.TotalTargets,
         )
     }
-    
+
     return response
 }
 ```
@@ -972,12 +972,12 @@ func (s *proxyWebhookService) aggregateResults(
 ```
 1. Alertmanager sends POST /webhook/proxy
    └─> Middleware stack (auth, rate limit, logging, metrics)
-   
+
 2. ProxyWebhookHTTPHandler.ServeHTTP()
    ├─> Parse JSON (ProxyWebhookRequest)
    ├─> Validate schema
    └─> Call ProxyWebhookService.ProcessWebhook()
-   
+
 3. ProxyWebhookService.ProcessWebhook()
    ├─> For each alert in request.alerts[]:
    │   ├─> Convert to core.Alert
@@ -1000,7 +1000,7 @@ func (s *proxyWebhookService) aggregateResults(
    │       └─> Return []TargetPublishingResult
    │
    └─> Aggregate results → ProxyWebhookResponse
-   
+
 4. ProxyWebhookHTTPHandler.writeResponse()
    ├─> Set HTTP 200 OK
    ├─> Set Content-Type: application/json
@@ -1024,12 +1024,12 @@ func (s *proxyWebhookService) aggregateResults(
 
 ```
 1. Request received with 2 alerts
-   
+
 2. Alert 1 processing:
    ├─> Classification: Success (150ms, LLM call)
    ├─> Filtering: DENY (severity=info, rule: deny-low-severity)
    └─> Publishing: SKIPPED (filtered)
-   
+
 3. Alert 2 processing:
    ├─> Classification: Success (2ms, cache hit)
    ├─> Filtering: ALLOW
@@ -1041,7 +1041,7 @@ func (s *proxyWebhookService) aggregateResults(
        │   ├─> Retry 3: FAILED (max retries)
        │   └─> Submit to DLQ
        └─> Target 3 (Rootly): Success (180ms)
-   
+
 4. Response:
    ├─> HTTP 207 Multi-Status
    ├─> Status: "partial"
@@ -1055,7 +1055,7 @@ func (s *proxyWebhookService) aggregateResults(
 
 ```
 1. Request received with 1 alert
-   
+
 2. Alert processing:
    ├─> Classification:
    │   ├─> Check memory cache → MISS
@@ -1068,7 +1068,7 @@ func (s *proxyWebhookService) aggregateResults(
    ├─> Filtering: ALLOW (fallback classification accepted)
    │
    └─> Publishing: Success (all targets)
-   
+
 3. Response:
    ├─> HTTP 200 OK (classification fallback is not an error)
    ├─> Status: "success"
@@ -1094,34 +1094,34 @@ sequenceDiagram
     participant PUB as ParallelPublisher
     participant SLACK as Slack Publisher
     participant PD as PagerDuty Publisher
-    
+
     AM->>MW: POST /webhook/proxy (webhook payload)
     MW->>MW: Auth, RateLimit, Logging, Metrics
     MW->>HTTP: ServeHTTP(request)
     HTTP->>HTTP: parseRequest() → ProxyWebhookRequest
     HTTP->>HTTP: validateRequest()
     HTTP->>SVC: ProcessWebhook(ctx, request)
-    
+
     loop For each alert
         SVC->>SVC: convertToAlert()
-        
+
         Note over SVC,CLASS: Classification Pipeline
         SVC->>CLASS: ClassifyAlert(ctx, alert)
         CLASS->>CLASS: Check L1 cache (memory) → HIT
         CLASS-->>SVC: ClassificationResult (1ms)
-        
+
         Note over SVC,FILTER: Filtering Pipeline
         SVC->>FILTER: EvaluateAlert(ctx, alert, classification)
         FILTER->>FILTER: Evaluate severity rule → ALLOW
         FILTER->>FILTER: Evaluate namespace rule → ALLOW
         FILTER-->>SVC: FilterActionAllow, reason (0.5ms)
-        
+
         Note over SVC,PUB: Publishing Pipeline
         SVC->>TARGET: GetActiveTargets(ctx)
         TARGET-->>SVC: []PublishingTarget (2 targets)
-        
+
         SVC->>PUB: PublishToMultiple(ctx, alert, targets)
-        
+
         par Parallel Publishing
             PUB->>SLACK: Publish(ctx, target, payload)
             SLACK->>SLACK: HTTP POST to Slack webhook
@@ -1131,10 +1131,10 @@ sequenceDiagram
             PD->>PD: HTTP POST to PagerDuty API
             PD-->>PUB: Success (230ms)
         end
-        
+
         PUB-->>SVC: []TargetPublishingResult
     end
-    
+
     SVC->>SVC: aggregateResults()
     SVC-->>HTTP: ProxyWebhookResponse
     HTTP->>HTTP: writeResponse(200, response)
@@ -1152,27 +1152,27 @@ sequenceDiagram
     participant LLM as LLM Proxy
     participant CB as Circuit Breaker
     participant FB as Fallback Engine
-    
+
     SVC->>CLASS: ClassifyAlert(ctx, alert)
     CLASS->>CLASS: Check L1 cache (memory) → MISS
     CLASS->>CACHE: Get(classification:fingerprint)
     CACHE-->>CLASS: Cache MISS
-    
+
     CLASS->>CB: Check circuit state
     CB-->>CLASS: CLOSED (OK to proceed)
-    
+
     CLASS->>LLM: POST /classify (alert data)
     LLM-->>CLASS: TIMEOUT (5s)
-    
+
     CLASS->>CB: Record failure
     CB->>CB: Increment failure count (4/5)
-    
+
     Note over CLASS,FB: Fallback Triggered
     CLASS->>FB: ClassifyWithRules(alert)
     FB->>FB: Extract severity from labels
     FB->>FB: Infer category from namespace
     FB-->>CLASS: ClassificationResult (confidence=0.6, source=fallback)
-    
+
     CLASS->>CLASS: Log warning: "LLM failed, fallback used"
     CLASS-->>SVC: ClassificationResult (source=fallback)
 ```
@@ -1186,33 +1186,33 @@ sequenceDiagram
     participant PDAPI as PagerDuty API
     participant QUEUE as Publishing Queue
     participant DLQ as Dead Letter Queue
-    
+
     PUB->>PDPUB: Publish(ctx, target, payload)
-    
+
     Note over PDPUB,PDAPI: Attempt 1
     PDPUB->>PDAPI: POST /events (alert)
     PDAPI-->>PDPUB: 503 Service Unavailable
-    
+
     PDPUB->>PDPUB: Wait 100ms (exponential backoff)
-    
+
     Note over PDPUB,PDAPI: Attempt 2
     PDPUB->>PDAPI: POST /events (alert)
     PDAPI-->>PDPUB: TIMEOUT (5s)
-    
+
     PDPUB->>PDPUB: Wait 500ms
-    
+
     Note over PDPUB,PDAPI: Attempt 3
     PDPUB->>PDAPI: POST /events (alert)
     PDAPI-->>PDPUB: 503 Service Unavailable
-    
+
     PDPUB->>PDPUB: Max retries exceeded
-    
+
     Note over PDPUB,DLQ: DLQ Submission
     PDPUB->>QUEUE: SubmitJob(alert, target, priority=high)
     QUEUE->>DLQ: Store(job) for later retry
     DLQ-->>QUEUE: Stored (job_id)
     QUEUE-->>PDPUB: JobID
-    
+
     PDPUB-->>PUB: TargetPublishingResult (success=false, retry_count=3)
 ```
 
@@ -1315,7 +1315,7 @@ CREATE TABLE alerts (
     generator_url        TEXT,
     created_at           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    
+
     -- Indexes
     INDEX idx_alerts_fingerprint (fingerprint),
     INDEX idx_alerts_status (status),
@@ -1337,7 +1337,7 @@ CREATE TABLE classifications (
     recommendations      TEXT[],
     classification_time  FLOAT,  -- seconds
     created_at           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    
+
     -- Indexes
     INDEX idx_classifications_fingerprint (fingerprint),
     INDEX idx_classifications_severity (severity),
@@ -1355,26 +1355,26 @@ CREATE TABLE proxy_processing_logs (
     request_id           VARCHAR(64) NOT NULL,
     fingerprint          VARCHAR(64) NOT NULL,
     receiver             VARCHAR(100) NOT NULL,
-    
+
     -- Processing stages
     classification_time  FLOAT,  -- ms
     filtering_time       FLOAT,  -- ms
     publishing_time      FLOAT,  -- ms
     total_time           FLOAT,  -- ms
-    
+
     -- Results
     classification_result JSONB,  -- ClassificationResult
     filter_action        VARCHAR(10) CHECK (filter_action IN ('allow', 'deny')),
     filter_reason        TEXT,
     publishing_results   JSONB,  -- []TargetPublishingResult
-    
+
     -- Status
     status               VARCHAR(20) NOT NULL CHECK (status IN ('success', 'filtered', 'failed')),
     error_message        TEXT,
-    
+
     -- Metadata
     created_at           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    
+
     -- Indexes
     INDEX idx_proxy_logs_request_id (request_id),
     INDEX idx_proxy_logs_fingerprint (fingerprint),
@@ -1384,7 +1384,7 @@ CREATE TABLE proxy_processing_logs (
 );
 
 -- Retention policy: Keep logs for 30 days
-CREATE INDEX idx_proxy_logs_created_at_btree ON proxy_processing_logs (created_at) 
+CREATE INDEX idx_proxy_logs_created_at_btree ON proxy_processing_logs (created_at)
 WHERE created_at > NOW() - INTERVAL '30 days';
 ```
 
@@ -1400,7 +1400,7 @@ type ProxyWebhookRequest struct {
     // Required fields
     Alerts   []AlertPayload `json:"alerts" validate:"required,min=1,max=100"`
     Receiver string         `json:"receiver" validate:"required"`
-    
+
     // Optional fields (Alertmanager metadata)
     Status            string            `json:"status,omitempty"`
     Version           string            `json:"version,omitempty"`
@@ -1429,7 +1429,7 @@ func (r *ProxyWebhookRequest) Validate() error {
     if err := validate.Struct(r); err != nil {
         return fmt.Errorf("validation failed: %w", err)
     }
-    
+
     // Additional validation
     if len(r.Alerts) == 0 {
         return errors.New("alerts array cannot be empty")
@@ -1437,13 +1437,13 @@ func (r *ProxyWebhookRequest) Validate() error {
     if len(r.Alerts) > 100 {
         return errors.New("alerts array cannot exceed 100 items")
     }
-    
+
     for i, alert := range r.Alerts {
         if err := alert.Validate(); err != nil {
             return fmt.Errorf("alert[%d] validation failed: %w", i, err)
         }
     }
-    
+
     return nil
 }
 
@@ -1474,13 +1474,13 @@ type ProxyWebhookResponse struct {
     Message        string        `json:"message"`
     Timestamp      time.Time     `json:"timestamp"`
     ProcessingTime time.Duration `json:"processing_time_ms"`
-    
+
     // Alerts processing summary
     AlertsSummary AlertsProcessingSummary `json:"alerts_summary"`
-    
+
     // Per-alert results
     AlertResults []AlertProcessingResult `json:"alert_results"`
-    
+
     // Publishing summary
     PublishingSummary PublishingSummary `json:"publishing_summary"`
 }
@@ -1501,18 +1501,18 @@ type AlertProcessingResult struct {
     Fingerprint string `json:"fingerprint"`
     AlertName   string `json:"alert_name"`
     Status      string `json:"status"` // success, filtered, failed
-    
+
     // Classification details
     Classification     *ClassificationResult `json:"classification,omitempty"`
     ClassificationTime time.Duration         `json:"classification_time_ms,omitempty"`
-    
+
     // Filtering details
     FilterAction string `json:"filter_action,omitempty"` // allow, deny
     FilterReason string `json:"filter_reason,omitempty"`
-    
+
     // Publishing details
     PublishingResults []TargetPublishingResult `json:"publishing_results,omitempty"`
-    
+
     // Error details (if failed)
     ErrorMessage string `json:"error_message,omitempty"`
 }
@@ -1639,15 +1639,15 @@ func ErrorHandlerMiddleware(next http.Handler) http.Handler {
                 logger.Error("Panic recovered",
                     "error", err,
                     "stack", debug.Stack())
-                
+
                 // Return 500 error
                 writeErrorResponse(w, 500, ErrCodeInternal, "Internal server error", nil)
-                
+
                 // Alert on-call
                 alerting.SendCriticalAlert("Panic in webhook handler", err)
             }
         }()
-        
+
         next.ServeHTTP(w, r)
     })
 }
@@ -1662,7 +1662,7 @@ func (s *proxyWebhookService) processAlert(
         Fingerprint: payload.Fingerprint,
         AlertName:   payload.Labels["alertname"],
     }
-    
+
     // Convert alert
     alert, err := convertToAlert(payload)
     if err != nil {
@@ -1670,7 +1670,7 @@ func (s *proxyWebhookService) processAlert(
         result.ErrorMessage = fmt.Sprintf("conversion error: %v", err)
         return result, nil // Don't fail entire batch
     }
-    
+
     // Classification (with fallback)
     classification, classTime, err := s.classifyAlert(ctx, alert)
     if err != nil {
@@ -1682,7 +1682,7 @@ func (s *proxyWebhookService) processAlert(
     }
     result.Classification = classification
     result.ClassificationTime = classTime
-    
+
     // Filtering
     filterAction, filterReason, err := s.filterAlert(ctx, alert, classification, receiver)
     if err != nil {
@@ -1695,13 +1695,13 @@ func (s *proxyWebhookService) processAlert(
     }
     result.FilterAction = string(filterAction)
     result.FilterReason = filterReason
-    
+
     // If filtered, skip publishing
     if filterAction == FilterActionDeny {
         result.Status = "filtered"
         return result, nil
     }
-    
+
     // Publishing (with retry and DLQ)
     publishResults, err := s.publishAlert(ctx, alert, classification)
     if err != nil {
@@ -1714,9 +1714,9 @@ func (s *proxyWebhookService) processAlert(
         result.PublishingResults = publishResults // Partial results
         return result, nil
     }
-    
+
     result.PublishingResults = publishResults
-    
+
     // Determine status based on publishing results
     successCount := 0
     for _, pubResult := range publishResults {
@@ -1724,7 +1724,7 @@ func (s *proxyWebhookService) processAlert(
             successCount++
         }
     }
-    
+
     if successCount == len(publishResults) {
         result.Status = "success"
     } else if successCount > 0 {
@@ -1732,7 +1732,7 @@ func (s *proxyWebhookService) processAlert(
     } else {
         result.Status = "failed"
     }
-    
+
     return result, nil
 }
 ```
@@ -1822,12 +1822,12 @@ func encodeJSON(v interface{}) ([]byte, error) {
         buf.Reset()
         jsonBufferPool.Put(buf)
     }()
-    
+
     encoder := json.NewEncoder(buf)
     if err := encoder.Encode(v); err != nil {
         return nil, err
     }
-    
+
     return buf.Bytes(), nil
 }
 ```
@@ -1918,7 +1918,5 @@ BenchmarkPublishing_ParallelTargets-8            30000  250000 ns/op  15000 B/op
 
 ---
 
-**Previous Document**: [requirements.md](./requirements.md)  
+**Previous Document**: [requirements.md](./requirements.md)
 **Next Step**: Phase 2 - Git Branch Setup
-
-

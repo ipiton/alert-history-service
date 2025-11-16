@@ -1,10 +1,10 @@
 # TN-062: POST /webhook/proxy - Requirements Specification
 
-**Project**: Intelligent Proxy Webhook Endpoint  
-**Version**: 1.0  
-**Date**: 2025-11-15  
-**Status**: Draft  
-**Target Quality**: 150% Enterprise Grade (A++)  
+**Project**: Intelligent Proxy Webhook Endpoint
+**Version**: 1.0
+**Date**: 2025-11-15
+**Status**: Draft
+**Target Quality**: 150% Enterprise Grade (A++)
 
 ---
 
@@ -62,7 +62,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 2.1 Webhook Ingestion (FR-001 to FR-005)
 
 #### FR-001: Accept Alertmanager Webhook Format
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Endpoint MUST accept standard Alertmanager webhook payloads.
 
 **Requirements**:
@@ -80,7 +80,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Validate required fields
 
 #### FR-002: Request Validation
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Validate all incoming webhook requests.
 
 **Requirements**:
@@ -102,7 +102,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Accept valid requests with all validations passing
 
 #### FR-003: Alert Normalization
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Convert webhook payload to internal `core.Alert` format.
 
 **Requirements**:
@@ -121,7 +121,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Default values applied appropriately
 
 #### FR-004: Backward Compatibility
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Maintain compatibility with existing alert storage.
 
 **Requirements**:
@@ -138,7 +138,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ State transitions tracked accurately
 
 #### FR-005: Concurrent Request Handling
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Handle multiple concurrent webhook requests efficiently.
 
 **Requirements**:
@@ -159,7 +159,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 2.2 LLM Classification (FR-006 to FR-010)
 
 #### FR-006: Alert Classification
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Classify all alerts using LLM service with caching and fallback.
 
 **Requirements**:
@@ -176,7 +176,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Recommendations generated when available
 
 #### FR-007: Two-Tier Caching
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Use memory L1 + Redis L2 caching to minimize LLM calls.
 
 **Requirements**:
@@ -194,7 +194,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Cache eviction working correctly
 
 #### FR-008: Circuit Breaker Protection
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Protect against LLM service failures using circuit breaker.
 
 **Requirements**:
@@ -211,7 +211,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Circuit breaker closes on successful probe
 
 #### FR-009: Fallback Classification
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Use rule-based fallback when LLM unavailable.
 
 **Requirements**:
@@ -230,7 +230,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Confidence score set appropriately
 
 #### FR-010: Batch Classification
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Optimize classification for multi-alert batches.
 
 **Requirements**:
@@ -250,7 +250,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 2.3 Alert Filtering (FR-011 to FR-015)
 
 #### FR-011: Severity-Based Filtering
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Filter alerts based on classified severity.
 
 **Requirements**:
@@ -267,7 +267,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Per-receiver configuration supported
 
 #### FR-012: Namespace Filtering
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Filter alerts based on Kubernetes namespace.
 
 **Requirements**:
@@ -283,7 +283,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Regex patterns supported
 
 #### FR-013: Label-Based Filtering
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Filter alerts based on arbitrary label key-value pairs.
 
 **Requirements**:
@@ -299,7 +299,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Multi-label AND logic works
 
 #### FR-014: Time-Window Filtering
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Description**: Filter alerts based on time of day / day of week.
 
 **Requirements**:
@@ -315,7 +315,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Combined with severity filters
 
 #### FR-015: Filter Action Tracking
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Track filtering decisions for audit and debugging.
 
 **Requirements**:
@@ -335,7 +335,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 2.4 Multi-Target Publishing (FR-016 to FR-020)
 
 #### FR-016: Target Discovery
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Dynamically discover publishing targets from Kubernetes secrets.
 
 **Requirements**:
@@ -352,7 +352,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Target list refreshed automatically
 
 #### FR-017: Parallel Publishing
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Publish alerts to multiple targets concurrently.
 
 **Requirements**:
@@ -371,7 +371,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Partial failures handled gracefully
 
 #### FR-018: Format-Specific Publishing
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Format alerts according to each target's requirements.
 
 **Requirements**:
@@ -388,7 +388,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Validation passes before sending
 
 #### FR-019: Retry Logic
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Retry failed publishing attempts with exponential backoff.
 
 **Requirements**:
@@ -405,7 +405,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Retry count tracked in metrics
 
 #### FR-020: Rate Limiting
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Respect per-target rate limits.
 
 **Requirements**:
@@ -429,7 +429,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 2.5 Response Handling (FR-021 to FR-025)
 
 #### FR-021: Detailed Response Structure
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Return comprehensive response with per-alert, per-target details.
 
 **Requirements**:
@@ -447,7 +447,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Summary calculations correct
 
 #### FR-022: HTTP Status Codes
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Return appropriate HTTP status codes.
 
 **Requirements**:
@@ -467,7 +467,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Consistent with REST best practices
 
 #### FR-023: Partial Success Handling
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Handle partial success scenarios gracefully.
 
 **Requirements**:
@@ -486,7 +486,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Logs distinguish partial failures
 
 #### FR-024: Error Response Format
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Return structured error responses.
 
 **Requirements**:
@@ -515,7 +515,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 - ✅ Field-level details provided
 
 #### FR-025: Response Time Tracking
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Track and report processing time breakdown.
 
 **Requirements**:
@@ -541,7 +541,7 @@ The Intelligent Proxy Webhook Endpoint (`POST /webhook/proxy`) extends the Alert
 ### 3.1 Performance (NFR-001 to NFR-005)
 
 #### NFR-001: Latency
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Meet strict latency requirements for production use.
 
 **Requirements**:
@@ -565,7 +565,7 @@ histogram_quantile(0.99, rate(alert_history_proxy_request_duration_seconds_bucke
 ```
 
 #### NFR-002: Throughput
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Handle high request volume.
 
 **Requirements**:
@@ -586,7 +586,7 @@ rate(alert_history_proxy_requests_total[1m])
 ```
 
 #### NFR-003: Resource Efficiency
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Minimize resource consumption.
 
 **Requirements**:
@@ -609,7 +609,7 @@ alert_history_proxy_goroutines
 ```
 
 #### NFR-004: Scalability
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Scale horizontally with linear performance.
 
 **Requirements**:
@@ -629,7 +629,7 @@ alert_history_proxy_goroutines
 - ✅ Scale down without data loss
 
 #### NFR-005: Caching Efficiency
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Optimize cache usage for LLM cost reduction.
 
 **Requirements**:
@@ -647,7 +647,7 @@ alert_history_proxy_goroutines
 
 **Measurement**:
 ```promql
-rate(alert_history_classification_cache_hits_total[5m]) / 
+rate(alert_history_classification_cache_hits_total[5m]) /
 rate(alert_history_classification_requests_total[5m])
 ```
 
@@ -656,7 +656,7 @@ rate(alert_history_classification_requests_total[5m])
 ### 3.2 Reliability (NFR-006 to NFR-010)
 
 #### NFR-006: Availability
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Maintain high availability in production.
 
 **Requirements**:
@@ -674,12 +674,12 @@ rate(alert_history_classification_requests_total[5m])
 
 **Measurement**:
 ```promql
-(1 - (rate(alert_history_proxy_errors_total{code="5xx"}[30d]) / 
+(1 - (rate(alert_history_proxy_errors_total{code="5xx"}[30d]) /
        rate(alert_history_proxy_requests_total[30d]))) * 100
 ```
 
 #### NFR-007: Fault Tolerance
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Tolerate partial system failures.
 
 **Requirements**:
@@ -697,7 +697,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Circuit breakers functional
 
 #### NFR-008: Data Durability
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Prevent data loss.
 
 **Requirements**:
@@ -715,7 +715,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Backups tested
 
 #### NFR-009: Error Recovery
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Recover automatically from transient errors.
 
 **Requirements**:
@@ -732,7 +732,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ No manual intervention needed
 
 #### NFR-010: Graceful Shutdown
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Shutdown cleanly without dropping requests.
 
 **Requirements**:
@@ -753,7 +753,7 @@ rate(alert_history_classification_requests_total[5m])
 ### 3.3 Security (NFR-011 to NFR-015)
 
 #### NFR-011: Authentication
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Authenticate all webhook requests.
 
 **Requirements**:
@@ -772,7 +772,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Rate limiting applied
 
 #### NFR-012: Authorization
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Authorize access to publishing targets.
 
 **Requirements**:
@@ -789,7 +789,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Secret rotation works
 
 #### NFR-013: Input Validation
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Validate all inputs thoroughly.
 
 **Requirements**:
@@ -807,7 +807,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Security scans pass
 
 #### NFR-014: Encryption
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Encrypt data in transit and at rest.
 
 **Requirements**:
@@ -824,7 +824,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ All connections encrypted
 
 #### NFR-015: Security Monitoring
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Monitor and alert on security events.
 
 **Requirements**:
@@ -845,7 +845,7 @@ rate(alert_history_classification_requests_total[5m])
 ### 3.4 Observability (NFR-016 to NFR-020)
 
 #### NFR-016: Metrics
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Comprehensive Prometheus metrics.
 
 **Requirements**:
@@ -862,7 +862,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Metrics scraped by Prometheus
 
 #### NFR-017: Logging
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Structured logging with slog.
 
 **Requirements**:
@@ -879,7 +879,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Sampling functional
 
 #### NFR-018: Distributed Tracing
-**Priority**: P2 (Medium)  
+**Priority**: P2 (Medium)
 **Description**: Support distributed tracing (optional 150% enhancement).
 
 **Requirements**:
@@ -895,7 +895,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Jaeger integration (optional)
 
 #### NFR-019: Dashboards
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Grafana dashboards for monitoring.
 
 **Requirements**:
@@ -911,7 +911,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Usable by operators
 
 #### NFR-020: Alerting
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Alerting rules for operational issues.
 
 **Requirements**:
@@ -931,7 +931,7 @@ rate(alert_history_classification_requests_total[5m])
 ### 3.5 Maintainability (NFR-021 to NFR-025)
 
 #### NFR-021: Code Quality
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: High code quality standards.
 
 **Requirements**:
@@ -948,7 +948,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Security scans pass
 
 #### NFR-022: Documentation
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Comprehensive documentation.
 
 **Requirements**:
@@ -966,7 +966,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ GoDoc coverage 100%
 
 #### NFR-023: Testability
-**Priority**: P0 (Critical)  
+**Priority**: P0 (Critical)
 **Description**: Comprehensive test suite.
 
 **Requirements**:
@@ -983,7 +983,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Mocks available
 
 #### NFR-024: Configurability
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Flexible configuration.
 
 **Requirements**:
@@ -1003,7 +1003,7 @@ rate(alert_history_classification_requests_total[5m])
 - ✅ Defaults sensible
 
 #### NFR-025: Deployability
-**Priority**: P1 (High)  
+**Priority**: P1 (High)
 **Description**: Easy deployment and operations.
 
 **Requirements**:
@@ -1025,11 +1025,11 @@ rate(alert_history_classification_requests_total[5m])
 
 ### 4.1 Endpoint Definition
 
-**Endpoint**: `POST /webhook/proxy`  
-**Description**: Intelligent proxy webhook endpoint with classification, filtering, and multi-target publishing.  
-**Authentication**: Required (API Key, HMAC, or mTLS)  
-**Rate Limiting**: 1,000 req/s per IP (global), 10,000 req/s (service-wide)  
-**Timeout**: 30 seconds (configurable)  
+**Endpoint**: `POST /webhook/proxy`
+**Description**: Intelligent proxy webhook endpoint with classification, filtering, and multi-target publishing.
+**Authentication**: Required (API Key, HMAC, or mTLS)
+**Rate Limiting**: 1,000 req/s per IP (global), 10,000 req/s (service-wide)
+**Timeout**: 30 seconds (configurable)
 
 ---
 
@@ -1125,7 +1125,7 @@ rate(alert_history_classification_requests_total[5m])
   "message": "All alerts processed and published successfully",
   "timestamp": "2025-11-15T12:00:05.123Z",
   "processing_time_ms": 523,
-  
+
   "alerts_summary": {
     "total_received": 1,
     "total_processed": 1,
@@ -1134,13 +1134,13 @@ rate(alert_history_classification_requests_total[5m])
     "total_published": 1,
     "total_failed": 0
   },
-  
+
   "alert_results": [
     {
       "fingerprint": "a1b2c3d4e5f6",
       "alert_name": "HighMemoryUsage",
       "status": "success",
-      
+
       "classification": {
         "severity": "warning",
         "category": "infrastructure",
@@ -1152,10 +1152,10 @@ rate(alert_history_classification_requests_total[5m])
         ]
       },
       "classification_time_ms": 45,
-      
+
       "filter_action": "allow",
       "filter_reason": "Severity 'warning' allowed for receiver 'platform-team'",
-      
+
       "publishing_results": [
         {
           "target_name": "platform-slack",
@@ -1174,7 +1174,7 @@ rate(alert_history_classification_requests_total[5m])
       ]
     }
   ],
-  
+
   "publishing_summary": {
     "total_targets": 2,
     "successful_targets": 2,
@@ -1194,7 +1194,7 @@ rate(alert_history_classification_requests_total[5m])
   "message": "1 of 2 alerts filtered, 1 of 2 targets failed",
   "timestamp": "2025-11-15T12:00:05.123Z",
   "processing_time_ms": 678,
-  
+
   "alerts_summary": {
     "total_received": 2,
     "total_processed": 2,
@@ -1203,7 +1203,7 @@ rate(alert_history_classification_requests_total[5m])
     "total_published": 1,
     "total_failed": 0
   },
-  
+
   "alert_results": [
     {
       "fingerprint": "a1b2c3d4e5f6",
@@ -1246,7 +1246,7 @@ rate(alert_history_classification_requests_total[5m])
       "filter_reason": "Severity 'info' denied by filter rule 'ignore-low-severity'"
     }
   ],
-  
+
   "publishing_summary": {
     "total_targets": 2,
     "successful_targets": 1,
@@ -1352,20 +1352,20 @@ rate(alert_history_classification_requests_total[5m])
 proxy:
   # Enable intelligent proxy mode
   enabled: true
-  
+
   # LLM Classification
   classification:
     enabled: true
     timeout: 5s
     cache_ttl: 15m
     fallback_enabled: true
-    
+
   # Filtering
   filtering:
     enabled: true
     default_action: allow  # allow or deny
     rules_file: /etc/config/filter-rules.yaml
-    
+
   # Publishing
   publishing:
     enabled: true
@@ -1376,7 +1376,7 @@ proxy:
     retry_max_attempts: 3
     retry_backoff: exponential  # exponential or linear
     dlq_enabled: true
-    
+
   # Target Discovery
   target_discovery:
     enabled: true
@@ -1590,5 +1590,3 @@ observability:
 ---
 
 **Next Document**: [design.md](./design.md) - Technical Design Specification
-
-
