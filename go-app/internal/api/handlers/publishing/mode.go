@@ -146,6 +146,9 @@ func (h *PublishingModeHandler) GetPublishingMode(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Set security headers (OWASP Top 10 compliance)
+	h.setSecurityHeaders(w, r)
+
 	// Generate ETag for caching
 	etag := h.generateETag(modeInfo)
 
@@ -239,6 +242,54 @@ func (h *PublishingModeHandler) sendJSON(w http.ResponseWriter, status int, data
 			"error", err,
 			"status", status)
 	}
+}
+
+// setSecurityHeaders sets OWASP Top 10 compliant security headers.
+//
+// Headers set:
+//   - X-Content-Type-Options: nosniff (prevents MIME type sniffing)
+//   - X-Frame-Options: DENY (prevents clickjacking)
+//   - X-XSS-Protection: 1; mode=block (enables XSS filter)
+//   - Content-Security-Policy: default-src 'none'; frame-ancestors 'none' (strict CSP for API)
+//   - Strict-Transport-Security: max-age=31536000; includeSubDomains (HSTS, HTTPS only)
+//   - Referrer-Policy: strict-origin-when-cross-origin (controls referrer information)
+//   - Permissions-Policy: geolocation=(), microphone=(), camera=() (restricts browser features)
+//
+// Security benefits:
+//   - Prevents MIME type confusion attacks
+//   - Protects against clickjacking
+//   - Enables browser XSS protection
+//   - Restricts resource loading (CSP)
+//   - Forces HTTPS (HSTS)
+//   - Controls referrer information leakage
+//   - Restricts browser features access
+func (h *PublishingModeHandler) setSecurityHeaders(w http.ResponseWriter, r *http.Request) {
+	// Prevent MIME type sniffing
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	// Prevent clickjacking
+	w.Header().Set("X-Frame-Options", "DENY")
+
+	// Enable XSS filter in older browsers
+	w.Header().Set("X-XSS-Protection", "1; mode=block")
+
+	// Content Security Policy (strict for API endpoint)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+
+	// HTTP Strict Transport Security (HSTS) - only over HTTPS
+	if r.TLS != nil {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
+
+	// Referrer Policy
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+	// Permissions Policy (formerly Feature-Policy)
+	w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
+	// Remove potentially sensitive server information
+	w.Header().Del("Server")
+	w.Header().Del("X-Powered-By")
 }
 
 // sendError sends a structured error response.

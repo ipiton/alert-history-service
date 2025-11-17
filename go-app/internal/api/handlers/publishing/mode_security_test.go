@@ -56,6 +56,14 @@ func TestSecurity_OWASP_SecurityMisconfiguration(t *testing.T) {
 
 	handler.GetPublishingMode(w, req)
 
+	// Verify security headers are set (OWASP Top 10 compliance)
+	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "1; mode=block", w.Header().Get("X-XSS-Protection"))
+	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", w.Header().Get("Content-Security-Policy"))
+	assert.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "geolocation=(), microphone=(), camera=()", w.Header().Get("Permissions-Policy"))
+
 	// Verify caching headers are set (security best practice)
 	assert.Equal(t, "max-age=5, public", w.Header().Get("Cache-Control"))
 	assert.NotEmpty(t, w.Header().Get("ETag"))
