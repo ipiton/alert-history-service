@@ -173,19 +173,155 @@ func (b *TreeBuilder) buildNode(
 		Level:  level,
 	}
 
-	// TODO: Phase 4 - implement full buildNode logic
-	// For now, just set receiver to avoid nil panic
+	// 1. Parse matchers (match + match_re)
+	node.Matchers = b.parseMatchers(route.Match, route.MatchRE)
+
+	// 2. Set receiver name
 	node.Receiver = route.Receiver
 	if node.Receiver == "" && parent != nil {
 		node.Receiver = parent.Receiver
 	}
 
-	// Placeholder: resolve receiver config
+	// 3. Resolve receiver config
 	if node.Receiver != "" {
 		node.ReceiverConfig = b.tree.receivers[node.Receiver]
 	}
 
+	// 4. Set continue flag
+	node.Continue = route.Continue
+
+	// 5. Apply parameter inheritance
+	node.GroupBy = b.inheritGroupBy(parent, route)
+	node.GroupWait = b.inheritDuration(parent, route.GroupWait, "group_wait")
+	node.GroupInterval = b.inheritDuration(parent, route.GroupInterval, "group_interval")
+	node.RepeatInterval = b.inheritDuration(parent, route.RepeatInterval, "repeat_interval")
+
+	// 6. Build children recursively
+	for i, childRoute := range route.Routes {
+		childPath := fmt.Sprintf("%s.routes[%d]", path, i)
+		child := b.buildNode(node, childRoute, childPath, level+1)
+		node.Children = append(node.Children, child)
+	}
+
 	return node
+}
+
+// parseMatchers converts match and match_re maps to Matcher list.
+func (b *TreeBuilder) parseMatchers(match map[string]string, matchRE map[string]string) []Matcher {
+	matchers := make([]Matcher, 0, len(match)+len(matchRE))
+
+	// Equality matchers
+	for name, value := range match {
+		matchers = append(matchers, Matcher{
+			Name:    name,
+			Value:   value,
+			IsRegex: false,
+		})
+	}
+
+	// Regex matchers
+	for name, pattern := range matchRE {
+		matchers = append(matchers, Matcher{
+			Name:    name,
+			Value:   pattern,
+			IsRegex: true,
+		})
+	}
+
+	return matchers
+}
+
+// inheritGroupBy applies inheritance logic for group_by parameter.
+func (b *TreeBuilder) inheritGroupBy(parent *RouteNode, route *Route) []string {
+	// Priority:
+	// 1. Route's own group_by (if set)
+	// 2. Parent's group_by (if exists)
+	// 3. Global config group_by (if set)
+	// 4. Default: ["alertname"]
+
+	if len(route.GroupBy) > 0 {
+		return route.GroupBy
+	}
+
+	if parent != nil && len(parent.GroupBy) > 0 {
+		return parent.GroupBy
+	}
+
+	if b.config.Global != nil && len(b.config.Global.GroupBy) > 0 {
+		return b.config.Global.GroupBy
+	}
+
+	return []string{"alertname"}
+}
+
+// inheritDuration applies inheritance logic for duration parameters.
+func (b *TreeBuilder) inheritDuration(
+	parent *RouteNode,
+	routeValue time.Duration,
+	fieldName string,
+) time.Duration {
+	// Priority:
+	// 1. Route's own value (if > 0)
+	// 2. Parent's value (if exists and > 0)
+	// 3. Global config value (if set and > 0)
+	// 4. Default value (based on field name)
+
+	if routeValue > 0 {
+		return routeValue
+	}
+
+	// Get parent value based on field name
+	if parent != nil {
+		switch fieldName {
+		case "group_wait":
+			if parent.GroupWait > 0 {
+				return parent.GroupWait
+			}
+		case "group_interval":
+			if parent.GroupInterval > 0 {
+				return parent.GroupInterval
+			}
+		case "repeat_interval":
+			if parent.RepeatInterval > 0 {
+				return parent.RepeatInterval
+			}
+		}
+	}
+
+	// Get global config value
+	if b.config.Global != nil {
+		switch fieldName {
+		case "group_wait":
+			if b.config.Global.GroupWait > 0 {
+				return b.config.Global.GroupWait
+			}
+		case "group_interval":
+			if b.config.Global.GroupInterval > 0 {
+				return b.config.Global.GroupInterval
+			}
+		case "repeat_interval":
+			if b.config.Global.RepeatInterval > 0 {
+				return b.config.Global.RepeatInterval
+			}
+		}
+	}
+
+	// Return default value
+	return b.getDefaultDuration(fieldName)
+}
+
+// getDefaultDuration returns the default duration for a field.
+func (b *TreeBuilder) getDefaultDuration(fieldName string) time.Duration {
+	switch fieldName {
+	case "group_wait":
+		return 30 * time.Second
+	case "group_interval":
+		return 5 * time.Minute
+	case "repeat_interval":
+		return 4 * time.Hour
+	default:
+		return 0
+	}
 }
 
 // calculateStats computes statistics about the tree.

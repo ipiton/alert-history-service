@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -387,8 +388,22 @@ func (t *RouteTree) validateReceivers() []TreeValidationError {
 func (t *RouteTree) validateMatchers() []TreeValidationError {
 	var errors []TreeValidationError
 
-	// This will be implemented in tree_validation.go
-	// Placeholder for now
+	_ = t.Walk(func(node *RouteNode) bool {
+		for _, matcher := range node.Matchers {
+			if matcher.IsRegex {
+				// Try to compile regex
+				if _, err := regexp.Compile(matcher.Value); err != nil {
+					errors = append(errors, TreeValidationError{
+						Type:    ErrInvalidRegex,
+						Path:    node.Path,
+						Message: fmt.Sprintf("invalid regex pattern '%s': %v", matcher.Value, err),
+						Field:   fmt.Sprintf("match_re[%s]", matcher.Name),
+					})
+				}
+			}
+		}
+		return true
+	})
 
 	return errors
 }
@@ -401,8 +416,39 @@ func (t *RouteTree) validateMatchers() []TreeValidationError {
 func (t *RouteTree) checkDuplicateMatchers() []TreeValidationError {
 	var errors []TreeValidationError
 
-	// This will be implemented in tree_validation.go
-	// Placeholder for now
+	_ = t.Walk(func(node *RouteNode) bool {
+		if len(node.Children) < 2 {
+			return true // Skip nodes with 0 or 1 children
+		}
+
+		// Build signature map for children
+		signatures := make(map[string][]string)
+		for _, child := range node.Children {
+			sig := child.GetMatcherSignature()
+			if sig == "" {
+				continue // Skip empty matchers
+			}
+			signatures[sig] = append(signatures[sig], child.Path)
+		}
+
+		// Check for duplicates
+		for sig, paths := range signatures {
+			if len(paths) > 1 {
+				errors = append(errors, TreeValidationError{
+					Type: ErrDuplicateMatcher,
+					Path: node.Path,
+					Message: fmt.Sprintf(
+						"duplicate matchers '%s' in children: %v",
+						sig,
+						paths,
+					),
+					Field: "routes",
+				})
+			}
+		}
+
+		return true
+	})
 
 	return errors
 }
@@ -413,8 +459,53 @@ func (t *RouteTree) checkDuplicateMatchers() []TreeValidationError {
 func (t *RouteTree) validateDurations() []TreeValidationError {
 	var errors []TreeValidationError
 
-	// This will be implemented in tree_validation.go
-	// Placeholder for now
+	_ = t.Walk(func(node *RouteNode) bool {
+		// Check GroupWait
+		if node.GroupWait <= 0 {
+			errors = append(errors, TreeValidationError{
+				Type:    ErrInvalidDuration,
+				Path:    node.Path,
+				Message: fmt.Sprintf("group_wait must be positive, got %v", node.GroupWait),
+				Field:   "group_wait",
+			})
+		}
+
+		// Check GroupInterval
+		if node.GroupInterval <= 0 {
+			errors = append(errors, TreeValidationError{
+				Type:    ErrInvalidDuration,
+				Path:    node.Path,
+				Message: fmt.Sprintf("group_interval must be positive, got %v", node.GroupInterval),
+				Field:   "group_interval",
+			})
+		}
+
+		// Check RepeatInterval
+		if node.RepeatInterval <= 0 {
+			errors = append(errors, TreeValidationError{
+				Type:    ErrInvalidDuration,
+				Path:    node.Path,
+				Message: fmt.Sprintf("repeat_interval must be positive, got %v", node.RepeatInterval),
+				Field:   "repeat_interval",
+			})
+		}
+
+		// Semantic check: GroupInterval should be >= GroupWait
+		if node.GroupInterval < node.GroupWait {
+			errors = append(errors, TreeValidationError{
+				Type: ErrInvalidDuration,
+				Path: node.Path,
+				Message: fmt.Sprintf(
+					"group_interval (%v) should be >= group_wait (%v)",
+					node.GroupInterval,
+					node.GroupWait,
+				),
+				Field: "group_interval",
+			})
+		}
+
+		return true
+	})
 
 	return errors
 }
