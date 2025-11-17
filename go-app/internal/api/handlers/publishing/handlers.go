@@ -1,6 +1,7 @@
 package publishing
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -86,16 +87,105 @@ type PublishingModeResponse struct {
 	MetricsOnlyActive bool   `json:"metrics_only_active"`
 }
 
-// TestTargetRequest represents test request
+// TestTargetRequest represents test target request configuration.
+//
+// This struct is used to configure test alert parameters when testing
+// publishing target connectivity via POST /api/v2/publishing/targets/{name}/test.
+//
+// Example:
+//
+//	req := TestTargetRequest{
+//	    AlertName:      "CustomTestAlert",
+//	    TimeoutSeconds: 60,
+//	    TestAlert: &CustomTestAlert{
+//	        Labels: map[string]string{"severity": "warning"},
+//	        Status: "firing",
+//	    },
+//	}
 type TestTargetRequest struct {
+	// AlertName is an optional custom alert name.
+	// If not provided, defaults to "TestAlert".
 	AlertName string `json:"alert_name"`
+
+	// TestAlert is an optional custom test alert payload.
+	// If not provided, a default test alert will be created.
+	TestAlert *CustomTestAlert `json:"test_alert,omitempty"`
+
+	// TimeoutSeconds is the timeout for the test in seconds.
+	// Must be between 1 and 300 (default: 30).
+	TimeoutSeconds int `json:"timeout_seconds"`
 }
 
-// TestTargetResponse represents test result
+// CustomTestAlert represents a custom test alert payload for target testing.
+//
+// This allows testing with custom labels, annotations, and status to simulate
+// different alert scenarios. A "test: true" label is automatically added.
+//
+// Example:
+//
+//	customAlert := &CustomTestAlert{
+//	    Fingerprint: "custom-fp-123",
+//	    Labels: map[string]string{
+//	        "alertname": "CustomAlert",
+//	        "severity":  "critical",
+//	    },
+//	    Annotations: map[string]string{
+//	        "summary": "Custom test alert",
+//	    },
+//	    Status: "firing",
+//	}
+type CustomTestAlert struct {
+	// Fingerprint is an optional custom fingerprint.
+	// If not provided, a fingerprint will be auto-generated.
+	Fingerprint string `json:"fingerprint,omitempty"`
+
+	// Labels are alert labels. A "test: true" label is automatically added.
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations are alert annotations.
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Status is the alert status: "firing" or "resolved" (default: "firing").
+	Status string `json:"status,omitempty"` // "firing" | "resolved"
+}
+
+// TestTargetResponse represents the result of a target connectivity test.
+//
+// This response is always returned with HTTP 200 OK. The success field
+// indicates whether the test succeeded. Error details are provided in
+// the error field if the test failed.
+//
+// Example:
+//
+//	{
+//	    "success": true,
+//	    "message": "Test alert sent",
+//	    "target_name": "rootly-prod",
+//	    "status_code": 200,
+//	    "response_time_ms": 150,
+//	    "test_timestamp": "2025-11-17T19:00:00Z"
+//	}
 type TestTargetResponse struct {
-	Success bool   `json:"success"`
+	// Success indicates whether the test succeeded.
+	Success bool `json:"success"`
+
+	// Message is a human-readable message describing the result.
 	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
+
+	// TargetName is the name of the target that was tested.
+	TargetName string `json:"target_name"`
+
+	// StatusCode is the HTTP status code from the target API (if available).
+	StatusCode *int `json:"status_code,omitempty"`
+
+	// ResponseTimeMs is the total response time in milliseconds.
+	ResponseTimeMs int `json:"response_time_ms"`
+
+	// Error contains error details if the test failed.
+	Error string `json:"error,omitempty"`
+
+	// TestTimestamp is when the test was executed.
+	TestTimestamp time.Time `json:"test_timestamp"`
 }
 
 // SubmitAlertRequest represents alert submission request
@@ -403,63 +493,155 @@ func (h *PublishingHandlers) RefreshTargets(w http.ResponseWriter, r *http.Reque
 // @Param name path string true "Target name"
 // @Param request body TestTargetRequest false "Test request"
 // @Success 200 {object} TestTargetResponse
+// @Failure 400 {object} apierrors.ErrorResponse
 // @Failure 404 {object} apierrors.ErrorResponse
 // @Router /publishing/targets/{name}/test [post]
 func (h *PublishingHandlers) TestTarget(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	requestID := middleware.GetRequestID(r.Context())
 	vars := mux.Vars(r)
-	name := vars["name"]
+	targetName := vars["name"]
 
+	// Validate target name
+	if targetName == "" {
+		apiErr := apierrors.ValidationError("Target name is required").
+			WithRequestID(requestID)
+		apierrors.WriteError(w, apiErr)
+		return
+	}
+
+	// Decode request body (optional)
 	var req TestTargetRequest
 	if r.Body != http.NoBody {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			apiErr := apierrors.ValidationError("Invalid request body").
-				WithRequestID(middleware.GetRequestID(r.Context()))
+				WithRequestID(requestID).
+				WithDetails(err.Error())
 			apierrors.WriteError(w, apiErr)
 			return
 		}
 	}
 
-	target, err := h.discoveryManager.GetTarget(name)
-	if err != nil {
-		apiErr := apierrors.NotFoundError("Target").
-			WithRequestID(middleware.GetRequestID(r.Context()))
+	// Set defaults
+	if req.TimeoutSeconds == 0 {
+		req.TimeoutSeconds = 30 // Default timeout
+	}
+	if req.TimeoutSeconds < 1 || req.TimeoutSeconds > 300 {
+		apiErr := apierrors.ValidationError("Timeout must be between 1 and 300 seconds").
+			WithRequestID(requestID)
 		apierrors.WriteError(w, apiErr)
 		return
 	}
 
+	// Get target
+	target, err := h.discoveryManager.GetTarget(targetName)
+	if err != nil {
+		apiErr := apierrors.NotFoundError("Target").
+			WithRequestID(requestID).
+			WithDetails(fmt.Sprintf("Target '%s' does not exist", targetName))
+		apierrors.WriteError(w, apiErr)
+		return
+	}
+
+	// Check if target is enabled
 	if !target.Enabled {
+		responseTimeMs := int(time.Since(startTime).Milliseconds())
 		h.sendJSON(w, http.StatusOK, TestTargetResponse{
-			Success: false,
-			Message: "Target is disabled",
+			Success:        false,
+			Message:        "Target is disabled",
+			TargetName:     targetName,
+			ResponseTimeMs: responseTimeMs,
+			TestTimestamp:  startTime,
 		})
 		return
 	}
 
-	testAlert := h.createTestAlert(req.AlertName)
-	results, err := h.coordinator.PublishToTargets(r.Context(), testAlert, []string{name})
+	// Create test alert
+	testAlert, err := h.buildTestAlert(&req, targetName)
 	if err != nil {
-		apiErr := apierrors.InternalError("Test failed: " + err.Error()).
-			WithRequestID(middleware.GetRequestID(r.Context()))
+		apiErr := apierrors.ValidationError("Failed to create test alert").
+			WithRequestID(requestID).
+			WithDetails(err.Error())
 		apierrors.WriteError(w, apiErr)
 		return
 	}
 
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(req.TimeoutSeconds)*time.Second)
+	defer cancel()
+
+	// Publish test alert
+	publishStartTime := time.Now()
+	results, err := h.coordinator.PublishToTargets(ctx, testAlert, []string{targetName})
+	publishDuration := time.Since(publishStartTime)
+	responseTimeMs := int(time.Since(startTime).Milliseconds())
+
+	// Handle publishing errors
+	if err != nil {
+		// Check if timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			h.sendJSON(w, http.StatusOK, TestTargetResponse{
+				Success:        false,
+				Message:        "Test timeout",
+				TargetName:     targetName,
+				ResponseTimeMs: responseTimeMs,
+				Error:          fmt.Sprintf("Test timeout after %d seconds", req.TimeoutSeconds),
+				TestTimestamp:  startTime,
+			})
+			return
+		}
+
+		// Other errors
+		h.sendJSON(w, http.StatusOK, TestTargetResponse{
+			Success:        false,
+			Message:        "Test failed",
+			TargetName:     targetName,
+			ResponseTimeMs: responseTimeMs,
+			Error:          err.Error(),
+			TestTimestamp:  startTime,
+		})
+		return
+	}
+
+	// Handle empty results
 	if len(results) == 0 {
-		apiErr := apierrors.InternalError("No results returned").
-			WithRequestID(middleware.GetRequestID(r.Context()))
-		apierrors.WriteError(w, apiErr)
+		h.sendJSON(w, http.StatusOK, TestTargetResponse{
+			Success:        false,
+			Message:        "No results returned",
+			TargetName:     targetName,
+			ResponseTimeMs: responseTimeMs,
+			Error:          "Publishing coordinator returned no results",
+			TestTimestamp:  startTime,
+		})
 		return
 	}
 
+	// Extract result
 	result := results[0]
 	response := TestTargetResponse{
-		Success: result.Success,
-		Message: "Test alert sent",
+		Success:        result.Success,
+		Message:        "Test alert sent",
+		TargetName:     targetName,
+		ResponseTimeMs: responseTimeMs,
+		TestTimestamp:  startTime,
 	}
 
+	// Add error if failed
 	if result.Error != nil {
 		response.Error = result.Error.Error()
+		// Try to extract status code from error (if available)
+		// This is a best-effort approach, as PublishingResult doesn't expose StatusCode
+		// TODO: Enhance PublishingResult to include StatusCode
 	}
+
+	// Log result
+	h.logger.Info("Test target completed",
+		"request_id", requestID,
+		"target", targetName,
+		"success", result.Success,
+		"response_time_ms", responseTimeMs,
+		"publish_duration_ms", publishDuration.Milliseconds(),
+	)
 
 	h.sendJSON(w, http.StatusOK, response)
 }
@@ -923,17 +1105,109 @@ func (h *PublishingHandlers) sendJSON(w http.ResponseWriter, status int, data in
 	}
 }
 
-func (h *PublishingHandlers) createTestAlert(alertName string) *core.EnrichedAlert {
+// buildTestAlert creates a test alert from the request configuration.
+//
+// This method supports both default and custom test alerts:
+//   - If TestAlert is provided, it uses the custom payload
+//   - Otherwise, creates a default test alert with the specified AlertName
+//
+// The method automatically adds a "test: true" label to identify test alerts
+// and creates a ClassificationResult with test data.
+//
+// Parameters:
+//   - req: Test request configuration (may be nil for defaults)
+//   - targetName: Target name for fingerprint generation
+//
+// Returns:
+//   - EnrichedAlert: Fully configured test alert ready for publishing
+//   - error: Validation error if custom alert is invalid
+//
+// Example:
+//
+//	alert, err := handler.buildTestAlert(&TestTargetRequest{
+//	    AlertName: "MyTestAlert",
+//	}, "rootly-prod")
+//	if err != nil {
+//	    return err
+//	}
+//	// alert is ready to publish
+func (h *PublishingHandlers) buildTestAlert(req *TestTargetRequest, targetName string) (*core.EnrichedAlert, error) {
+	now := time.Now()
+	generatorURL := fmt.Sprintf("http://test/alert/%s", targetName)
+
+	// If custom test alert provided, use it
+	if req.TestAlert != nil {
+		alert := &core.EnrichedAlert{
+			Alert: &core.Alert{
+				Fingerprint: req.TestAlert.Fingerprint,
+				AlertName:   req.TestAlert.Labels["alertname"],
+				Status:      core.StatusFiring,
+				Labels:      make(map[string]string),
+				Annotations: make(map[string]string),
+				StartsAt:    now,
+			},
+		}
+
+		// Copy labels from custom alert
+		if req.TestAlert.Labels != nil {
+			for k, v := range req.TestAlert.Labels {
+				alert.Alert.Labels[k] = v
+			}
+		}
+
+		// Copy annotations from custom alert
+		if req.TestAlert.Annotations != nil {
+			for k, v := range req.TestAlert.Annotations {
+				alert.Alert.Annotations[k] = v
+			}
+		}
+
+		// Ensure test labels are present
+		alert.Alert.Labels["test"] = "true"
+		if alert.Alert.Labels["severity"] == "" {
+			alert.Alert.Labels["severity"] = "info"
+		}
+		if alert.Alert.AlertName == "" {
+			alert.Alert.AlertName = "TestAlert"
+		}
+
+		// Set status
+		if req.TestAlert.Status == "resolved" {
+			alert.Alert.Status = core.StatusResolved
+		} else {
+			alert.Alert.Status = core.StatusFiring
+		}
+
+		// Generate fingerprint if not provided
+		if alert.Alert.Fingerprint == "" {
+			alert.Alert.Fingerprint = fmt.Sprintf("test-%s-%d", targetName, now.Unix())
+		}
+
+		// Set generator URL
+		alert.Alert.GeneratorURL = &generatorURL
+
+		// Add classification
+		alert.Classification = &core.ClassificationResult{
+			Severity:   core.SeverityInfo,
+			Confidence: 1.0,
+			Reasoning:  "Test alert",
+			Recommendations: []string{
+				"This is a test - no action required",
+			},
+		}
+
+		return alert, nil
+	}
+
+	// Default test alert
+	alertName := req.AlertName
 	if alertName == "" {
 		alertName = "TestAlert"
 	}
 
-	now := time.Now()
-	generatorURL := "http://test/alert"
-
 	return &core.EnrichedAlert{
 		Alert: &core.Alert{
-			Fingerprint: "test-" + alertName,
+			Fingerprint: fmt.Sprintf("test-%s-%d", targetName, now.Unix()),
 			AlertName:   alertName,
 			Status:      core.StatusFiring,
 			Labels: map[string]string{
@@ -943,7 +1217,7 @@ func (h *PublishingHandlers) createTestAlert(alertName string) *core.EnrichedAle
 			},
 			Annotations: map[string]string{
 				"summary":     "Test alert for target validation",
-				"description": "This is a test alert sent via API",
+				"description": fmt.Sprintf("This is a test alert sent via API for target %s", targetName),
 			},
 			StartsAt:     now,
 			GeneratorURL: &generatorURL,
@@ -956,7 +1230,16 @@ func (h *PublishingHandlers) createTestAlert(alertName string) *core.EnrichedAle
 				"This is a test - no action required",
 			},
 		},
+	}, nil
+}
+
+// createTestAlert creates a simple test alert (backward compatibility)
+func (h *PublishingHandlers) createTestAlert(alertName string) *core.EnrichedAlert {
+	req := &TestTargetRequest{
+		AlertName: alertName,
 	}
+	alert, _ := h.buildTestAlert(req, "default")
+	return alert
 }
 
 func jobSnapshotToResponse(job *infrapub.JobSnapshot) JobStatusResponse {

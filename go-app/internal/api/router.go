@@ -42,6 +42,12 @@ type RouterConfig struct {
 
 	// TN-68: Publishing mode endpoint
 	ModeService apiservices.ModeService
+
+	// TN-70: Test target endpoint dependencies
+	TargetDiscoveryManager publishing.TargetDiscoveryManager
+	PublishingCoordinator  interface {
+		PublishToTargets(ctx interface{}, alert interface{}, targets []string) (interface{}, error)
+	} // *infrapub.PublishingCoordinator (avoid circular import via interface)
 }
 
 // DefaultRouterConfig returns default router configuration
@@ -172,7 +178,13 @@ func setupPublishingRoutes(router *mux.Router, config RouterConfig) {
 	if config.EnableAuth {
 		targetsOperator.Use(middleware.OperatorMiddleware)
 	}
-	targetsOperator.HandleFunc("/{name}/test", PlaceholderHandler("TestTarget")).Methods("POST")
+	// TN-70: POST /api/v2/publishing/targets/{name}/test - Test target connectivity
+	if config.TargetDiscoveryManager != nil && config.PublishingCoordinator != nil {
+		targetsOperator.HandleFunc("/{name}/test",
+			handlers.HandleTestTarget(config.TargetDiscoveryManager, config.PublishingCoordinator, config.Logger)).Methods("POST")
+	} else {
+		targetsOperator.HandleFunc("/{name}/test", PlaceholderHandler("TestTarget")).Methods("POST")
+	}
 
 	// --- Targets Health ---
 	health := targets.PathPrefix("/health").Subrouter()
