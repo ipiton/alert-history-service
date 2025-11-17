@@ -107,15 +107,21 @@ type RouteNode struct {
 // Matcher represents a single label matcher for alert routing.
 //
 // Matchers are used to select which alerts a route applies to.
-// Supported types: equality (=) and regex (=~, !~).
+// Supported operators: =, !=, =~, !~
 //
-// Example:
+// Examples:
 //
-//	// Equality matcher: severity="critical"
-//	{Name: "severity", Value: "critical", IsRegex: false}
+//	// Equality: severity="critical"
+//	{Name: "severity", Value: "critical", IsRegex: false, IsNegative: false}
 //
-//	// Regex matcher: namespace=~"prod.*"
-//	{Name: "namespace", Value: "prod.*", IsRegex: true}
+//	// Inequality: severity!="info"
+//	{Name: "severity", Value: "info", IsRegex: false, IsNegative: true}
+//
+//	// Regex: namespace=~"prod.*"
+//	{Name: "namespace", Value: "prod.*", IsRegex: true, IsNegative: false}
+//
+//	// Negative regex: namespace!~"dev.*"
+//	{Name: "namespace", Value: "dev.*", IsRegex: true, IsNegative: true}
 type Matcher struct {
 	// Name is the label name to match against.
 	// Example: "alertname", "severity", "namespace"
@@ -127,9 +133,14 @@ type Matcher struct {
 	Value string
 
 	// IsRegex indicates if this is a regex matcher.
-	// false: equality match (label == value)
-	// true: regex match (label =~ value)
+	// false: equality/inequality (=, !=)
+	// true: regex match (=~, !~)
 	IsRegex bool
+
+	// IsNegative indicates if this is a negative matcher.
+	// false: positive match (=, =~)
+	// true: negative match (!=, !~)
+	IsNegative bool
 }
 
 // IsRoot returns true if this node is the root node (has no parent).
