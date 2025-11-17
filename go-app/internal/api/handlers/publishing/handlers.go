@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -199,32 +201,117 @@ type PurgeDLQResponse struct {
 	DeletedCount int64  `json:"deleted_count"`
 }
 
+// ListTargetsParams represents query parameters for list targets endpoint
+type ListTargetsParams struct {
+	Type      *string
+	Enabled   *bool
+	Limit     int
+	Offset    int
+	SortBy    string
+	SortOrder string
+}
+
+// TargetListResponse represents paginated list of targets
+type TargetListResponse struct {
+	Data       []TargetResponse   `json:"data"`
+	Pagination PaginationMetadata `json:"pagination"`
+	Metadata   ResponseMetadata   `json:"metadata"`
+}
+
+// PaginationMetadata represents pagination information
+type PaginationMetadata struct {
+	Total   int  `json:"total"`
+	Count   int  `json:"count"`
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	HasMore bool `json:"has_more"`
+}
+
+// ResponseMetadata represents response metadata
+type ResponseMetadata struct {
+	RequestID       string `json:"request_id"`
+	Timestamp       string `json:"timestamp"`
+	ProcessingTimeMs int64  `json:"processing_time_ms"`
+}
+
 // ===== Target Management Handlers =====
 
 // ListTargets handles GET /api/v2/publishing/targets
 //
 // @Summary List all publishing targets
-// @Description Returns a list of all configured publishing targets
+// @Description Returns a paginated list of all configured publishing targets with filtering and sorting support
 // @Tags Targets
 // @Produce json
-// @Param type query string false "Filter by target type"
+// @Param type query string false "Filter by target type (rootly, pagerduty, slack, webhook)"
 // @Param enabled query bool false "Filter by enabled status"
-// @Success 200 {array} TargetResponse
+// @Param limit query int false "Maximum results per page (1-1000, default: 100)"
+// @Param offset query int false "Offset for pagination (>=0, default: 0)"
+// @Param sort_by query string false "Sort field (name, type, enabled, default: name)"
+// @Param sort_order query string false "Sort direction (asc, desc, default: asc)"
+// @Success 200 {object} TargetListResponse
+// @Failure 400 {object} apierrors.ErrorResponse
+// @Failure 500 {object} apierrors.ErrorResponse
 // @Router /publishing/targets [get]
 func (h *PublishingHandlers) ListTargets(w http.ResponseWriter, r *http.Request) {
-	targets := h.discoveryManager.ListTargets()
+	startTime := time.Now()
+	requestID := middleware.GetRequestID(r.Context())
 
-	response := make([]TargetResponse, 0, len(targets))
-	for _, t := range targets {
-		response = append(response, TargetResponse{
-			Name:    t.Name,
-			Type:    t.Type,
-			URL:     t.URL,
-			Enabled: t.Enabled,
-			Format:  string(t.Format),
-			Headers: t.Headers,
-		})
+	// Parse and validate query parameters
+	params, err := h.parseListTargetsParams(r)
+	if err != nil {
+		apiErr := apierrors.ValidationError("Invalid query parameters").
+			WithDetails(err.Error()).
+			WithRequestID(requestID)
+		apierrors.WriteError(w, apiErr)
+		return
 	}
+
+	// Get all targets from discovery manager
+	allTargets := h.discoveryManager.ListTargets()
+	if allTargets == nil {
+		allTargets = []*core.PublishingTarget{}
+	}
+
+	// Apply filters
+	filteredTargets := h.filterTargets(allTargets, params)
+
+	// Sort targets
+	h.sortTargets(filteredTargets, params)
+
+	// Calculate pagination
+	total := len(filteredTargets)
+	paginatedTargets := h.paginateTargets(filteredTargets, params)
+
+	// Build response
+	response := TargetListResponse{
+		Data: h.convertToTargetResponses(paginatedTargets),
+		Pagination: PaginationMetadata{
+			Total:   total,
+			Count:   len(paginatedTargets),
+			Limit:   params.Limit,
+			Offset:  params.Offset,
+			HasMore: params.Offset+len(paginatedTargets) < total,
+		},
+		Metadata: ResponseMetadata{
+			RequestID:       requestID,
+			Timestamp:       time.Now().UTC().Format(time.RFC3339),
+			ProcessingTimeMs: time.Since(startTime).Milliseconds(),
+		},
+	}
+
+	// Log request
+	h.logger.Info("List targets request",
+		"request_id", requestID,
+		"type_filter", params.Type,
+		"enabled_filter", params.Enabled,
+		"limit", params.Limit,
+		"offset", params.Offset,
+		"sort_by", params.SortBy,
+		"sort_order", params.SortOrder,
+		"total_targets", total,
+		"returned_count", len(paginatedTargets),
+		"processing_time_ms", time.Since(startTime).Milliseconds(),
+	)
 
 	h.sendJSON(w, http.StatusOK, response)
 }
@@ -662,6 +749,170 @@ func (h *PublishingHandlers) GetPublishingMode(w http.ResponseWriter, r *http.Re
 }
 
 // ===== Helper Methods =====
+
+// parseListTargetsParams parses and validates query parameters for list targets endpoint
+func (h *PublishingHandlers) parseListTargetsParams(r *http.Request) (*ListTargetsParams, error) {
+	params := &ListTargetsParams{
+		Limit:     100,
+		SortBy:    "name",
+		SortOrder: "asc",
+	}
+
+	query := r.URL.Query()
+
+	// Parse type filter
+	if typeStr := query.Get("type"); typeStr != "" {
+		typeStr = strings.ToLower(typeStr)
+		validTypes := map[string]bool{
+			"rootly":    true,
+			"pagerduty": true,
+			"slack":     true,
+			"webhook":   true,
+		}
+		if !validTypes[typeStr] {
+			return nil, fmt.Errorf("invalid type: must be one of rootly, pagerduty, slack, webhook")
+		}
+		params.Type = &typeStr
+	}
+
+	// Parse enabled filter
+	if enabledStr := query.Get("enabled"); enabledStr != "" {
+		enabled, err := strconv.ParseBool(enabledStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid enabled: must be true or false")
+		}
+		params.Enabled = &enabled
+	}
+
+	// Parse limit
+	if limitStr := query.Get("limit"); limitStr != "" {
+		limit, err := strconv.ParseInt(limitStr, 10, 32)
+		if err != nil || limit < 1 || limit > 1000 {
+			return nil, fmt.Errorf("invalid limit: must be between 1 and 1000")
+		}
+		params.Limit = int(limit)
+	}
+
+	// Parse offset
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		offset, err := strconv.ParseInt(offsetStr, 10, 32)
+		if err != nil || offset < 0 || offset > 1000000 {
+			return nil, fmt.Errorf("invalid offset: must be between 0 and 1000000")
+		}
+		params.Offset = int(offset)
+	}
+
+	// Parse sort_by
+	if sortBy := query.Get("sort_by"); sortBy != "" {
+		sortBy = strings.ToLower(sortBy)
+		validSortFields := map[string]bool{
+			"name":    true,
+			"type":    true,
+			"enabled": true,
+		}
+		if !validSortFields[sortBy] {
+			return nil, fmt.Errorf("invalid sort_by: must be one of name, type, enabled")
+		}
+		params.SortBy = sortBy
+	}
+
+	// Parse sort_order
+	if sortOrder := query.Get("sort_order"); sortOrder != "" {
+		sortOrder = strings.ToLower(sortOrder)
+		if sortOrder != "asc" && sortOrder != "desc" {
+			return nil, fmt.Errorf("invalid sort_order: must be asc or desc")
+		}
+		params.SortOrder = sortOrder
+	}
+
+	return params, nil
+}
+
+// filterTargets applies filters to targets list
+func (h *PublishingHandlers) filterTargets(
+	targets []*core.PublishingTarget,
+	params *ListTargetsParams,
+) []*core.PublishingTarget {
+	filtered := make([]*core.PublishingTarget, 0, len(targets))
+
+	for _, target := range targets {
+		// Filter by type
+		if params.Type != nil && !strings.EqualFold(target.Type, *params.Type) {
+			continue
+		}
+
+		// Filter by enabled
+		if params.Enabled != nil && target.Enabled != *params.Enabled {
+			continue
+		}
+
+		filtered = append(filtered, target)
+	}
+
+	return filtered
+}
+
+// sortTargets sorts targets by specified field and order
+func (h *PublishingHandlers) sortTargets(
+	targets []*core.PublishingTarget,
+	params *ListTargetsParams,
+) {
+	sort.Slice(targets, func(i, j int) bool {
+		var less bool
+
+		switch params.SortBy {
+		case "name":
+			less = targets[i].Name < targets[j].Name
+		case "type":
+			less = targets[i].Type < targets[j].Type
+		case "enabled":
+			less = !targets[i].Enabled && targets[j].Enabled
+		default:
+			less = targets[i].Name < targets[j].Name
+		}
+
+		if params.SortOrder == "desc" {
+			return !less
+		}
+		return less
+	})
+}
+
+// paginateTargets applies pagination to targets list
+func (h *PublishingHandlers) paginateTargets(
+	targets []*core.PublishingTarget,
+	params *ListTargetsParams,
+) []*core.PublishingTarget {
+	start := params.Offset
+	if start > len(targets) {
+		return []*core.PublishingTarget{}
+	}
+
+	end := start + params.Limit
+	if end > len(targets) {
+		end = len(targets)
+	}
+
+	return targets[start:end]
+}
+
+// convertToTargetResponses converts PublishingTarget slice to TargetResponse slice
+func (h *PublishingHandlers) convertToTargetResponses(
+	targets []*core.PublishingTarget,
+) []TargetResponse {
+	responses := make([]TargetResponse, 0, len(targets))
+	for _, t := range targets {
+		responses = append(responses, TargetResponse{
+			Name:    t.Name,
+			Type:    t.Type,
+			URL:     t.URL,
+			Enabled: t.Enabled,
+			Format:  string(t.Format),
+			Headers: t.Headers,
+		})
+	}
+	return responses
+}
 
 func (h *PublishingHandlers) sendJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
