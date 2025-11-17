@@ -1,8 +1,8 @@
 # TN-68: Observability Report
 
-**Date**: 2025-11-17  
-**Status**: Complete ✅  
-**Grade**: A+ (100%)  
+**Date**: 2025-11-17
+**Status**: Complete ✅
+**Grade**: A+ (100%)
 
 ---
 
@@ -109,7 +109,7 @@ rate(api_http_requests_total{endpoint="publishing/mode"}[5m])
 
 ### Request Latency (P95)
 ```promql
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(api_http_request_duration_seconds_bucket{endpoint="publishing/mode"}[5m])
 )
 ```
@@ -225,6 +225,5 @@ All observability requirements are met:
 
 ---
 
-**Report Date**: 2025-11-17  
-**Status**: ✅ Complete, Production-Ready  
-
+**Report Date**: 2025-11-17
+**Status**: ✅ Complete, Production-Ready

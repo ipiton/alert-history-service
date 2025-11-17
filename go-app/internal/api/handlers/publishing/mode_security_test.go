@@ -444,4 +444,3 @@ func TestSecurity_NoInformationDisclosure(t *testing.T) {
 	assert.NotContains(t, errorResponse.Message, "file")
 	assert.NotContains(t, errorResponse.Message, "path")
 }
-

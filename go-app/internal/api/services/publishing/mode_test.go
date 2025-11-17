@@ -308,4 +308,3 @@ func TestNewModeService(t *testing.T) {
 	service2 := NewModeService(modeManager, discoveryManager, nil)
 	assert.NotNil(t, service2)
 }
-

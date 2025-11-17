@@ -263,4 +263,3 @@ func TestPublishingModeHandler_SendError(t *testing.T) {
 	assert.Equal(t, "test-request-id", errorResponse.RequestID)
 	assert.False(t, errorResponse.Timestamp.IsZero())
 }
-

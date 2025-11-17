@@ -323,4 +323,3 @@ func (h *PublishingModeHandler) sendError(w http.ResponseWriter, status int, mes
 
 	h.sendJSON(w, status, errorResponse)
 }
-

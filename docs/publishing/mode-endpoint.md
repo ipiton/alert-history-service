@@ -325,7 +325,7 @@ rate(api_http_requests_total{endpoint="publishing/mode"}[5m])
 
 **Request Latency (P95)**:
 ```promql
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(api_http_request_duration_seconds_bucket{endpoint="publishing/mode"}[5m])
 )
 ```
@@ -450,6 +450,5 @@ For issues or questions:
 
 ---
 
-**Last Updated**: 2025-11-17  
+**Last Updated**: 2025-11-17
 **Status**: Production-Ready ✅
-

@@ -1510,16 +1510,16 @@ func main() {
 		stubDiscoveryMgrForMode := infrapublishing.NewStubTargetDiscoveryManager(appLogger)
 		modeMetricsForMode := infrapublishing.NewPublishingModeMetrics("alert_history", "publishing")
 		modeManagerForMode := infrapublishing.NewModeManager(stubDiscoveryMgrForMode, appLogger, modeMetricsForMode)
-		
+
 		modeService := apiservices.NewModeService(modeManagerForMode, stubDiscoveryMgrForMode, appLogger)
 		modeHandler := handlers.NewPublishingModeHandler(modeService, appLogger)
-		
+
 		// Register API v1 endpoint (backward compatibility)
 		mux.HandleFunc("GET /api/v1/publishing/mode", modeHandler.GetPublishingMode)
-		
+
 		// Register API v2 endpoint (consistent with other v2 endpoints)
 		mux.HandleFunc("GET /api/v2/publishing/mode", modeHandler.GetPublishingMode)
-		
+
 		slog.Info("✅ Publishing Mode endpoints registered (TN-68)",
 			"endpoints", []string{
 				"GET /api/v1/publishing/mode",

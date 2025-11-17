@@ -3,10 +3,10 @@ info:
   title: Publishing Mode API
   description: |
     API endpoint for retrieving the current publishing mode of the Alert History system.
-    
+
     The endpoint provides information about whether the system is operating in normal mode
     (publishing alerts to targets) or metrics-only mode (collecting metrics only).
-    
+
     Features:
     - HTTP caching with ETag and conditional requests
     - OWASP Top 10 compliant security headers
@@ -38,12 +38,12 @@ paths:
       summary: Get current publishing mode
       description: |
         Retrieves the current operational mode of the publishing system.
-        
+
         The response includes:
         - Current mode (normal or metrics-only)
         - Target availability status
         - Enhanced metrics (if ModeManager available)
-        
+
         Supports HTTP caching with ETag and conditional requests (304 Not Modified).
       operationId: getPublishingMode
       parameters:
@@ -77,7 +77,7 @@ paths:
             ETag:
               schema:
                 type: string
-                description: ETag for caching (format: "mode-enabled_targets-transition_count")
+                description: 'ETag for caching (format: "mode-enabled_targets-transition_count")'
                 example: '"normal-5-12"'
             X-Request-ID:
               schema:
@@ -160,7 +160,7 @@ paths:
       summary: Get current publishing mode (deprecated)
       description: |
         **Deprecated**: Use `/api/v2/publishing/mode` instead.
-        
+
         This endpoint is maintained for backward compatibility only.
         Support ends 2026-11-13.
       operationId: getPublishingModeV1
@@ -208,7 +208,7 @@ components:
       type: object
       description: |
         Current publishing mode information.
-        
+
         Basic fields are always present. Enhanced fields are present when
         ModeManager is available (TN-060).
       required:
@@ -304,4 +304,3 @@ components:
 
 security:
   - None: []
-

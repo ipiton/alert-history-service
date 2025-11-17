@@ -214,4 +214,3 @@ func BenchmarkService_GetCurrentModeInfo(b *testing.B) {
 		_, _ = mockService.GetCurrentModeInfo(ctx)
 	}
 }
-

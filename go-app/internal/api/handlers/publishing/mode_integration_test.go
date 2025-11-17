@@ -24,7 +24,7 @@ func TestIntegration_GetPublishingMode_V1(t *testing.T) {
 	// Setup: Create real ModeManager and DiscoveryManager
 	logger := slog.Default()
 	stubDiscoveryMgr := infrapublishing.NewStubTargetDiscoveryManager(logger)
-	
+
 	// Add some targets
 	stubDiscoveryMgr.AddTarget(&core.PublishingTarget{
 		Name:    "target1",
@@ -39,7 +39,7 @@ func TestIntegration_GetPublishingMode_V1(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_v1", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	// Start mode manager
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
@@ -85,7 +85,7 @@ func TestIntegration_GetPublishingMode_V2(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_v2", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -122,7 +122,7 @@ func TestIntegration_ConditionalRequest(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_conditional", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -159,7 +159,7 @@ func TestIntegration_MetricsOnlyMode(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_metrics_only", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -255,7 +255,7 @@ func TestIntegration_ConcurrentRequests(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_concurrent", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -300,7 +300,7 @@ func TestIntegration_ETagConsistency(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_etag", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -334,7 +334,7 @@ func TestIntegration_ResponseTime(t *testing.T) {
 
 	modeMetrics := infrapublishing.NewPublishingModeMetrics("test_perf", "publishing")
 	modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, logger, modeMetrics)
-	
+
 	ctx := context.Background()
 	_ = modeManager.Start(ctx)
 	defer modeManager.Stop()
@@ -353,4 +353,3 @@ func TestIntegration_ResponseTime(t *testing.T) {
 	assert.Less(t, duration.Milliseconds(), int64(10), "Response time should be < 10ms")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
-
