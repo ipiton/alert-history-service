@@ -10,6 +10,8 @@ import (
 
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
+	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
+	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 )
 
 // RouterConfig holds router configuration
@@ -33,6 +35,9 @@ type RouterConfig struct {
 
 	// Logger
 	Logger *slog.Logger
+
+	// Business services (TN-67: Publishing targets refresh)
+	RefreshManager publishing.RefreshManager
 }
 
 // DefaultRouterConfig returns default router configuration
@@ -151,7 +156,12 @@ func setupPublishingRoutes(router *mux.Router, config RouterConfig) {
 	if config.EnableAuth {
 		targetsAdmin.Use(middleware.AdminMiddleware)
 	}
-	targetsAdmin.HandleFunc("/refresh", PlaceholderHandler("RefreshTargets")).Methods("POST")
+	// TN-67: POST /api/v2/publishing/targets/refresh - Manual target refresh
+	if config.RefreshManager != nil {
+		targetsAdmin.HandleFunc("/refresh", handlers.HandleRefreshTargets(config.RefreshManager)).Methods("POST")
+	} else {
+		targetsAdmin.HandleFunc("/refresh", PlaceholderHandler("RefreshTargets")).Methods("POST")
+	}
 
 	// Operator+ endpoints
 	targetsOperator := targetsProtected.NewRoute().Subrouter()
