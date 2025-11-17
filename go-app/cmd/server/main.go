@@ -1404,6 +1404,9 @@ func main() {
 		slog.Info("✅ Publishing Stats Handler created (5 REST endpoints)")
 
 		// Step 5: Register HTTP API endpoints
+		// TN-69: API v1 endpoint for backward compatibility
+		mux.HandleFunc("GET /api/v1/publishing/stats", statsHandler.GetStatsV1)
+		// API v2 endpoints
 		mux.HandleFunc("GET /api/v2/publishing/metrics", statsHandler.GetMetrics)
 		mux.HandleFunc("GET /api/v2/publishing/stats", statsHandler.GetStats)
 		mux.HandleFunc("GET /api/v2/publishing/health", statsHandler.GetHealth)

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,6 +165,107 @@ func TestGetStats(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		handler.GetStats(w, req)
+
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("Supports query parameters", func(t *testing.T) {
+		snapshot := &publishing.MetricsSnapshot{
+			Timestamp:           time.Now(),
+			Metrics:             createTestMetrics(),
+			CollectionDuration:  time.Microsecond * 85,
+			AvailableCollectors: []string{"health", "refresh"},
+			Errors:              make(map[string]error),
+		}
+		handler := createTestHandler(snapshot)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/publishing/stats?filter=type:rootly", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetStats(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("Validates invalid filter parameter", func(t *testing.T) {
+		handler := createTestHandler(nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/publishing/stats?filter=invalid", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetStats(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("Supports Prometheus format", func(t *testing.T) {
+		snapshot := &publishing.MetricsSnapshot{
+			Timestamp:           time.Now(),
+			Metrics:             createTestMetrics(),
+			CollectionDuration:  time.Microsecond * 85,
+			AvailableCollectors: []string{"health", "refresh"},
+			Errors:              make(map[string]error),
+		}
+		handler := createTestHandler(snapshot)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/publishing/stats?format=prometheus", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetStats(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		contentType := w.Header().Get("Content-Type")
+		if !strings.Contains(contentType, "text/plain") {
+			t.Errorf("Expected Prometheus content type, got %s", contentType)
+		}
+	})
+}
+
+// TestGetStatsV1 tests GET /api/v1/publishing/stats endpoint.
+func TestGetStatsV1(t *testing.T) {
+	t.Run("Returns v1 stats successfully", func(t *testing.T) {
+		snapshot := &publishing.MetricsSnapshot{
+			Timestamp:           time.Now(),
+			Metrics:             createTestMetrics(),
+			CollectionDuration:  time.Microsecond * 85,
+			AvailableCollectors: []string{"health", "refresh"},
+			Errors:              make(map[string]error),
+		}
+		handler := createTestHandler(snapshot)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/publishing/stats", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetStatsV1(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var response StatsResponseV1
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if response.TotalTargets == 0 && len(createTestMetrics()) > 0 {
+			t.Error("Expected non-zero total targets")
+		}
+	})
+
+	t.Run("Rejects non-GET requests", func(t *testing.T) {
+		handler := createTestHandler(nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/publishing/stats", nil)
+		w := httptest.NewRecorder()
+
+		handler.GetStatsV1(w, req)
 
 		if w.Code != http.StatusMethodNotAllowed {
 			t.Errorf("Expected status 405, got %d", w.Code)
