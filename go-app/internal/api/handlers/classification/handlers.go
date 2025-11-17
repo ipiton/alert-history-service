@@ -3,8 +3,10 @@ package classification
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
@@ -66,12 +68,16 @@ func NewClassificationHandlersWithService(
 // ClassifyRequest represents classification request
 type ClassifyRequest struct {
 	Alert *core.Alert `json:"alert" validate:"required"`
+	Force bool        `json:"force,omitempty"` // Force new classification (bypass cache)
 }
 
 // ClassifyResponse represents classification response
 type ClassifyResponse struct {
 	Result         *core.ClassificationResult `json:"result"`
-	ProcessingTime string                     `json:"processing_time"`
+	ProcessingTime string                     `json:"processing_time"` // e.g., "50ms", "1.2s"
+	Cached         bool                       `json:"cached"`         // Was result from cache?
+	Model          string                     `json:"model,omitempty"` // LLM model used (if available)
+	Timestamp      time.Time                  `json:"timestamp"`
 }
 
 // StatsResponse represents classification statistics
@@ -159,7 +165,8 @@ type ModelInfo struct {
 // ClassifyAlert handles POST /api/v2/classification/classify
 //
 // @Summary Classify an alert
-// @Description Classifies an alert and returns severity, confidence, and recommendations
+// @Description Classifies an alert and returns severity, confidence, and recommendations.
+// Supports force flag to bypass cache and force new classification.
 // @Tags Classification
 // @Security ApiKeyAuth
 // @Accept json
@@ -167,46 +174,200 @@ type ModelInfo struct {
 // @Param request body ClassifyRequest true "Classification request"
 // @Success 200 {object} ClassifyResponse
 // @Failure 400 {object} apierrors.ErrorResponse
+// @Failure 429 {object} apierrors.ErrorResponse
 // @Failure 500 {object} apierrors.ErrorResponse
+// @Failure 503 {object} apierrors.ErrorResponse
 // @Router /classification/classify [post]
 func (h *ClassificationHandlers) ClassifyAlert(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	startTime := time.Now()
+
+	// Parse request
 	var req ClassifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		apiErr := apierrors.ValidationError("Invalid request body").
-			WithRequestID(middleware.GetRequestID(r.Context()))
+		h.logger.Warn("Invalid request body",
+			"request_id", requestID,
+			"error", err)
+		apiErr := apierrors.ValidationError("Invalid request body: " + err.Error()).
+			WithRequestID(requestID)
 		apierrors.WriteError(w, apiErr)
 		return
 	}
 
-	// Basic validation
+	// Validate alert is present
 	if req.Alert == nil {
+		h.logger.Warn("Alert is required",
+			"request_id", requestID)
 		apiErr := apierrors.ValidationError("Alert is required").
-			WithRequestID(middleware.GetRequestID(r.Context()))
+			WithRequestID(requestID)
 		apierrors.WriteError(w, apiErr)
 		return
 	}
 
+	// Validate alert fields
+	if err := h.validateAlert(req.Alert); err != nil {
+		h.logger.Warn("Alert validation failed",
+			"request_id", requestID,
+			"fingerprint", req.Alert.Fingerprint,
+			"error", err)
+		apiErr := apierrors.ValidationError("Invalid alert: " + err.Error()).
+			WithRequestID(requestID)
+		apierrors.WriteError(w, apiErr)
+		return
+	}
+
+	// Create context with timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	start := time.Now()
-	result, err := h.classifier.Classify(ctx, req.Alert)
-	duration := time.Since(start)
-
-	if err != nil {
-		h.logger.Error("Classification failed", "error", err, "duration", duration)
-		apiErr := apierrors.InternalError("Classification failed: " + err.Error()).
-			WithRequestID(middleware.GetRequestID(r.Context()))
-		apierrors.WriteError(w, apiErr)
-		return
+	// Handle force flag: invalidate cache if force=true
+	cached := false
+	if req.Force && h.classificationService != nil {
+		if err := h.classificationService.InvalidateCache(ctx, req.Alert.Fingerprint); err != nil {
+			h.logger.Warn("Failed to invalidate cache",
+				"request_id", requestID,
+				"fingerprint", req.Alert.Fingerprint,
+				"error", err)
+			// Continue anyway - not critical
+		} else {
+			h.logger.Debug("Cache invalidated due to force flag",
+				"request_id", requestID,
+				"fingerprint", req.Alert.Fingerprint)
+		}
 	}
 
+	// Check cache first (if force=false and ClassificationService available)
+	var result *core.ClassificationResult
+	var err error
+	if !req.Force && h.classificationService != nil {
+		if cachedResult, cacheErr := h.classificationService.GetCachedClassification(ctx, req.Alert.Fingerprint); cacheErr == nil && cachedResult != nil {
+			result = cachedResult
+			cached = true
+			h.logger.Debug("Classification retrieved from cache",
+				"request_id", requestID,
+				"fingerprint", req.Alert.Fingerprint,
+				"severity", result.Severity,
+				"confidence", result.Confidence)
+		}
+	}
+
+	// If not cached, classify
+	if result == nil {
+		result, err = h.classifier.Classify(ctx, req.Alert)
+		if err != nil {
+			duration := time.Since(startTime)
+			h.logger.Error("Classification failed",
+				"request_id", requestID,
+				"fingerprint", req.Alert.Fingerprint,
+				"error", err,
+				"duration_ms", duration.Milliseconds())
+
+			// Determine error type and status code
+			var apiErr *apierrors.APIError
+			if isTimeoutError(err) {
+				apiErr = apierrors.ClassificationTimeoutError().
+					WithRequestID(requestID)
+			} else if isServiceUnavailable(err) {
+				apiErr = apierrors.ServiceUnavailableError("LLM service").
+					WithRequestID(requestID)
+			} else {
+				apiErr = apierrors.InternalError("Classification failed: " + err.Error()).
+					WithRequestID(requestID)
+			}
+			apierrors.WriteError(w, apiErr)
+			return
+		}
+
+		h.logger.Info("Alert classified successfully",
+			"request_id", requestID,
+			"fingerprint", req.Alert.Fingerprint,
+			"severity", result.Severity,
+			"confidence", result.Confidence,
+			"cached", cached,
+			"force", req.Force)
+	}
+
+	duration := time.Since(startTime)
+
+	// Format response
 	response := ClassifyResponse{
 		Result:         result,
-		ProcessingTime: duration.String(),
+		ProcessingTime: formatDuration(duration),
+		Cached:         cached,
+		Timestamp:      time.Now(),
 	}
 
+	// Try to extract model from metadata (if available)
+	if result.Metadata != nil {
+		if model, ok := result.Metadata["model"].(string); ok {
+			response.Model = model
+		}
+	}
+
+	h.logger.Debug("Classification response prepared",
+		"request_id", requestID,
+		"fingerprint", req.Alert.Fingerprint,
+		"severity", result.Severity,
+		"cached", cached,
+		"duration_ms", duration.Milliseconds())
+
 	h.sendJSON(w, http.StatusOK, response)
+}
+
+// validateAlert validates alert structure and fields
+func (h *ClassificationHandlers) validateAlert(alert *core.Alert) error {
+	if alert.Fingerprint == "" {
+		return fmt.Errorf("fingerprint is required")
+	}
+	if alert.AlertName == "" {
+		return fmt.Errorf("alert_name is required")
+	}
+	if alert.Status != core.StatusFiring && alert.Status != core.StatusResolved {
+		return fmt.Errorf("status must be 'firing' or 'resolved'")
+	}
+	if alert.StartsAt.IsZero() {
+		return fmt.Errorf("starts_at is required")
+	}
+	// Validate generator_url if present
+	if alert.GeneratorURL != nil && *alert.GeneratorURL != "" {
+		// Basic URL validation (more comprehensive validation can be added)
+		if !strings.HasPrefix(*alert.GeneratorURL, "http://") && !strings.HasPrefix(*alert.GeneratorURL, "https://") {
+			return fmt.Errorf("generator_url must be a valid HTTP/HTTPS URL")
+		}
+	}
+	return nil
+}
+
+// isTimeoutError checks if error is a timeout error
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "timeout") ||
+		strings.Contains(err.Error(), "deadline exceeded") ||
+		strings.Contains(err.Error(), "context deadline exceeded")
+}
+
+// isServiceUnavailable checks if error indicates service unavailable
+func isServiceUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "circuit breaker") ||
+		strings.Contains(errStr, "service unavailable") ||
+		strings.Contains(errStr, "unavailable")
+}
+
+// formatDuration formats duration as human-readable string
+func formatDuration(d time.Duration) string {
+	if d < time.Millisecond {
+		return fmt.Sprintf("%dµs", d.Microseconds())
+	}
+	if d < time.Second {
+		return fmt.Sprintf("%.2fms", float64(d.Nanoseconds())/1e6)
+	}
+	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
 // GetClassificationStats handles GET /api/v2/classification/stats

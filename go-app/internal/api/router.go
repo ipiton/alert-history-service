@@ -378,7 +378,13 @@ func setupClassificationRoutes(router *mux.Router, config RouterConfig) {
 		classProtected.Use(middleware.RateLimitMiddleware(config.RateLimitPerMinute, config.RateLimitBurst))
 	}
 
-	classProtected.HandleFunc("/classify", PlaceholderHandler("ClassifyAlert")).Methods("POST")
+	// TN-72: Register classification classify endpoint (if handlers available)
+	if config.ClassificationHandlers != nil {
+		classProtected.HandleFunc("/classify", config.ClassificationHandlers.ClassifyAlert).Methods("POST")
+	} else {
+		// Fallback to placeholder if handlers not available
+		classProtected.HandleFunc("/classify", PlaceholderHandler("ClassifyAlert")).Methods("POST")
+	}
 }
 
 // setupHistoryRoutes configures /api/v2/history/* routes
