@@ -40,6 +40,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 	pkgmiddleware "github.com/vitaliisemenov/alert-history/pkg/middleware"
 	apiservices "github.com/vitaliisemenov/alert-history/internal/api/services/publishing"
+	classificationhandlers "github.com/vitaliisemenov/alert-history/internal/api/handlers/classification"
 )
 
 const (
@@ -593,6 +594,24 @@ func main() {
 		slog.Info("LLM not enabled, classification service will not be available")
 	}
 
+	// TN-71: Initialize Classification Handlers (for GET /api/v2/classification/stats)
+	var classificationHandlers *classificationhandlers.ClassificationHandlers
+	if classificationService != nil {
+		classificationHandlers = classificationhandlers.NewClassificationHandlersWithService(
+			classificationService, // core.AlertClassifier
+			classificationService, // services.ClassificationService
+			appLogger,
+		)
+		slog.Info("✅ Classification Handlers initialized (TN-71)",
+			"endpoints", []string{
+				"GET /api/v2/classification/stats - LLM classification statistics",
+			})
+	} else {
+		// Create handlers with nil service (graceful degradation)
+		classificationHandlers = classificationhandlers.NewClassificationHandlers(nil, appLogger)
+		slog.Info("Classification Handlers initialized (without service, graceful degradation enabled)")
+	}
+
 	// Initialize AlertProcessor
 	alertProcessorConfig := services.AlertProcessorConfig{
 		EnrichmentManager: enrichmentManager,
@@ -940,6 +959,17 @@ func main() {
 		)
 	} else {
 		slog.Warn("⚠️ Analytics endpoints NOT available (database not connected or MOCK_MODE)")
+	}
+
+	// TN-71: Register Classification endpoints
+	if classificationHandlers != nil {
+		mux.HandleFunc("/api/v2/classification/stats", classificationHandlers.GetClassificationStats)
+		slog.Info("✅ Classification endpoints registered (TN-71)",
+			"endpoints", []string{
+				"GET /api/v2/classification/stats - LLM classification statistics",
+			})
+	} else {
+		slog.Warn("⚠️ Classification endpoints NOT available (handlers not initialized)")
 	}
 
 	// Register enrichment mode endpoints
