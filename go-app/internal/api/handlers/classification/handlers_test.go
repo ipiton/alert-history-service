@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/vitaliisemenov/alert-history/internal/core"
+	"github.com/vitaliisemenov/alert-history/internal/core/services"
 )
 
 // MockClassifier implements core.AlertClassifier for testing
@@ -27,6 +29,52 @@ func (m *MockClassifier) Classify(ctx context.Context, alert *core.Alert) (*core
 		Reasoning:      "Test classification",
 		ProcessingTime: 0.05,
 	}, nil
+}
+
+// MockClassificationService implements both core.AlertClassifier and services.ClassificationService for testing
+type MockClassificationService struct {
+	classifyFunc func(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error)
+	stats        services.ClassificationStats
+}
+
+func (m *MockClassificationService) Classify(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
+	if m.classifyFunc != nil {
+		return m.classifyFunc(ctx, alert)
+	}
+	return &core.ClassificationResult{
+		Severity:       core.SeverityWarning,
+		Confidence:     0.95,
+		Reasoning:      "Test classification",
+		ProcessingTime: 0.05,
+	}, nil
+}
+
+func (m *MockClassificationService) ClassifyAlert(ctx context.Context, alert *core.Alert) (*core.ClassificationResult, error) {
+	return m.Classify(ctx, alert)
+}
+
+func (m *MockClassificationService) GetStats() services.ClassificationStats {
+	return m.stats
+}
+
+func (m *MockClassificationService) GetCachedClassification(ctx context.Context, fingerprint string) (*core.ClassificationResult, error) {
+	return nil, nil
+}
+
+func (m *MockClassificationService) ClassifyBatch(ctx context.Context, alerts []*core.Alert) ([]*core.ClassificationResult, error) {
+	return nil, nil
+}
+
+func (m *MockClassificationService) InvalidateCache(ctx context.Context, fingerprint string) error {
+	return nil
+}
+
+func (m *MockClassificationService) WarmCache(ctx context.Context, alerts []*core.Alert) error {
+	return nil
+}
+
+func (m *MockClassificationService) Health(ctx context.Context) error {
+	return nil
 }
 
 func TestClassifyAlert_Success(t *testing.T) {
@@ -141,16 +189,26 @@ func TestClassifyAlert_ClassifierError(t *testing.T) {
 }
 
 func TestGetClassificationStats_Success(t *testing.T) {
-	mockClassifier := &MockClassifier{}
-	handlers := NewClassificationHandlers(mockClassifier, slog.Default())
+	// Create mock with stats
+	mockService := &MockClassificationService{
+		stats: services.ClassificationStats{
+			TotalRequests:   100,
+			CacheHitRate:    0.65,
+			LLMSuccessRate:  0.98,
+			FallbackRate:    0.02,
+			AvgResponseTime: 50 * time.Millisecond,
+		},
+	}
+	handlers := NewClassificationHandlersWithService(mockService, mockService, slog.Default())
 
 	req := httptest.NewRequest("GET", "/api/v2/classification/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "request_id", "test-request-id"))
 	rr := httptest.NewRecorder()
 
 	handlers.GetClassificationStats(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr.Code)
+		t.Errorf("Expected status 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	var response StatsResponse
@@ -158,8 +216,63 @@ func TestGetClassificationStats_Success(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
+	// Validate response structure
 	if response.BySeverity == nil {
 		t.Error("Expected by_severity map, got nil")
+	}
+
+	if response.TotalRequests != 100 {
+		t.Errorf("Expected TotalRequests 100, got %d", response.TotalRequests)
+	}
+
+	if response.CacheStats.HitRate != 0.65 {
+		t.Errorf("Expected CacheStats.HitRate 0.65, got %f", response.CacheStats.HitRate)
+	}
+
+	if response.LLMStats.SuccessRate != 0.98 {
+		t.Errorf("Expected LLMStats.SuccessRate 0.98, got %f", response.LLMStats.SuccessRate)
+	}
+
+	if response.FallbackStats.Rate != 0.02 {
+		t.Errorf("Expected FallbackStats.Rate 0.02, got %f", response.FallbackStats.Rate)
+	}
+
+	// Validate severity stats are initialized
+	expectedSeverities := []string{"critical", "warning", "info", "noise"}
+	for _, severity := range expectedSeverities {
+		if _, exists := response.BySeverity[severity]; !exists {
+			t.Errorf("Expected severity %s in BySeverity map", severity)
+		}
+	}
+}
+
+func TestGetClassificationStats_WithoutService(t *testing.T) {
+	// Test graceful degradation when ClassificationService is not available
+	mockClassifier := &MockClassifier{}
+	handlers := NewClassificationHandlers(mockClassifier, slog.Default())
+
+	req := httptest.NewRequest("GET", "/api/v2/classification/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "request_id", "test-request-id"))
+	rr := httptest.NewRecorder()
+
+	handlers.GetClassificationStats(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status 200 (graceful degradation), got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response StatsResponse
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Should return empty stats, not error
+	if response.TotalRequests != 0 {
+		t.Errorf("Expected TotalRequests 0 (empty stats), got %d", response.TotalRequests)
+	}
+
+	if response.BySeverity == nil {
+		t.Error("Expected by_severity map (even if empty), got nil")
 	}
 }
 

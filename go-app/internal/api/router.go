@@ -48,6 +48,15 @@ type RouterConfig struct {
 	PublishingCoordinator  interface {
 		PublishToTargets(ctx interface{}, alert interface{}, targets []string) (interface{}, error)
 	} // *infrapub.PublishingCoordinator (avoid circular import via interface)
+
+	// TN-71: Classification endpoints dependencies
+	ClassificationService interface {
+		GetStats() interface{} // services.ClassificationStats (avoid circular import)
+		ClassifyAlert(ctx interface{}, alert interface{}) (interface{}, error)
+	} // services.ClassificationService (avoid circular import via interface)
+	ClassificationHandlers interface {
+		GetClassificationStats(w http.ResponseWriter, r *http.Request)
+	} // *classificationhandlers.ClassificationHandlers (avoid circular import via interface)
 }
 
 // DefaultRouterConfig returns default router configuration
@@ -348,14 +357,17 @@ func HealthCheckHandler(logger *slog.Logger) http.HandlerFunc {
 func setupClassificationRoutes(router *mux.Router, config RouterConfig) {
 	class := router.PathPrefix("/classification").Subrouter()
 
-	// TODO: Initialize classification handlers with actual classifier
-	// For now, use placeholder
-	_ = class
-	_ = config
+	// TN-71: Register classification stats endpoint (if handlers available)
+	if config.ClassificationHandlers != nil {
+		// Public endpoint (no auth required)
+		class.HandleFunc("/stats", config.ClassificationHandlers.GetClassificationStats).Methods("GET")
+	} else {
+		// Fallback to placeholder if handlers not available
+		class.HandleFunc("/stats", PlaceholderHandler("GetClassificationStats")).Methods("GET")
+	}
 
 	// Public endpoints (no auth required)
 	class.HandleFunc("/models", PlaceholderHandler("ListClassificationModels")).Methods("GET")
-	class.HandleFunc("/stats", PlaceholderHandler("GetClassificationStats")).Methods("GET")
 
 	// Protected endpoints (require auth)
 	classProtected := class.PathPrefix("").Subrouter()

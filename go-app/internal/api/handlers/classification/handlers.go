@@ -10,12 +10,16 @@ import (
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	"github.com/vitaliisemenov/alert-history/internal/core"
+	"github.com/vitaliisemenov/alert-history/internal/core/services"
 )
 
 // ClassificationHandlers provides HTTP handlers for classification operations
 type ClassificationHandlers struct {
-	classifier core.AlertClassifier
-	logger     *slog.Logger
+	classifier          core.AlertClassifier
+	classificationService services.ClassificationService // Optional: for GetStats()
+	logger              *slog.Logger
+	statsAggregator     *StatsAggregator
+	statsCache          *StatsCache // Optional: for performance optimization
 }
 
 // NewClassificationHandlers creates new classification handlers
@@ -24,9 +28,38 @@ func NewClassificationHandlers(classifier core.AlertClassifier, logger *slog.Log
 		logger = slog.Default()
 	}
 
-	return &ClassificationHandlers{
+	handlers := &ClassificationHandlers{
 		classifier: classifier,
 		logger:     logger,
+		statsCache: NewStatsCache(5 * time.Second), // Default 5s cache TTL
+	}
+
+	// Try to get ClassificationService from classifier (type assertion)
+	if svc, ok := classifier.(services.ClassificationService); ok {
+		handlers.classificationService = svc
+		handlers.statsAggregator = NewStatsAggregator(svc, logger)
+	}
+
+	return handlers
+}
+
+// NewClassificationHandlersWithService creates new classification handlers with explicit ClassificationService
+// This is the preferred method when ClassificationService is available
+func NewClassificationHandlersWithService(
+	classifier core.AlertClassifier,
+	classificationService services.ClassificationService,
+	logger *slog.Logger,
+) *ClassificationHandlers {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &ClassificationHandlers{
+		classifier:          classifier,
+		classificationService: classificationService,
+		logger:              logger,
+		statsAggregator:     NewStatsAggregator(classificationService, logger),
+		statsCache:          NewStatsCache(5 * time.Second), // Default 5s cache TTL
 	}
 }
 
@@ -43,11 +76,70 @@ type ClassifyResponse struct {
 
 // StatsResponse represents classification statistics
 type StatsResponse struct {
-	TotalClassified int64              `json:"total_classified"`
-	BySeverity      map[string]int64   `json:"by_severity"`
-	AvgConfidence   float64            `json:"avg_confidence"`
-	AvgProcessing   float64            `json:"avg_processing_ms"`
-	LastClassified  *time.Time         `json:"last_classified,omitempty"`
+	// Базовые метрики
+	TotalClassified   int64                    `json:"total_classified"`
+	TotalRequests     int64                    `json:"total_requests"`
+	ClassificationRate float64                 `json:"classification_rate"`
+	AvgConfidence     float64                 `json:"avg_confidence"`
+	AvgProcessing     float64                 `json:"avg_processing_ms"`
+
+	// Статистика по severity
+	BySeverity map[string]SeverityStats `json:"by_severity"`
+
+	// Cache статистика
+	CacheStats CacheStats `json:"cache_stats"`
+
+	// LLM статистика
+	LLMStats LLMStats `json:"llm_stats"`
+
+	// Fallback статистика
+	FallbackStats FallbackStats `json:"fallback_stats"`
+
+	// Error статистика
+	ErrorStats ErrorStats `json:"error_stats"`
+
+	// Метаданные
+	LastClassified *time.Time `json:"last_classified,omitempty"`
+	Timestamp      time.Time  `json:"timestamp"`
+}
+
+// SeverityStats represents statistics for a specific severity level
+type SeverityStats struct {
+	Count         int64   `json:"count"`
+	AvgConfidence float64 `json:"avg_confidence"`
+	Percentage    float64 `json:"percentage,omitempty"`
+}
+
+// CacheStats represents cache statistics
+type CacheStats struct {
+	HitRate float64 `json:"hit_rate"`
+	L1Hits  int64   `json:"l1_cache_hits"`
+	L2Hits  int64   `json:"l2_cache_hits"`
+	Misses  int64   `json:"cache_misses"`
+}
+
+// LLMStats represents LLM usage statistics
+type LLMStats struct {
+	Requests     int64   `json:"requests"`
+	SuccessRate  float64 `json:"success_rate"`
+	Failures     int64   `json:"failures"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	UsageRate    float64 `json:"usage_rate"`
+}
+
+// FallbackStats represents fallback classification statistics
+type FallbackStats struct {
+	Used         int64   `json:"used"`
+	Rate         float64 `json:"rate"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+}
+
+// ErrorStats represents error statistics
+type ErrorStats struct {
+	Total        int64      `json:"total"`
+	Rate         float64    `json:"rate"`
+	LastError    string     `json:"last_error,omitempty"`
+	LastErrorTime *time.Time `json:"last_error_time,omitempty"`
 }
 
 // ModelsResponse represents available classification models
@@ -120,27 +212,92 @@ func (h *ClassificationHandlers) ClassifyAlert(w http.ResponseWriter, r *http.Re
 // GetClassificationStats handles GET /api/v2/classification/stats
 //
 // @Summary Get classification statistics
-// @Description Returns aggregated statistics about classification operations
+// @Description Returns aggregated statistics about classification operations including cache hit rate, LLM usage, fallback statistics, and error rates
 // @Tags Classification
 // @Produce json
 // @Success 200 {object} StatsResponse
 // @Failure 500 {object} apierrors.ErrorResponse
 // @Router /classification/stats [get]
 func (h *ClassificationHandlers) GetClassificationStats(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement actual stats collection
-	// For now, return mock data
-	response := StatsResponse{
-		TotalClassified: 0,
-		BySeverity: map[string]int64{
-			"critical": 0,
-			"warning":  0,
-			"info":     0,
-			"noise":    0,
-		},
-		AvgConfidence: 0.0,
-		AvgProcessing: 0.0,
-		LastClassified: nil,
+	startTime := time.Now()
+	requestID := middleware.GetRequestID(r.Context())
+
+	// Check if ClassificationService is available
+	if h.classificationService == nil {
+		h.logger.Warn("ClassificationService not available, returning empty stats",
+			"request_id", requestID)
+
+		// Return empty stats instead of error (graceful degradation)
+		response := &StatsResponse{
+			TotalClassified:   0,
+			TotalRequests:     0,
+			ClassificationRate: 0.0,
+			AvgConfidence:     0.0,
+			AvgProcessing:     0.0,
+			BySeverity:        make(map[string]SeverityStats),
+			CacheStats:        CacheStats{},
+			LLMStats:          LLMStats{},
+			FallbackStats:     FallbackStats{},
+			ErrorStats:        ErrorStats{},
+			Timestamp:         time.Now(),
+		}
+
+		// Initialize severity stats with zeros
+		severities := []string{"critical", "warning", "info", "noise"}
+		for _, severity := range severities {
+			response.BySeverity[severity] = SeverityStats{
+				Count:         0,
+				AvgConfidence: 0.0,
+				Percentage:    0.0,
+			}
+		}
+
+		h.sendJSON(w, http.StatusOK, response)
+		return
 	}
+
+	// Check cache first (performance optimization)
+	if h.statsCache != nil {
+		if cached, hit := h.statsCache.Get(); hit {
+			duration := time.Since(startTime)
+			h.logger.Info("Classification stats retrieved from cache",
+				"request_id", requestID,
+				"total_classified", cached.TotalClassified,
+				"cache_hit_rate", cached.CacheStats.HitRate,
+				"duration_ms", duration.Milliseconds())
+			h.sendJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
+
+	// Aggregate statistics
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	response, err := h.statsAggregator.AggregateStats(ctx)
+	if err != nil {
+		h.logger.Error("Failed to aggregate classification statistics",
+			"request_id", requestID,
+			"error", err,
+			"duration_ms", time.Since(startTime).Milliseconds())
+
+		apiErr := apierrors.InternalError("Failed to retrieve classification statistics: " + err.Error()).
+			WithRequestID(requestID)
+		apierrors.WriteError(w, apiErr)
+		return
+	}
+
+	// Store in cache for future requests
+	if h.statsCache != nil {
+		h.statsCache.Set(response)
+	}
+
+	duration := time.Since(startTime)
+	h.logger.Info("Classification stats retrieved successfully",
+		"request_id", requestID,
+		"total_classified", response.TotalClassified,
+		"cache_hit_rate", response.CacheStats.HitRate,
+		"duration_ms", duration.Milliseconds())
 
 	h.sendJSON(w, http.StatusOK, response)
 }
