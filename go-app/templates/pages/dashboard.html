@@ -1,0 +1,146 @@
+{{ define "title" }}Dashboard - Alertmanager++{{ end }}
+
+{{ define "content" }}
+<div class="dashboard-page">
+    <h1>Dashboard</h1>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ .Data.FiringAlerts }}</div>
+                <div class="stat-label">Firing Alerts</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ .Data.ResolvedAlerts }}</div>
+                <div class="stat-label">Resolved Alerts</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">🔕</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ .Data.ActiveSilences }}</div>
+                <div class="stat-label">Active Silences</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ .Data.InhibitedAlerts }}</div>
+                <div class="stat-label">Inhibited Alerts</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Alerts -->
+    <div class="section">
+        <h2>Recent Alerts</h2>
+        {{ if .Data.RecentAlerts }}
+        <div class="alert-list">
+            {{ range .Data.RecentAlerts }}
+            <div class="alert-card">
+                <div class="alert-header">
+                    <span class="{{ statusClass .Status }}">{{ .Status }}</span>
+                    <span class="{{ severity .Severity }}">{{ .Severity }}</span>
+                </div>
+                <div class="alert-name">{{ .AlertName }}</div>
+                <div class="alert-summary">{{ truncate .Summary 100 }}</div>
+                <div class="alert-footer">
+                    <span class="alert-time">{{ timeAgo .StartsAt }}</span>
+                    <a href="/alerts/{{ .Fingerprint }}" class="alert-link">Details →</a>
+                </div>
+            </div>
+            {{ end }}
+        </div>
+        {{ else }}
+        <p class="empty-state">No recent alerts</p>
+        {{ end }}
+    </div>
+
+    <!-- Active Silences -->
+    <div class="section">
+        <h2>Active Silences</h2>
+        {{ if .Data.ActiveSilencesList }}
+        <div class="silence-list">
+            {{ range .Data.ActiveSilencesList }}
+            <div class="silence-card">
+                <div class="silence-header">
+                    <span class="silence-creator">{{ .Creator }}</span>
+                    <span class="silence-expires">Expires {{ timeAgo .EndsAt }}</span>
+                </div>
+                <div class="silence-comment">{{ truncate .Comment 150 }}</div>
+                <div class="silence-matchers">
+                    {{ range .Matchers }}
+                    <span class="matcher-badge">{{ .Name }}{{ .Operator }}{{ .Value }}</span>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </div>
+        {{ else }}
+        <p class="empty-state">No active silences</p>
+        {{ end }}
+    </div>
+</div>
+{{ end }}
+
+{{ define "extra_css" }}
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.stat-icon {
+    font-size: 2rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #111827;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.alert-list, .silence-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.alert-card, .silence-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.empty-state {
+    text-align: center;
+    color: #6b7280;
+    padding: 2rem;
+}
+</style>
+{{ end }}
