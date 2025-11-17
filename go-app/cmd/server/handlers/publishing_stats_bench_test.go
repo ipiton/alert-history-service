@@ -249,6 +249,63 @@ func BenchmarkConcurrentGetMetrics(b *testing.B) {
 	})
 }
 
+// BenchmarkGetStatsV1 benchmarks the v1 stats endpoint
+func BenchmarkGetStatsV1(b *testing.B) {
+	snapshot := &publishing.MetricsSnapshot{
+		Timestamp:           time.Now(),
+		Metrics:             createTestMetrics(),
+		CollectionDuration:  time.Microsecond * 85,
+		AvailableCollectors: []string{"health", "refresh"},
+		Errors:              make(map[string]error),
+	}
+	handler := createTestHandler(snapshot)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest("GET", "/api/v1/publishing/stats", nil)
+		w := httptest.NewRecorder()
+		handler.GetStatsV1(w, req)
+	}
+}
+
+// BenchmarkGetStatsWithFilter benchmarks stats with filter parameter
+func BenchmarkGetStatsWithFilter(b *testing.B) {
+	snapshot := &publishing.MetricsSnapshot{
+		Timestamp:           time.Now(),
+		Metrics:             createTestMetrics(),
+		CollectionDuration:  time.Microsecond * 85,
+		AvailableCollectors: []string{"health", "refresh"},
+		Errors:              make(map[string]error),
+	}
+	handler := createTestHandler(snapshot)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest("GET", "/api/v2/publishing/stats?filter=type:rootly", nil)
+		w := httptest.NewRecorder()
+		handler.GetStats(w, req)
+	}
+}
+
+// BenchmarkGetStatsPrometheusFormat benchmarks Prometheus format export
+func BenchmarkGetStatsPrometheusFormat(b *testing.B) {
+	snapshot := &publishing.MetricsSnapshot{
+		Timestamp:           time.Now(),
+		Metrics:             createTestMetrics(),
+		CollectionDuration:  time.Microsecond * 85,
+		AvailableCollectors: []string{"health", "refresh"},
+		Errors:              make(map[string]error),
+	}
+	handler := createTestHandler(snapshot)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest("GET", "/api/v2/publishing/stats?format=prometheus", nil)
+		w := httptest.NewRecorder()
+		handler.GetStats(w, req)
+	}
+}
+
 // BenchmarkConcurrentGetStats tests concurrent requests to /stats
 func BenchmarkConcurrentGetStats(b *testing.B) {
 	mockCollector := &MockCollectorForHandler{
