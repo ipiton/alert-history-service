@@ -39,6 +39,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/pkg/logger"
 	"github.com/vitaliisemenov/alert-history/pkg/metrics"
 	pkgmiddleware "github.com/vitaliisemenov/alert-history/pkg/middleware"
+	apiservices "github.com/vitaliisemenov/alert-history/internal/api/services/publishing"
 )
 
 const (
@@ -1439,10 +1440,12 @@ func main() {
 
 		// Step 2: Create stub TargetDiscoveryManager (for testing until K8s is enabled)
 		// TODO: Replace with real discoveryMgr when K8s is uncommented
+		// Note: Declared outside block for TN-68 endpoint registration
 		stubDiscoveryMgr := infrapublishing.NewStubTargetDiscoveryManager(appLogger)
 		slog.Info("✅ Stub Target Discovery Manager created (for testing)")
 
 		// Step 3: Create Mode Manager
+		// Note: Declared outside block for TN-68 endpoint registration
 		modeManager := infrapublishing.NewModeManager(stubDiscoveryMgr, appLogger, modeMetrics)
 		slog.Info("✅ Mode Manager created",
 			"features", []string{
@@ -1488,6 +1491,9 @@ func main() {
 			// - publishingCoordinator (if exists)
 			// - parallelPublisher (if exists)
 
+			// TN-68: ModeService will be created and endpoints registered after mux is created
+			// (see registration code below, after mux initialization)
+
 			slog.Info("✅ Metrics-Only Mode (TN-060) integrated",
 				"status", "PRODUCTION-READY",
 				"quality", "150%+ (Grade A+, Phase 9 complete)",
@@ -1495,6 +1501,36 @@ func main() {
 		}
 	} else {
 		slog.Warn("⚠️ Publishing Queue NOT initialized (database or metrics not available)")
+	}
+
+	// TN-68: Register publishing mode endpoints (API v1 & v2)
+	// Create ModeService and handler for endpoint registration
+	// Note: We create new instances here since modeManager/stubDiscoveryMgr from above are in a different scope
+	if publishingQueue != nil {
+		stubDiscoveryMgrForMode := infrapublishing.NewStubTargetDiscoveryManager(appLogger)
+		modeMetricsForMode := infrapublishing.NewPublishingModeMetrics("alert_history", "publishing")
+		modeManagerForMode := infrapublishing.NewModeManager(stubDiscoveryMgrForMode, appLogger, modeMetricsForMode)
+
+		modeService := apiservices.NewModeService(modeManagerForMode, stubDiscoveryMgrForMode, appLogger)
+		modeHandler := handlers.NewPublishingModeHandler(modeService, appLogger)
+
+		// Register API v1 endpoint (backward compatibility)
+		mux.HandleFunc("GET /api/v1/publishing/mode", modeHandler.GetPublishingMode)
+
+		// Register API v2 endpoint (consistent with other v2 endpoints)
+		mux.HandleFunc("GET /api/v2/publishing/mode", modeHandler.GetPublishingMode)
+
+		slog.Info("✅ Publishing Mode endpoints registered (TN-68)",
+			"endpoints", []string{
+				"GET /api/v1/publishing/mode",
+				"GET /api/v2/publishing/mode",
+			},
+			"features", []string{
+				"HTTP caching (Cache-Control, ETag)",
+				"Conditional requests (304 Not Modified)",
+				"Structured logging",
+				"Request ID tracking",
+			})
 	}
 
 	// Add Prometheus metrics endpoint if enabled

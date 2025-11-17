@@ -10,6 +10,7 @@ import (
 
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
+	apiservices "github.com/vitaliisemenov/alert-history/internal/api/services/publishing"
 	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 )
@@ -38,6 +39,9 @@ type RouterConfig struct {
 
 	// Business services (TN-67: Publishing targets refresh)
 	RefreshManager publishing.RefreshManager
+
+	// TN-68: Publishing mode endpoint
+	ModeService apiservices.ModeService
 }
 
 // DefaultRouterConfig returns default router configuration
@@ -239,6 +243,16 @@ func setupPublishingRoutes(router *mux.Router, config RouterConfig) {
 
 	// --- Overall Health ---
 	pub.HandleFunc("/health", PlaceholderHandler("GetPublishingHealth")).Methods("GET")
+
+	// --- Mode Information (TN-68) ---
+	// Public endpoint (no auth required)
+	mode := pub.PathPrefix("/mode").Subrouter()
+	if config.ModeService != nil {
+		modeHandler := handlers.NewPublishingModeHandler(config.ModeService, config.Logger)
+		mode.HandleFunc("", modeHandler.GetPublishingMode).Methods("GET")
+	} else {
+		mode.HandleFunc("", PlaceholderHandler("GetPublishingMode")).Methods("GET")
+	}
 }
 
 // setupAPIv1Routes configures /api/v1 routes (backward compatibility)
@@ -258,6 +272,14 @@ func setupAPIv1Routes(router *mux.Router, config RouterConfig) {
 	v1Publishing := v1.PathPrefix("/publishing").Subrouter()
 	v1Publishing.HandleFunc("/targets", PlaceholderHandler("ListTargets_v1")).Methods("GET")
 	v1Publishing.HandleFunc("/submit", PlaceholderHandler("SubmitAlert_v1")).Methods("POST")
+
+	// TN-68: Publishing mode endpoint (backward compatibility)
+	if config.ModeService != nil {
+		modeHandler := handlers.NewPublishingModeHandler(config.ModeService, config.Logger)
+		v1Publishing.HandleFunc("/mode", modeHandler.GetPublishingMode).Methods("GET")
+	} else {
+		v1Publishing.HandleFunc("/mode", PlaceholderHandler("GetPublishingMode_v1")).Methods("GET")
+	}
 	// ... more legacy routes as needed
 }
 
