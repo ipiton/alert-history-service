@@ -253,7 +253,7 @@ type PagerDutyConfig struct {
 
 	// URL is the PagerDuty Events API endpoint
 	// Default: https://events.pagerduty.com/v2/enqueue
-	URL string `yaml:"url,omitempty" validate:"omitempty,url,https"`
+	URL string `yaml:"url,omitempty" validate:"omitempty,url,https_production"`
 
 	// Severity specifies the incident severity
 	// Values: critical, error, warning, info
@@ -352,7 +352,7 @@ func (p *PagerDutyConfig) Sanitize() *PagerDutyConfig {
 type SlackConfig struct {
 	// APIURL is the Slack webhook or API URL (required)
 	// Must be HTTPS
-	APIURL string `yaml:"api_url" validate:"required,url,https"`
+	APIURL string `yaml:"api_url" validate:"required,url,https_production"`
 
 	// Channel specifies the target channel or user
 	// Format: #channel or @username
