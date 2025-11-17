@@ -233,6 +233,8 @@ func (h *PublishingStatsHandler) GetMetrics(w http.ResponseWriter, r *http.Reque
 //	  "queue_utilization_percent": 1.5
 //	}
 func (h *PublishingStatsHandler) GetStatsV1(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -287,9 +289,17 @@ func (h *PublishingStatsHandler) GetStatsV1(w http.ResponseWriter, r *http.Reque
 		h.logger.Error("Failed to encode stats v1 response", "error", err)
 	}
 
-	h.logger.Debug("Stats v1 endpoint called",
+	// Enhanced observability logging
+	duration := time.Since(startTime)
+	h.logger.Info("Stats v1 endpoint called",
 		"total_targets", totalTargets,
 		"enabled_targets", enabledTargets,
+		"queue_size", queueSize,
+		"queue_capacity", queueCapacity,
+		"queue_utilization", queueUtilization,
+		"duration_ms", duration.Milliseconds(),
+		"collection_duration_us", snapshot.CollectionDuration.Microseconds(),
+		"metrics_count", len(snapshot.Metrics),
 	)
 }
 
@@ -323,6 +333,8 @@ func (h *PublishingStatsHandler) GetStatsV1(w http.ResponseWriter, r *http.Reque
 //	  "queue_stats": {...}
 //	}
 func (h *PublishingStatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -401,12 +413,22 @@ func (h *PublishingStatsHandler) GetStats(w http.ResponseWriter, r *http.Request
 		h.logger.Error("Failed to encode stats response", "error", err)
 	}
 
-	h.logger.Debug("Stats endpoint called",
+	// Enhanced observability logging
+	duration := time.Since(startTime)
+	h.logger.Info("Stats endpoint called",
 		"total_targets", systemStats.TotalTargets,
 		"healthy_targets", systemStats.HealthyTargets,
+		"unhealthy_targets", systemStats.UnhealthyTargets,
+		"success_rate", systemStats.SuccessRate,
+		"queue_size", systemStats.QueueSize,
+		"queue_capacity", systemStats.QueueCapacity,
 		"filter", queryParams.Filter,
 		"group_by", queryParams.GroupBy,
 		"format", queryParams.Format,
+		"duration_ms", duration.Milliseconds(),
+		"collection_duration_us", snapshot.CollectionDuration.Microseconds(),
+		"metrics_count", len(snapshot.Metrics),
+		"cache_hit", r.Header.Get("If-None-Match") != "",
 	)
 }
 
