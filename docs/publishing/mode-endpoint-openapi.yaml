@@ -1,0 +1,307 @@
+openapi: 3.0.3
+info:
+  title: Publishing Mode API
+  description: |
+    API endpoint for retrieving the current publishing mode of the Alert History system.
+    
+    The endpoint provides information about whether the system is operating in normal mode
+    (publishing alerts to targets) or metrics-only mode (collecting metrics only).
+    
+    Features:
+    - HTTP caching with ETag and conditional requests
+    - OWASP Top 10 compliant security headers
+    - Structured logging with request ID tracking
+    - Prometheus metrics integration
+  version: 2.0.0
+  contact:
+    name: Platform Team
+    email: platform@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Publishing
+    description: Publishing system endpoints
+
+paths:
+  /api/v2/publishing/mode:
+    get:
+      tags:
+        - Publishing
+      summary: Get current publishing mode
+      description: |
+        Retrieves the current operational mode of the publishing system.
+        
+        The response includes:
+        - Current mode (normal or metrics-only)
+        - Target availability status
+        - Enhanced metrics (if ModeManager available)
+        
+        Supports HTTP caching with ETag and conditional requests (304 Not Modified).
+      operationId: getPublishingMode
+      parameters:
+        - name: If-None-Match
+          in: header
+          description: ETag from previous response for conditional requests
+          required: false
+          schema:
+            type: string
+            example: '"normal-5-12"'
+        - name: X-Request-ID
+          in: header
+          description: Request ID for tracing (auto-generated if not provided)
+          required: false
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Mode information returned successfully
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: application/json; charset=utf-8
+            Cache-Control:
+              schema:
+                type: string
+                example: max-age=5, public
+            ETag:
+              schema:
+                type: string
+                description: ETag for caching (format: "mode-enabled_targets-transition_count")
+                example: '"normal-5-12"'
+            X-Request-ID:
+              schema:
+                type: string
+                format: uuid
+                example: "550e8400-e29b-41d4-a716-446655440000"
+            X-Content-Type-Options:
+              schema:
+                type: string
+                example: nosniff
+            X-Frame-Options:
+              schema:
+                type: string
+                example: DENY
+            Content-Security-Policy:
+              schema:
+                type: string
+                example: default-src 'none'; frame-ancestors 'none'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeInfo'
+              examples:
+                normal:
+                  summary: Normal mode response
+                  value:
+                    mode: "normal"
+                    targets_available: true
+                    enabled_targets: 5
+                    metrics_only_active: false
+                    transition_count: 12
+                    current_mode_duration_seconds: 3600.5
+                    last_transition_time: "2025-11-17T10:30:00Z"
+                    last_transition_reason: "targets_available"
+                metrics_only:
+                  summary: Metrics-only mode response
+                  value:
+                    mode: "metrics-only"
+                    targets_available: false
+                    enabled_targets: 0
+                    metrics_only_active: true
+                    transition_count: 13
+                    current_mode_duration_seconds: 1800.0
+                    last_transition_time: "2025-11-17T10:00:00Z"
+                    last_transition_reason: "no_enabled_targets"
+                fallback:
+                  summary: Fallback mode (no ModeManager)
+                  value:
+                    mode: "normal"
+                    targets_available: true
+                    enabled_targets: 3
+                    metrics_only_active: false
+        '304':
+          description: Client has cached version (conditional request)
+          headers:
+            ETag:
+              schema:
+                type: string
+                example: '"normal-5-12"'
+            Cache-Control:
+              schema:
+                type: string
+                example: max-age=5, public
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Internal Server Error"
+                message: "Failed to retrieve publishing mode information"
+                request_id: "550e8400-e29b-41d4-a716-446655440000"
+                timestamp: "2025-11-17T12:00:00Z"
+
+  /api/v1/publishing/mode:
+    get:
+      tags:
+        - Publishing
+      summary: Get current publishing mode (deprecated)
+      description: |
+        **Deprecated**: Use `/api/v2/publishing/mode` instead.
+        
+        This endpoint is maintained for backward compatibility only.
+        Support ends 2026-11-13.
+      operationId: getPublishingModeV1
+      deprecated: true
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: X-Request-ID
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Mode information returned successfully
+          headers:
+            X-API-Deprecated:
+              schema:
+                type: boolean
+                example: true
+            X-API-Deprecation-Info:
+              schema:
+                type: string
+                example: "API v1 is deprecated. Please migrate to /api/v2. Support ends 2026-11-13."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeInfo'
+        '304':
+          description: Client has cached version
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ModeInfo:
+      type: object
+      description: |
+        Current publishing mode information.
+        
+        Basic fields are always present. Enhanced fields are present when
+        ModeManager is available (TN-060).
+      required:
+        - mode
+        - targets_available
+        - enabled_targets
+        - metrics_only_active
+      properties:
+        mode:
+          type: string
+          enum: [normal, metrics-only]
+          description: Current publishing mode
+          example: "normal"
+        targets_available:
+          type: boolean
+          description: Whether any publishing targets are available
+          example: true
+        enabled_targets:
+          type: integer
+          description: Count of currently enabled publishing targets
+          minimum: 0
+          example: 5
+        metrics_only_active:
+          type: boolean
+          description: Whether system is in metrics-only mode
+          example: false
+        transition_count:
+          type: integer
+          description: Total number of mode transitions since startup (enhanced field)
+          minimum: 0
+          example: 12
+        current_mode_duration_seconds:
+          type: number
+          format: float
+          description: Duration in seconds in current mode (enhanced field)
+          minimum: 0
+          example: 3600.5
+        last_transition_time:
+          type: string
+          format: date-time
+          description: RFC3339 timestamp of last transition (enhanced field)
+          example: "2025-11-17T10:30:00Z"
+        last_transition_reason:
+          type: string
+          description: Reason for last transition (enhanced field)
+          enum:
+            - targets_available
+            - no_enabled_targets
+            - manual
+          example: "targets_available"
+      example:
+        mode: "normal"
+        targets_available: true
+        enabled_targets: 5
+        metrics_only_active: false
+        transition_count: 12
+        current_mode_duration_seconds: 3600.5
+        last_transition_time: "2025-11-17T10:30:00Z"
+        last_transition_reason: "targets_available"
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - error
+        - message
+        - request_id
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: HTTP status text
+          example: "Internal Server Error"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Failed to retrieve publishing mode information"
+        request_id:
+          type: string
+          description: Request ID for tracing
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          description: RFC3339 timestamp of error
+          example: "2025-11-17T12:00:00Z"
+
+  securitySchemes:
+    None:
+      type: http
+      scheme: none
+      description: No authentication required (public endpoint)
+
+security:
+  - None: []
+
