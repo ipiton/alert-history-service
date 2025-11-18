@@ -26,13 +26,19 @@ func (m *mockAlertProcessor) ProcessAlert(ctx context.Context, alert *core.Alert
 	return nil
 }
 
+func (m *mockAlertProcessor) Health(ctx context.Context) error {
+	return nil // Mock always healthy
+}
+
 func TestNewUniversalWebhookHandler(t *testing.T) {
 	processor := &mockAlertProcessor{}
 	handler := NewUniversalWebhookHandler(processor, nil)
 
 	require.NotNil(t, handler)
 	assert.NotNil(t, handler.detector)
-	assert.NotNil(t, handler.parser)
+	assert.NotNil(t, handler.parsers) // TN-146: Changed from parser to parsers map
+	assert.Contains(t, handler.parsers, WebhookTypeAlertmanager)
+	assert.Contains(t, handler.parsers, WebhookTypePrometheus) // TN-146: Verify Prometheus parser registered
 	assert.NotNil(t, handler.validator)
 	assert.NotNil(t, handler.processor)
 	assert.NotNil(t, handler.metrics)

@@ -20,15 +20,18 @@ type AlertProcessor interface {
 // UniversalWebhookHandler handles webhook requests with auto-detection and validation.
 //
 // This handler provides:
-//   - Auto-detection of webhook format (Alertmanager vs Generic)
-//   - Parsing using appropriate parser
+//   - Auto-detection of webhook format (Alertmanager, Prometheus, Generic)
+//   - Dynamic parser selection using Strategy pattern
+//   - Parsing using appropriate parser based on detected type
 //   - Validation of parsed webhook
 //   - Conversion to domain models
 //   - Metrics recording
 //   - Error handling with detailed responses
+//
+// TN-146: Enhanced to support multiple parsers via map (Alertmanager + Prometheus).
 type UniversalWebhookHandler struct {
 	detector  WebhookDetector
-	parser    WebhookParser // Currently only Alertmanager, can be extended to map[WebhookType]WebhookParser
+	parsers   map[WebhookType]WebhookParser // Strategy pattern: dynamic parser selection
 	validator WebhookValidator
 	processor AlertProcessor
 	metrics   *metrics.WebhookMetrics
@@ -37,20 +40,31 @@ type UniversalWebhookHandler struct {
 
 // NewUniversalWebhookHandler creates a new universal webhook handler.
 //
+// The handler supports multiple webhook formats via Strategy pattern:
+//   - Alertmanager webhooks (v0.25+ format)
+//   - Prometheus direct alerts (v1 array and v2 grouped formats)
+//
+// Parser selection is automatic based on webhook detection.
+//
 // Parameters:
 //   - processor: Alert processor for handling converted alerts
 //   - logger: Structured logger (optional, defaults to slog.Default())
 //
 // Returns:
 //   - *UniversalWebhookHandler: Initialized handler with all dependencies
+//
+// TN-146: Added Prometheus parser support via parsers map.
 func NewUniversalWebhookHandler(processor AlertProcessor, logger *slog.Logger) *UniversalWebhookHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	return &UniversalWebhookHandler{
-		detector:  NewWebhookDetector(),
-		parser:    NewAlertmanagerParser(),
+		detector: NewWebhookDetector(),
+		parsers: map[WebhookType]WebhookParser{
+			WebhookTypeAlertmanager: NewAlertmanagerParser(),
+			WebhookTypePrometheus:   NewPrometheusParser(), // TN-146: Prometheus support
+		},
 		validator: NewWebhookValidator(),
 		processor: processor,
 		metrics:   metrics.NewWebhookMetrics(),
@@ -132,17 +146,20 @@ func (h *UniversalWebhookHandler) HandleWebhook(ctx context.Context, req *Handle
 		"type", webhookType,
 		"payload_size", len(req.Payload))
 
-	// Step 2: Parse webhook (currently only Alertmanager supported)
-	if webhookType != WebhookTypeAlertmanager {
-		// For now, only Alertmanager is fully supported
-		// Generic webhook support can be added later
-		h.logger.Warn("Unsupported webhook type, treating as Alertmanager",
-			"detected_type", webhookType)
-		webhookType = WebhookTypeAlertmanager
+	// Step 2: Select parser based on detected webhook type (TN-146: Strategy pattern)
+	parser, ok := h.parsers[webhookType]
+	if !ok {
+		// Unknown type: fallback to Alertmanager parser (conservative approach)
+		h.logger.Warn("Unknown webhook type, falling back to Alertmanager parser",
+			"detected_type", webhookType,
+			"fallback_to", WebhookTypeAlertmanager)
+		parser = h.parsers[WebhookTypeAlertmanager]
+		webhookType = WebhookTypeAlertmanager // Update type for metrics
 	}
 
+	// Parse webhook using selected parser
 	parseStart := time.Now()
-	webhook, err := h.parser.Parse(req.Payload)
+	webhook, err := parser.Parse(req.Payload)
 	parseDuration := time.Since(parseStart).Seconds()
 	h.metrics.RecordProcessingStage(string(webhookType), "parse", parseDuration)
 
@@ -184,9 +201,9 @@ func (h *UniversalWebhookHandler) HandleWebhook(ctx context.Context, req *Handle
 		}, fmt.Errorf("validation failed: %d errors", len(validationResult.Errors))
 	}
 
-	// Step 4: Convert to domain alerts
+	// Step 4: Convert to domain alerts (using selected parser)
 	convertStart := time.Now()
-	alerts, err := h.parser.ConvertToDomain(webhook)
+	alerts, err := parser.ConvertToDomain(webhook)
 	convertDuration := time.Since(convertStart).Seconds()
 	h.metrics.RecordProcessingStage(string(webhookType), "convert", convertDuration)
 
