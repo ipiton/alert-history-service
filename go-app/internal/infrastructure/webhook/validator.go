@@ -30,6 +30,10 @@ type WebhookValidator interface {
 
 	// ValidateGeneric validates a generic webhook payload.
 	ValidateGeneric(data map[string]interface{}) *ValidationResult
+
+	// ValidatePrometheus validates a Prometheus webhook payload.
+	// Added for TN-146 (Prometheus Alert Parser).
+	ValidatePrometheus(webhook *PrometheusWebhook) *ValidationResult
 }
 
 // webhookValidator implements WebhookValidator using go-playground/validator.
@@ -279,6 +283,248 @@ func (v *webhookValidator) ValidateGeneric(data map[string]interface{}) *Validat
 	}
 
 	return result
+}
+
+// ValidatePrometheus validates a Prometheus webhook payload.
+//
+// This validates both v1 (flat array) and v2 (grouped) formats.
+// The validation is performed on the flattened alert list.
+//
+// Validation rules:
+//  1. Labels: alertname is required, label names match [a-zA-Z_][a-zA-Z0-9_]*
+//  2. State: Must be "firing", "pending", or "inactive"
+//  3. Timestamps: activeAt is required, valid RFC3339, not in future (5m tolerance)
+//  4. GeneratorURL: Required, valid URL format
+//
+// Parameters:
+//   - webhook: Prometheus webhook to validate (v1 or v2 format)
+//
+// Returns:
+//   - *ValidationResult: Validation result with errors (if any)
+//
+// Example:
+//
+//	validator := NewWebhookValidator()
+//	result := validator.ValidatePrometheus(webhook)
+//	if !result.Valid {
+//	    for _, err := range result.Errors {
+//	        log.Printf("Field %s: %s", err.Field, err.Message)
+//	    }
+//	}
+func (v *webhookValidator) ValidatePrometheus(webhook *PrometheusWebhook) *ValidationResult {
+	if webhook == nil {
+		return &ValidationResult{
+			Valid: false,
+			Errors: []*ValidationError{
+				{
+					Field:   "webhook",
+					Message: "prometheus webhook is nil",
+				},
+			},
+		}
+	}
+
+	result := &ValidationResult{
+		Valid:  true,
+		Errors: []*ValidationError{},
+	}
+
+	// Flatten alerts (handles both v1 and v2 formats)
+	alerts := webhook.FlattenAlerts()
+
+	if len(alerts) == 0 {
+		result.Valid = false
+		result.Errors = append(result.Errors, &ValidationError{
+			Field:   "alerts",
+			Message: "prometheus webhook contains no alerts",
+			Tag:     "required",
+		})
+		return result
+	}
+
+	// Validate each alert
+	for i, alert := range alerts {
+		errors := v.validatePrometheusAlert(&alert, i)
+		if len(errors) > 0 {
+			result.Valid = false
+			result.Errors = append(result.Errors, errors...)
+		}
+	}
+
+	return result
+}
+
+// validatePrometheusAlert validates a single Prometheus alert.
+//
+// This is a helper function for ValidatePrometheus that validates all required
+// fields and format constraints for a single alert.
+//
+// Parameters:
+//   - alert: Prometheus alert to validate
+//   - index: Alert index in the array (for error messages)
+//
+// Returns:
+//   - []ValidationError: List of validation errors (empty if valid)
+func (v *webhookValidator) validatePrometheusAlert(alert *PrometheusAlert, index int) []*ValidationError {
+	var errors []*ValidationError
+	prefix := fmt.Sprintf("alerts[%d]", index)
+
+	// 1. Validate required field: labels.alertname
+	if alert.Labels == nil || alert.Labels["alertname"] == "" {
+		errors = append(errors, &ValidationError{
+			Field:   fmt.Sprintf("%s.labels.alertname", prefix),
+			Message: "alertname label is required",
+			Tag:     "required",
+		})
+	}
+
+	// 2. Validate label names (Prometheus conventions: [a-zA-Z_][a-zA-Z0-9_]*)
+	for name, value := range alert.Labels {
+		if !isValidPrometheusLabelName(name) {
+			errors = append(errors, &ValidationError{
+				Field:   fmt.Sprintf("%s.labels.%s", prefix, name),
+				Message: fmt.Sprintf("invalid label name '%s', must match [a-zA-Z_][a-zA-Z0-9_]*", name),
+				Value:   name,
+				Tag:     "format",
+			})
+		}
+		if value == "" {
+			errors = append(errors, &ValidationError{
+				Field:   fmt.Sprintf("%s.labels.%s", prefix, name),
+				Message: fmt.Sprintf("label '%s' has empty value", name),
+				Value:   value,
+				Tag:     "required",
+			})
+		}
+	}
+
+	// 3. Validate state (enum: firing | pending | inactive)
+	if err := validatePrometheusState(alert.State); err != nil {
+		errors = append(errors, &ValidationError{
+			Field:   fmt.Sprintf("%s.state", prefix),
+			Message: err.Error(),
+			Value:   alert.State,
+			Tag:     "enum",
+		})
+	}
+
+	// 4. Validate activeAt timestamp (required, RFC3339, not in future with 5m tolerance)
+	if alert.ActiveAt.IsZero() {
+		errors = append(errors, &ValidationError{
+			Field:   fmt.Sprintf("%s.activeAt", prefix),
+			Message: "activeAt timestamp is required",
+			Tag:     "required",
+		})
+	} else {
+		if err := validatePrometheusTimestamp(alert.ActiveAt); err != nil {
+			errors = append(errors, &ValidationError{
+				Field:   fmt.Sprintf("%s.activeAt", prefix),
+				Message: err.Error(),
+				Value:   alert.ActiveAt,
+				Tag:     "timestamp",
+			})
+		}
+	}
+
+	// 5. Validate generatorURL (required, valid URL format)
+	if alert.GeneratorURL == "" {
+		errors = append(errors, &ValidationError{
+			Field:   fmt.Sprintf("%s.generatorURL", prefix),
+			Message: "generatorURL is required",
+			Tag:     "required",
+		})
+	} else {
+		if _, err := url.Parse(alert.GeneratorURL); err != nil {
+			errors = append(errors, &ValidationError{
+				Field:   fmt.Sprintf("%s.generatorURL", prefix),
+				Message: fmt.Sprintf("invalid URL format: %v", err),
+				Value:   alert.GeneratorURL,
+				Tag:     "url",
+			})
+		}
+	}
+
+	return errors
+}
+
+// validatePrometheusState validates Prometheus alert state enum.
+//
+// Valid states: "firing", "pending", "inactive"
+//
+// Parameters:
+//   - state: Prometheus alert state to validate
+//
+// Returns:
+//   - error: Validation error if state is invalid, nil otherwise
+func validatePrometheusState(state string) error {
+	validStates := map[string]bool{
+		"firing":   true,
+		"pending":  true,
+		"inactive": true,
+	}
+
+	if !validStates[state] {
+		return fmt.Errorf("invalid state '%s', must be 'firing', 'pending', or 'inactive'", state)
+	}
+
+	return nil
+}
+
+// validatePrometheusTimestamp validates Prometheus alert timestamp.
+//
+// Rules:
+//  1. Must be valid time.Time (not zero)
+//  2. Must not be in the future (with 5-minute tolerance for clock skew)
+//
+// Parameters:
+//   - activeAt: Prometheus alert timestamp to validate
+//
+// Returns:
+//   - error: Validation error if timestamp is invalid, nil otherwise
+func validatePrometheusTimestamp(activeAt time.Time) error {
+	// Check if timestamp is in the future (with 5-minute tolerance)
+	now := time.Now()
+	tolerance := 5 * time.Minute
+	maxAllowed := now.Add(tolerance)
+
+	if activeAt.After(maxAllowed) {
+		return fmt.Errorf("timestamp %s is in the future (current time: %s, tolerance: 5m)", activeAt.Format(time.RFC3339), now.Format(time.RFC3339))
+	}
+
+	return nil
+}
+
+// isValidPrometheusLabelName checks if a label name follows Prometheus naming conventions.
+//
+// Prometheus label names must match the regex: [a-zA-Z_][a-zA-Z0-9_]*
+// - Must start with a letter or underscore
+// - Can contain letters, digits, and underscores
+//
+// Parameters:
+//   - name: Label name to validate
+//
+// Returns:
+//   - bool: true if valid, false otherwise
+func isValidPrometheusLabelName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	// First character must be [a-zA-Z_]
+	first := name[0]
+	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
+		return false
+	}
+
+	// Remaining characters must be [a-zA-Z0-9_]
+	for i := 1; i < len(name); i++ {
+		c := name[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Custom validation functions
