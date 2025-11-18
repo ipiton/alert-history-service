@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/vitaliisemenov/alert-history/go-app/cmd/server/handlers/proxy"
+	"github.com/vitaliisemenov/alert-history/cmd/server/handlers/proxy"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing"
 )

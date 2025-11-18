@@ -14,6 +14,7 @@ import (
 // AlertProcessor defines the interface for processing alerts.
 type AlertProcessor interface {
 	ProcessAlert(ctx context.Context, alert *core.Alert) error
+	Health(ctx context.Context) error // Added for compatibility with handlers.AlertProcessor
 }
 
 // UniversalWebhookHandler handles webhook requests with auto-detection and validation.
@@ -55,6 +56,24 @@ func NewUniversalWebhookHandler(processor AlertProcessor, logger *slog.Logger) *
 		metrics:   metrics.NewWebhookMetrics(),
 		logger:    logger,
 	}
+}
+
+// Health checks the health of the webhook handler.
+func (h *UniversalWebhookHandler) Health(ctx context.Context) error {
+	// Delegate to processor if available
+	if h.processor != nil {
+		return h.processor.Health(ctx)
+	}
+	return nil
+}
+
+// ProcessAlert implements handlers.AlertProcessor interface.
+// This is an adapter method that delegates to the underlying processor.
+func (h *UniversalWebhookHandler) ProcessAlert(ctx context.Context, alert *core.Alert) error {
+	if h.processor != nil {
+		return h.processor.ProcessAlert(ctx, alert)
+	}
+	return fmt.Errorf("processor not initialized")
 }
 
 // HandleWebhookRequest represents the webhook processing request.

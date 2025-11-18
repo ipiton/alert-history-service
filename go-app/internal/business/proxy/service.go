@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vitaliisemenov/alert-history/go-app/cmd/server/handlers/proxy"
+	"github.com/vitaliisemenov/alert-history/cmd/server/handlers/proxy"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/publishing"

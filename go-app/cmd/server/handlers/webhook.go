@@ -41,10 +41,28 @@ type AlertProcessor interface {
 	Health(ctx context.Context) error
 }
 
+// WebhookConfig holds configuration for webhook HTTP handler.
+type WebhookConfig struct {
+	MaxRequestSize  int
+	RequestTimeout  time.Duration
+	MaxAlertsPerReq int
+	EnableMetrics   bool
+	EnableAuth      bool
+	AuthType        string
+	APIKey          string
+	SignatureSecret string
+}
+
 // WebhookHandlers holds dependencies for webhook handlers
 type WebhookHandlers struct {
 	processor AlertProcessor
 	logger    *slog.Logger
+	config    *WebhookConfig
+}
+
+// ServeHTTP implements http.Handler interface
+func (h *WebhookHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.HandleWebhook(w, r)
 }
 
 // NewWebhookHandlers creates a new WebhookHandlers instance
@@ -55,6 +73,27 @@ func NewWebhookHandlers(processor AlertProcessor, logger *slog.Logger) *WebhookH
 	return &WebhookHandlers{
 		processor: processor,
 		logger:    logger,
+		config:    nil, // No config for simple version
+	}
+}
+
+// NewWebhookHTTPHandler creates a new WebhookHandlers instance with configuration.
+func NewWebhookHTTPHandler(processor AlertProcessor, config *WebhookConfig, logger *slog.Logger) *WebhookHandlers {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if config == nil {
+		config = &WebhookConfig{
+			MaxRequestSize:  10 * 1024 * 1024, // 10 MB default
+			RequestTimeout:  30 * time.Second,
+			MaxAlertsPerReq: 1000,
+			EnableMetrics:   true,
+		}
+	}
+	return &WebhookHandlers{
+		processor: processor,
+		logger:    logger,
+		config:    config,
 	}
 }
 
