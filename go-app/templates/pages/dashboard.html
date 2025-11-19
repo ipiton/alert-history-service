@@ -1,146 +1,134 @@
+{{/* TN-77: Modern Dashboard Page (150% Quality Target) */}}
 {{ define "title" }}Dashboard - Alertmanager++{{ end }}
 
 {{ define "content" }}
 <div class="dashboard-page">
+  <!-- Page Header -->
+  <div class="page-header">
     <h1>Dashboard</h1>
-
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon">🔥</div>
-            <div class="stat-content">
-                <div class="stat-value">{{ .Data.FiringAlerts }}</div>
-                <div class="stat-label">Firing Alerts</div>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon">✅</div>
-            <div class="stat-content">
-                <div class="stat-value">{{ .Data.ResolvedAlerts }}</div>
-                <div class="stat-label">Resolved Alerts</div>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon">🔕</div>
-            <div class="stat-content">
-                <div class="stat-value">{{ .Data.ActiveSilences }}</div>
-                <div class="stat-label">Active Silences</div>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon">🎯</div>
-            <div class="stat-content">
-                <div class="stat-value">{{ .Data.InhibitedAlerts }}</div>
-                <div class="stat-label">Inhibited Alerts</div>
-            </div>
-        </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="location.reload()">
+        🔄 Refresh
+      </button>
+      <a href="/ui/silences/create" class="btn btn-primary">
+        🔕 Create Silence
+      </a>
     </div>
+  </div>
 
-    <!-- Recent Alerts -->
-    <div class="section">
-        <h2>Recent Alerts</h2>
-        {{ if .Data.RecentAlerts }}
-        <div class="alert-list">
-            {{ range .Data.RecentAlerts }}
-            <div class="alert-card">
-                <div class="alert-header">
-                    <span class="{{ statusClass .Status }}">{{ .Status }}</span>
-                    <span class="{{ severity .Severity }}">{{ .Severity }}</span>
-                </div>
-                <div class="alert-name">{{ .AlertName }}</div>
-                <div class="alert-summary">{{ truncate .Summary 100 }}</div>
-                <div class="alert-footer">
-                    <span class="alert-time">{{ timeAgo .StartsAt }}</span>
-                    <a href="/alerts/{{ .Fingerprint }}" class="alert-link">Details →</a>
-                </div>
-            </div>
-            {{ end }}
-        </div>
-        {{ else }}
-        <p class="empty-state">No recent alerts</p>
+  <!-- Dashboard Grid (CSS Grid Layout) -->
+  <div class="dashboard-grid">
+
+    <!-- Section 1: Stats Overview (Row 1, Full Width) -->
+    <section class="stats-section" aria-labelledby="stats-heading">
+      <h2 id="stats-heading" class="sr-only">Alert Statistics</h2>
+      <div class="stats-grid">
+        {{ template "partials/stats-card" (dict "Icon" "🔥" "Value" (default 0 .Data.FiringAlerts) "Label" "Firing Alerts" "Severity" "critical") }}
+        {{ template "partials/stats-card" (dict "Icon" "✅" "Value" (default 0 .Data.ResolvedAlerts) "Label" "Resolved Today") }}
+        {{ template "partials/stats-card" (dict "Icon" "🔕" "Value" (default 0 .Data.ActiveSilences) "Label" "Active Silences") }}
+        {{ template "partials/stats-card" (dict "Icon" "🎯" "Value" (default 0 .Data.InhibitedAlerts) "Label" "Inhibited Alerts") }}
+      </div>
+    </section>
+
+    <!-- Section 2: Recent Alerts (Row 2, Left 60% on desktop) -->
+    <section class="alerts-section" aria-labelledby="alerts-heading">
+      <div class="section-header">
+        <h2 id="alerts-heading">Recent Alerts</h2>
+        <a href="/ui/alerts" class="view-all-link">View All →</a>
+      </div>
+      {{ if .Data.RecentAlerts }}
+      <div class="alert-feed" role="list">
+        {{ range .Data.RecentAlerts }}
+          {{ template "partials/alert-card" . }}
         {{ end }}
-    </div>
+      </div>
+      {{ else }}
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <p>No recent alerts</p>
+      </div>
+      {{ end }}
+    </section>
 
-    <!-- Active Silences -->
-    <div class="section">
-        <h2>Active Silences</h2>
-        {{ if .Data.ActiveSilencesList }}
-        <div class="silence-list">
-            {{ range .Data.ActiveSilencesList }}
-            <div class="silence-card">
-                <div class="silence-header">
-                    <span class="silence-creator">{{ .Creator }}</span>
-                    <span class="silence-expires">Expires {{ timeAgo .EndsAt }}</span>
-                </div>
-                <div class="silence-comment">{{ truncate .Comment 150 }}</div>
-                <div class="silence-matchers">
-                    {{ range .Matchers }}
-                    <span class="matcher-badge">{{ .Name }}{{ .Operator }}{{ .Value }}</span>
-                    {{ end }}
-                </div>
-            </div>
-            {{ end }}
-        </div>
-        {{ else }}
-        <p class="empty-state">No active silences</p>
+    <!-- Section 3: Active Silences (Row 2, Right 40% on desktop) -->
+    <section class="silences-section" aria-labelledby="silences-heading">
+      <div class="section-header">
+        <h2 id="silences-heading">Active Silences</h2>
+        <a href="/ui/silences" class="view-all-link">View All →</a>
+      </div>
+      {{ if .Data.ActiveSilencesList }}
+      <div class="silence-feed" role="list">
+        {{ range .Data.ActiveSilencesList }}
+          {{ template "partials/silence-card" . }}
         {{ end }}
-    </div>
+      </div>
+      {{ else }}
+      <div class="empty-state">
+        <div class="empty-icon">🔕</div>
+        <p>No active silences</p>
+      </div>
+      {{ end }}
+    </section>
+
+    <!-- Section 4: Alert Timeline (Row 3, Full Width) -->
+    <section class="timeline-section" aria-labelledby="timeline-heading">
+      <div class="section-header">
+        <h2 id="timeline-heading">Alert Timeline (24h)</h2>
+      </div>
+      {{ if .Data.AlertTimeline }}
+        {{ template "partials/timeline-chart" .Data.AlertTimeline }}
+      {{ else }}
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <p>Timeline data unavailable</p>
+      </div>
+      {{ end }}
+    </section>
+
+    <!-- Section 5: System Health (Row 4, Left 50% on desktop) -->
+    <section class="health-section" aria-labelledby="health-heading">
+      <div class="section-header">
+        <h2 id="health-heading">System Health</h2>
+      </div>
+      {{ if .Data.Health }}
+        {{ template "partials/health-panel" .Data.Health }}
+      {{ else }}
+      <div class="empty-state">
+        <div class="empty-icon">🏥</div>
+        <p>Health data unavailable</p>
+      </div>
+      {{ end }}
+    </section>
+
+    <!-- Section 6: Quick Actions (Row 4, Right 50% on desktop) -->
+    <section class="actions-section" aria-labelledby="actions-heading">
+      <div class="section-header">
+        <h2 id="actions-heading">Quick Actions</h2>
+      </div>
+      {{ template "partials/quick-actions" . }}
+    </section>
+
+  </div>
 </div>
 {{ end }}
 
 {{ define "extra_css" }}
-<style>
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
+<link rel="stylesheet" href="/static/css/dashboard.css">
+<link rel="stylesheet" href="/static/css/components/stats-card.css">
+<link rel="stylesheet" href="/static/css/components/alert-card.css">
+<link rel="stylesheet" href="/static/css/components/silence-card.css">
+{{ end }}
 
-.stat-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+{{ define "extra_js" }}
+<script>
+// Progressive Enhancement: Auto-refresh dashboard every 30s (idle callback)
+if ('requestIdleCallback' in window) {
+  setInterval(() => {
+    requestIdleCallback(() => {
+      console.log('[Dashboard] Auto-refresh triggered');
+      location.reload();
+    });
+  }, 30000); // 30 seconds
 }
-
-.stat-icon {
-    font-size: 2rem;
-}
-
-.stat-value {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #111827;
-}
-
-.stat-label {
-    color: #6b7280;
-    font-size: 0.875rem;
-}
-
-.alert-list, .silence-list {
-    display: grid;
-    gap: 1rem;
-}
-
-.alert-card, .silence-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-.empty-state {
-    text-align: center;
-    color: #6b7280;
-    padding: 2rem;
-}
-</style>
+</script>
 {{ end }}

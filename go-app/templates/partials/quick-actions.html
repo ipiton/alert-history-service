@@ -1,0 +1,24 @@
+{{/* Quick Actions Partial - TN-77 Modern Dashboard */}}
+{{ define "partials/quick-actions" }}
+<div class="quick-actions">
+  <a href="/ui/silences/create" class="action-button" data-shortcut="shift+s">
+    <span class="action-icon">🔕</span>
+    <span class="action-label">Create Silence</span>
+  </a>
+
+  <a href="/ui/alerts" class="action-button" data-shortcut="shift+a">
+    <span class="action-icon">🔍</span>
+    <span class="action-label">Search Alerts</span>
+  </a>
+
+  <a href="/ui/settings" class="action-button" data-shortcut="shift+comma">
+    <span class="action-icon">⚙️</span>
+    <span class="action-label">Settings</span>
+  </a>
+
+  <a href="/metrics" class="action-button" target="_blank">
+    <span class="action-icon">📊</span>
+    <span class="action-label">Metrics</span>
+  </a>
+</div>
+{{ end }}

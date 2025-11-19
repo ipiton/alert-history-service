@@ -1,0 +1,20 @@
+{{/* Alert Card Partial - TN-77 Modern Dashboard */}}
+{{ define "partials/alert-card" }}
+<div class="alert-card severity-{{ default "info" .Severity }}" role="listitem">
+  <div class="alert-header">
+    <span class="alert-status {{ .Status }}">{{ .Status }}</span>
+    <span class="alert-severity">{{ default "info" .Severity }}</span>
+    {{ if .AIClassification }}
+    <span class="ai-badge" title="AI Confidence: {{ printf "%.0f%%" (mul .AIClassification.Confidence 100) }}">
+      🤖 AI
+    </span>
+    {{ end }}
+  </div>
+  <div class="alert-name">{{ .AlertName }}</div>
+  <div class="alert-summary">{{ truncate (default "No summary" .Summary) 120 }}</div>
+  <div class="alert-footer">
+    <span class="alert-time">{{ timeAgo .StartsAt }}</span>
+    <a href="/ui/alerts/{{ .Fingerprint }}" class="alert-link">Details →</a>
+  </div>
+</div>
+{{ end }}
