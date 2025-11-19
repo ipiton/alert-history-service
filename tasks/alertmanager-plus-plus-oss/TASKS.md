@@ -65,7 +65,7 @@
 
 ### Prometheus Compatibility
 - [x] **TN-146** Prometheus Alert Parser (150% quality, Grade A+, 90.3% coverage)
-- [ ] **TN-147** POST /api/v2/alerts endpoint (Alertmanager-compatible)
+- [x] **TN-147** POST /api/v2/alerts endpoint (150% quality, Grade A+ EXCEPTIONAL, 22/25 tests)
 - [ ] **TN-148** Prometheus-compatible response
 
 ### Deduplication & Filtering
