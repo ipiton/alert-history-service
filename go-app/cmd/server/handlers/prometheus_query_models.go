@@ -25,10 +25,11 @@ import (
 //   - sort: Sort field and direction
 //
 // Example Usage:
-//   params, err := ParseQueryParameters(r.URL.Query())
-//   if err != nil {
-//       return nil, fmt.Errorf("invalid query parameters: %w", err)
-//   }
+//
+//	params, err := ParseQueryParameters(r.URL.Query())
+//	if err != nil {
+//	    return nil, fmt.Errorf("invalid query parameters: %w", err)
+//	}
 type QueryParameters struct {
 	// Alertmanager standard filters
 	Filter    string // Label matcher expression (e.g., {alertname="HighCPU"})
@@ -61,8 +62,9 @@ type QueryParameters struct {
 //   - !~ : Negative regex match
 //
 // Example:
-//   {Name: "severity", Operator: "=", Value: "critical"}
-//   {Name: "alertname", Operator: "=~", Value: "High.*"}
+//
+//	{Name: "severity", Operator: "=", Value: "critical"}
+//	{Name: "alertname", Operator: "=~", Value: "High.*"}
 type LabelMatcher struct {
 	Name     string // Label name
 	Operator string // Operator: "=", "!=", "=~", "!~"
@@ -79,36 +81,37 @@ type LabelMatcher struct {
 //   - amtool CLI
 //
 // Example:
-//   {
-//     "labels": {
-//       "alertname": "HighCPU",
-//       "severity": "critical",
-//       "instance": "node-1"
-//     },
-//     "annotations": {
-//       "summary": "CPU usage above 90%",
-//       "description": "CPU usage is 95% for 5 minutes"
-//     },
-//     "startsAt": "2025-11-19T10:00:00Z",
-//     "endsAt": "2025-11-19T10:15:00Z",
-//     "generatorURL": "http://prometheus:9090/graph?...",
-//     "status": {
-//       "state": "active",
-//       "silencedBy": [],
-//       "inhibitedBy": []
-//     },
-//     "receivers": ["team-ops"],
-//     "fingerprint": "abc123def456"
-//   }
+//
+//	{
+//	  "labels": {
+//	    "alertname": "HighCPU",
+//	    "severity": "critical",
+//	    "instance": "node-1"
+//	  },
+//	  "annotations": {
+//	    "summary": "CPU usage above 90%",
+//	    "description": "CPU usage is 95% for 5 minutes"
+//	  },
+//	  "startsAt": "2025-11-19T10:00:00Z",
+//	  "endsAt": "2025-11-19T10:15:00Z",
+//	  "generatorURL": "http://prometheus:9090/graph?...",
+//	  "status": {
+//	    "state": "active",
+//	    "silencedBy": [],
+//	    "inhibitedBy": []
+//	  },
+//	  "receivers": ["team-ops"],
+//	  "fingerprint": "abc123def456"
+//	}
 type AlertmanagerAlert struct {
-	Labels       map[string]string `json:"labels"`                // Alert labels
-	Annotations  map[string]string `json:"annotations"`           // Alert annotations
-	StartsAt     string            `json:"startsAt"`              // Start timestamp (RFC3339)
-	EndsAt       string            `json:"endsAt,omitempty"`      // End timestamp (RFC3339, omitempty for active)
-	GeneratorURL string            `json:"generatorURL"`          // Generator URL
-	Status       AlertStatus       `json:"status"`                // Alert status
-	Receivers    []string          `json:"receivers"`             // Receiver names
-	Fingerprint  string            `json:"fingerprint"`           // Alert fingerprint
+	Labels       map[string]string `json:"labels"`           // Alert labels
+	Annotations  map[string]string `json:"annotations"`      // Alert annotations
+	StartsAt     string            `json:"startsAt"`         // Start timestamp (RFC3339)
+	EndsAt       string            `json:"endsAt,omitempty"` // End timestamp (RFC3339, omitempty for active)
+	GeneratorURL string            `json:"generatorURL"`     // Generator URL
+	Status       AlertStatus       `json:"status"`           // Alert status
+	Receivers    []string          `json:"receivers"`        // Receiver names
+	Fingerprint  string            `json:"fingerprint"`      // Alert fingerprint
 }
 
 // AlertStatus represents the status of an alert.
@@ -119,11 +122,12 @@ type AlertmanagerAlert struct {
 //   - inhibitedBy: List of alert fingerprints that inhibit this alert
 //
 // Example:
-//   {
-//     "state": "active",
-//     "silencedBy": [],
-//     "inhibitedBy": []
-//   }
+//
+//	{
+//	  "state": "active",
+//	  "silencedBy": [],
+//	  "inhibitedBy": []
+//	}
 type AlertStatus struct {
 	State       string   `json:"state"`                 // Alert state: "active", "suppressed", "unprocessed"
 	SilencedBy  []string `json:"silencedBy"`            // Silence IDs (empty array if not silenced)
@@ -136,25 +140,27 @@ type AlertStatus struct {
 // response format used by Prometheus ecosystem tools.
 //
 // Response format:
-//   {
-//     "status": "success",
-//     "data": {
-//       "alerts": [...],
-//       "total": 42,
-//       "page": 1,
-//       "limit": 100
-//     }
-//   }
+//
+//	{
+//	  "status": "success",
+//	  "data": {
+//	    "alerts": [...],
+//	    "total": 42,
+//	    "page": 1,
+//	    "limit": 100
+//	  }
+//	}
 //
 // Or for errors:
-//   {
-//     "status": "error",
-//     "error": "invalid filter expression: {alertname"
-//   }
+//
+//	{
+//	  "status": "error",
+//	  "error": "invalid filter expression: {alertname"
+//	}
 type AlertmanagerListResponse struct {
-	Status string                 `json:"status"` // "success" or "error"
-	Data   *AlertmanagerListData  `json:"data,omitempty"`   // Response data (success only)
-	Error  string                 `json:"error,omitempty"`  // Error message (error only)
+	Status string                `json:"status"`          // "success" or "error"
+	Data   *AlertmanagerListData `json:"data,omitempty"`  // Response data (success only)
+	Error  string                `json:"error,omitempty"` // Error message (error only)
 }
 
 // AlertmanagerListData contains the list of alerts and pagination metadata.
@@ -166,17 +172,18 @@ type AlertmanagerListResponse struct {
 //   - Limit: Results per page
 //
 // Example:
-//   {
-//     "alerts": [{...}, {...}],
-//     "total": 42,
-//     "page": 1,
-//     "limit": 100
-//   }
+//
+//	{
+//	  "alerts": [{...}, {...}],
+//	  "total": 42,
+//	  "page": 1,
+//	  "limit": 100
+//	}
 type AlertmanagerListData struct {
-	Alerts []AlertmanagerAlert `json:"alerts"`           // Array of alerts
-	Total  int                 `json:"total,omitempty"`  // Total count (for pagination)
-	Page   int                 `json:"page,omitempty"`   // Current page
-	Limit  int                 `json:"limit,omitempty"`  // Results per page
+	Alerts []AlertmanagerAlert `json:"alerts"`          // Array of alerts
+	Total  int                 `json:"total,omitempty"` // Total count (for pagination)
+	Page   int                 `json:"page,omitempty"`  // Current page
+	Limit  int                 `json:"limit,omitempty"` // Results per page
 }
 
 // DefaultQueryParameters returns default query parameters.
@@ -202,17 +209,18 @@ func DefaultQueryParameters() *QueryParameters {
 	}
 }
 
-// ValidationError represents a query parameter validation error.
+// QueryValidationError represents a query parameter validation error.
 //
 // Provides detailed context about which parameter failed validation and why.
 //
 // Example:
-//   {
-//     "parameter": "limit",
-//     "message": "limit must be between 1 and 1000",
-//     "value": "5000"
-//   }
-type ValidationError struct {
+//
+//	{
+//	  "parameter": "limit",
+//	  "message": "limit must be between 1 and 1000",
+//	  "value": "5000"
+//	}
+type QueryValidationError struct {
 	Parameter string      `json:"parameter"` // Parameter name
 	Message   string      `json:"message"`   // Error message
 	Value     interface{} `json:"value"`     // Invalid value
@@ -225,13 +233,14 @@ type ValidationError struct {
 //   - Errors: List of validation errors (if any)
 //
 // Example:
-//   result := ValidateQueryParameters(params)
-//   if !result.Valid {
-//       return handleValidationError(result.Errors)
-//   }
+//
+//	result := ValidateQueryParameters(params)
+//	if !result.Valid {
+//	    return handleValidationError(result.Errors)
+//	}
 type QueryValidationResult struct {
-	Valid  bool              `json:"valid"`  // Whether parameters are valid
-	Errors []ValidationError `json:"errors"` // Validation errors
+	Valid  bool                   `json:"valid"`  // Whether parameters are valid
+	Errors []QueryValidationError `json:"errors"` // Validation errors
 }
 
 // MaxAlertsPerPage is the maximum number of alerts that can be returned in a single page.

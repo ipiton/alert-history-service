@@ -19,11 +19,12 @@ import (
 //   - Sorting: sort (format: "field:direction")
 //
 // Example Usage:
-//   params, err := ParseQueryParameters(r.URL.Query())
-//   if err != nil {
-//       http.Error(w, err.Error(), http.StatusBadRequest)
-//       return
-//   }
+//
+//	params, err := ParseQueryParameters(r.URL.Query())
+//	if err != nil {
+//	    http.Error(w, err.Error(), http.StatusBadRequest)
+//	    return
+//	}
 //
 // Parameters:
 //   - query: URL query parameters from http.Request
@@ -216,16 +217,18 @@ func parseSortParameter(s string) (string, string, error) {
 // ParseLabelMatchers parses a label matcher expression.
 //
 // Supports Prometheus label matcher syntax:
-//   {name="value"}                  - Single matcher
-//   {name1="value1",name2="value2"} - Multiple matchers
-//   {name=~"regex.*"}               - Regex matcher
-//   {name!="value"}                 - Negative matcher
-//   {name!~"regex.*"}               - Negative regex matcher
+//
+//	{name="value"}                  - Single matcher
+//	{name1="value1",name2="value2"} - Multiple matchers
+//	{name=~"regex.*"}               - Regex matcher
+//	{name!="value"}                 - Negative matcher
+//	{name!~"regex.*"}               - Negative regex matcher
 //
 // Examples:
-//   {alertname="HighCPU"}
-//   {alertname="HighCPU",severity="critical"}
-//   {alertname=~"High.*",severity!="info"}
+//
+//	{alertname="HighCPU"}
+//	{alertname="HighCPU",severity="critical"}
+//	{alertname=~"High.*",severity!="info"}
 //
 // Parameters:
 //   - expr: Label matcher expression
@@ -275,8 +278,9 @@ func ParseLabelMatchers(expr string) ([]LabelMatcher, error) {
 // This handles commas inside quoted values correctly.
 //
 // Example:
-//   alertname="HighCPU",severity="critical"
-//   → ["alertname=\"HighCPU\"", "severity=\"critical\""]
+//
+//	alertname="HighCPU",severity="critical"
+//	→ ["alertname=\"HighCPU\"", "severity=\"critical\""]
 //
 // Parameters:
 //   - expr: Matcher expression (without outer braces)
@@ -319,10 +323,11 @@ func splitMatcherExpression(expr string) []string {
 // parseSingleMatcher parses a single label matcher.
 //
 // Supported formats:
-//   name="value"    - Exact match
-//   name!="value"   - Not equal
-//   name=~"regex"   - Regex match
-//   name!~"regex"   - Negative regex match
+//
+//	name="value"    - Exact match
+//	name!="value"   - Not equal
+//	name=~"regex"   - Regex match
+//	name!~"regex"   - Negative regex match
 //
 // Parameters:
 //   - s: Matcher string
@@ -373,18 +378,18 @@ func parseSingleMatcher(s string) (LabelMatcher, error) {
 // Returns:
 //   - *QueryValidationResult: Validation result
 func ValidateQueryParameters(params *QueryParameters) *QueryValidationResult {
-	var errors []ValidationError
+	var errors []QueryValidationError
 
 	// Validate pagination
 	if params.Page < 1 {
-		errors = append(errors, ValidationError{
+		errors = append(errors, QueryValidationError{
 			Parameter: "page",
 			Message:   "must be a positive integer",
 			Value:     params.Page,
 		})
 	}
 	if params.Limit < 1 || params.Limit > MaxAlertsPerPage {
-		errors = append(errors, ValidationError{
+		errors = append(errors, QueryValidationError{
 			Parameter: "limit",
 			Message:   fmt.Sprintf("must be between 1 and %d", MaxAlertsPerPage),
 			Value:     params.Limit,
@@ -394,7 +399,7 @@ func ValidateQueryParameters(params *QueryParameters) *QueryValidationResult {
 	// Validate time range
 	if !params.StartTime.IsZero() && !params.EndTime.IsZero() {
 		if params.StartTime.After(params.EndTime) {
-			errors = append(errors, ValidationError{
+			errors = append(errors, QueryValidationError{
 				Parameter: "time_range",
 				Message:   "startTime must be before endTime",
 				Value:     fmt.Sprintf("%s > %s", params.StartTime, params.EndTime),
@@ -405,7 +410,7 @@ func ValidateQueryParameters(params *QueryParameters) *QueryValidationResult {
 	// Validate label matchers (if present)
 	if params.Filter != "" {
 		if _, err := ParseLabelMatchers(params.Filter); err != nil {
-			errors = append(errors, ValidationError{
+			errors = append(errors, QueryValidationError{
 				Parameter: "filter",
 				Message:   fmt.Sprintf("invalid label matcher expression: %v", err),
 				Value:     params.Filter,
