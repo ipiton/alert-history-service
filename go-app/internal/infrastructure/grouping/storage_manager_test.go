@@ -34,6 +34,7 @@ type mockStorage struct {
 	deleteCount   int
 	listKeysCount int
 	sizeCount     int
+	loadAllCount  int
 	pingCount     int
 }
 
@@ -63,6 +64,7 @@ func (m *mockStorage) Size(ctx context.Context) (int, error) {
 }
 
 func (m *mockStorage) LoadAll(ctx context.Context) ([]*AlertGroup, error) {
+	m.loadAllCount++
 	return []*AlertGroup{}, nil
 }
 
@@ -335,6 +337,31 @@ func TestStorageManager_SizeAndListKeys(t *testing.T) {
 	// ListKeys uses fallback
 	_, _ = manager.ListKeys(ctx)
 	assert.Equal(t, 1, fallback.listKeysCount)
+}
+
+// TestStorageManager_LoadAllDelegation tests delegation of LoadAll.
+func TestStorageManager_LoadAllDelegation(t *testing.T) {
+	primary := &mockStorage{healthy: true}
+	fallback := &mockStorage{healthy: true}
+
+	manager := NewStorageManager(primary, fallback, nil, nil)
+	defer manager.Stop()
+
+	ctx := context.Background()
+
+	// LoadAll uses current storage (primary)
+	_, _ = manager.LoadAll(ctx)
+	assert.Equal(t, 1, primary.loadAllCount)
+	assert.Equal(t, 0, fallback.loadAllCount)
+
+	// Switch to fallback
+	primary.healthy = false
+	manager.checkHealthAndSwitch()
+
+	// LoadAll uses fallback
+	_, _ = manager.LoadAll(ctx)
+	assert.Equal(t, 1, primary.loadAllCount)
+	assert.Equal(t, 1, fallback.loadAllCount)
 }
 
 // TestStorageManager_MetricsRecording tests metrics are recorded.

@@ -101,20 +101,21 @@ func (h *HistoryHandlerV2) parseHistoryRequest(query map[string][]string) (*core
 	// Parse pagination
 	page := 1
 	if pageStr := query["page"]; len(pageStr) > 0 {
-		if p, err := strconv.Atoi(pageStr[0]); err == nil && p > 0 {
-			page = p
+		p, err := strconv.Atoi(pageStr[0])
+		if err != nil {
+			return nil, &core.ValidationError{Field: "page", Message: "must be an integer"}
 		}
+		page = p
 	}
 	req.Pagination.Page = page
 
 	perPage := 50
 	if perPageStr := query["per_page"]; len(perPageStr) > 0 {
-		if pp, err := strconv.Atoi(perPageStr[0]); err == nil && pp > 0 {
-			perPage = pp
-			if perPage > 1000 {
-				perPage = 1000
-			}
+		pp, err := strconv.Atoi(perPageStr[0])
+		if err != nil {
+			return nil, &core.ValidationError{Field: "per_page", Message: "must be an integer"}
 		}
+		perPage = pp
 	}
 	req.Pagination.PerPage = perPage
 

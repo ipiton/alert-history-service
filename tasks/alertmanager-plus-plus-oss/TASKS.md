@@ -115,7 +115,6 @@
 - [x] **TN-133** Silence Storage (PostgreSQL) ✅ **COMPLETED** (152.7%, Grade A+)
 - [x] **TN-134** Silence Manager Service ✅ **COMPLETED** (150%, 90% coverage)
 - [x] **TN-135** Silence API Endpoints ✅ **COMPLETED** (150%, Alertmanager v2 compatible)
-- [x] **TN-136** Silence UI Components ✅ **COMPLETED** (150%, WebSocket, PWA)
 
 ---
 
@@ -170,15 +169,14 @@
 ## 🔄 Phase 9: Dashboard & UI (IN PROGRESS 20%)
 
 - [x] **TN-76** Dashboard template engine (html/template) ✅ **COMPLETED** (153.8%, Grade A+ 🏆)
-- [ ] **TN-77** Modern dashboard page (CSS Grid/Flexbox)
-- [ ] **TN-78** Real-time updates (SSE/WebSocket)
-- [ ] **TN-79** Alert list with filtering
-- [ ] **TN-80** Classification display
-- [ ] **TN-81** GET /api/dashboard/overview
-- [ ] **TN-82** GET /api/dashboard/charts
-- [ ] **TN-83** GET /api/dashboard/health
-- [ ] **TN-84** GET /api/dashboard/alerts/recent
-- [ ] **TN-85** GET /api/dashboard/recommendations
+	•	TN-77 Modern dashboard page (CSS Grid/Flexbox)
+	•	TN-78 Real-time updates (SSE/WebSocket)
+	•	TN-79 Alert list with filtering
+	•	TN-80 Classification display
+	•	TN-136 Silence UI Components
+	•	TN-81 GET /api/dashboard/overview
+	•	TN-83 GET /api/dashboard/health (basic)
+	•	TN-84 GET /api/dashboard/alerts/recent (simple)
 
 ---
 
@@ -266,11 +264,13 @@
 ### SaaS Integrations (Not in OSS)
 - **TN-52** Rootly publisher ❌ PAID (deep SaaS integration)
 
-### Advanced UI (Future OSS consideration)
-- **TN-169** Real-time Alert Dashboard (WebSocket) 🔄 FUTURE
-- **TN-170** Configuration UI (visual editor) 🔄 FUTURE
-- **TN-171** Analytics Dashboard (Grafana-style) 🔄 FUTURE
-- **TN-172** Mobile-Responsive UI 🔄 FUTURE
+### Advanced UI (Not in OSS)
+- **TN-169** Real-time Alert Dashboard (WebSocket) ❌ PAID
+- **TN-170** Configuration UI (visual editor) ❌ PAID
+- **TN-171** Analytics Dashboard (Grafana-style) ❌ PAID
+- **TN-172** Mobile-Responsive UI ❌ PAID
+  •	TN-82 GET /api/dashboard/charts** (графики, аналитика) ❌ PAID
+	•	TN-85 GET /api/dashboard/recommendations** (AI рекомендации) ❌ PAID
 
 ---
 

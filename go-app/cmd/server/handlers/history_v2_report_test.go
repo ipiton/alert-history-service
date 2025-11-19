@@ -21,9 +21,13 @@ type MockHistoryRepository struct {
 	GetTopAlertsFunc       func(ctx context.Context, timeRange *core.TimeRange, limit int) ([]*core.TopAlert, error)
 	GetFlappingAlertsFunc  func(ctx context.Context, timeRange *core.TimeRange, threshold int) ([]*core.FlappingAlert, error)
 	GetRecentAlertsFunc    func(ctx context.Context, limit int) ([]*core.Alert, error)
+	GetHistoryFunc         func(ctx context.Context, req *core.HistoryRequest) (*core.HistoryResponse, error)
 }
 
 func (m *MockHistoryRepository) GetHistory(ctx context.Context, req *core.HistoryRequest) (*core.HistoryResponse, error) {
+	if m.GetHistoryFunc != nil {
+		return m.GetHistoryFunc(ctx, req)
+	}
 	return nil, nil
 }
 

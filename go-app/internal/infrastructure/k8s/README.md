@@ -582,6 +582,3 @@ Copyright (c) 2025 Alert History Service. All rights reserved.
 **Coverage**: 72.8%
 **Tests**: 45+ tests, 4 benchmarks
 **Last Updated**: 2025-11-07
-
-
-

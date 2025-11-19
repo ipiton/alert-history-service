@@ -39,13 +39,13 @@ func (m *mockAlertProcessor) Health(ctx context.Context) error {
 // mockPrometheusAlertsMetrics is a no-op implementation for testing.
 type mockPrometheusAlertsMetrics struct{}
 
-func (m *mockPrometheusAlertsMetrics) IncRequests(code int)                          {}
-func (m *mockPrometheusAlertsMetrics) ObserveRequestDuration(duration float64)       {}
-func (m *mockPrometheusAlertsMetrics) IncAlertsReceived(format string, count int)    {}
-func (m *mockPrometheusAlertsMetrics) IncAlertsProcessed(status string, count int)   {}
-func (m *mockPrometheusAlertsMetrics) ObserveProcessingDuration(duration float64)    {}
-func (m *mockPrometheusAlertsMetrics) ObservePayloadSize(size int)                   {}
-func (m *mockPrometheusAlertsMetrics) IncParseErrors(format string)                  {}
+func (m *mockPrometheusAlertsMetrics) IncRequests(code int)                                {}
+func (m *mockPrometheusAlertsMetrics) ObserveRequestDuration(duration float64)             {}
+func (m *mockPrometheusAlertsMetrics) IncAlertsReceived(format string, count int)          {}
+func (m *mockPrometheusAlertsMetrics) IncAlertsProcessed(status string, count int)         {}
+func (m *mockPrometheusAlertsMetrics) ObserveProcessingDuration(duration float64)          {}
+func (m *mockPrometheusAlertsMetrics) ObservePayloadSize(size int)                         {}
+func (m *mockPrometheusAlertsMetrics) IncParseErrors(format string)                        {}
 func (m *mockPrometheusAlertsMetrics) ObserveAlertProcessingTime(name string, dur float64) {}
 
 // Test fixtures for Prometheus alert payloads
@@ -488,14 +488,15 @@ func TestHandlePrometheusAlerts_AllFailed_500InternalError(t *testing.T) {
 }
 
 func TestHandlePrometheusAlerts_ProcessorUnavailable_500(t *testing.T) {
-	// Handler with nil processor (should not happen, but test graceful handling)
-	// This test verifies constructor validation
+	// Handler with nil dependencies (should not happen, but test graceful handling)
+	// This test verifies constructor validation (parser is checked first)
 	_, err := NewPrometheusAlertsHandler(nil, nil, nil, nil)
 	if err == nil {
-		t.Error("Expected error when processor is nil, got nil")
+		t.Error("Expected error when dependencies are nil, got nil")
 	}
-	if !strings.Contains(err.Error(), "processor") {
-		t.Errorf("Expected 'processor' in error, got '%v'", err)
+	// Parser is validated first in constructor (line 235-236)
+	if !strings.Contains(err.Error(), "parser") {
+		t.Errorf("Expected 'parser' in error, got '%v'", err)
 	}
 }
 
@@ -683,6 +684,8 @@ func (m *mockWebhookParser) Parse(data []byte) (*webhook.AlertmanagerWebhook, er
 	// Simplified parsing for tests (real tests use TN-146 parser)
 	// This is just for unit testing the handler logic
 	var alerts []interface{}
+	var groupLabels map[string]string
+
 	if err := json.Unmarshal(data, &alerts); err != nil {
 		// Try v2 format
 		var v2 map[string]interface{}
@@ -692,8 +695,33 @@ func (m *mockWebhookParser) Parse(data []byte) (*webhook.AlertmanagerWebhook, er
 		// Simplified v2 handling
 		if groups, ok := v2["groups"].([]interface{}); ok && len(groups) > 0 {
 			group := groups[0].(map[string]interface{})
-			alerts = group["alerts"].([]interface{})
+
+			// Extract group-level labels
+			if groupLabelsRaw, ok := group["labels"].(map[string]interface{}); ok {
+				groupLabels = make(map[string]string)
+				for k, v := range groupLabelsRaw {
+					groupLabels[k] = v.(string)
+				}
+			}
+
+			if alertsRaw, ok := group["alerts"].([]interface{}); ok {
+				alerts = alertsRaw
+			} else {
+				return nil, errors.New("invalid prometheus format: missing alerts in group")
+			}
+		} else {
+			// Not a valid v1 or v2 format
+			return nil, errors.New("invalid prometheus format: expected array or grouped structure")
 		}
+	}
+
+	// Validate we have alerts
+	if len(alerts) == 0 {
+		// Empty alerts is valid, return empty webhook
+		return &webhook.AlertmanagerWebhook{
+			Alerts:  []webhook.AlertmanagerAlert{},
+			Version: "prom_v1",
+		}, nil
 	}
 
 	// Convert to AlertmanagerWebhook (simplified)
@@ -703,13 +731,20 @@ func (m *mockWebhookParser) Parse(data []byte) (*webhook.AlertmanagerWebhook, er
 		labels := alert["labels"].(map[string]interface{})
 
 		labelMap := make(map[string]string)
+
+		// First, add group-level labels (if any)
+		for k, v := range groupLabels {
+			labelMap[k] = v
+		}
+
+		// Then, add alert-specific labels (these override group labels if there's a conflict)
 		for k, v := range labels {
 			labelMap[k] = v.(string)
 		}
 
 		amAlerts[i] = webhook.AlertmanagerAlert{
-			Status:  alert["state"].(string),
-			Labels:  labelMap,
+			Status:   alert["state"].(string),
+			Labels:   labelMap,
 			StartsAt: time.Now(),
 		}
 	}

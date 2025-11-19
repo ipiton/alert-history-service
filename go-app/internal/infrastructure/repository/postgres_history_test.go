@@ -2,163 +2,353 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/vitaliisemenov/alert-history/internal/core"
 )
 
-// MockAlertStorage is a mock implementation of core.AlertStorage for testing
-type MockAlertStorage struct {
-	alerts []*core.Alert
-}
+// setupTestDB creates a PostgreSQL container and returns a connection pool
+func setupTestDB(t *testing.T) *pgxpool.Pool {
+	ctx := context.Background()
 
-func (m *MockAlertStorage) SaveAlert(ctx context.Context, alert *core.Alert) error {
-	m.alerts = append(m.alerts, alert)
-	return nil
-}
+	dbName := "alerthistory_test"
+	dbUser := "testuser"
+	dbPassword := "testpassword"
 
-func (m *MockAlertStorage) GetAlertByFingerprint(ctx context.Context, fingerprint string) (*core.Alert, error) {
-	for _, alert := range m.alerts {
-		if alert.Fingerprint == fingerprint {
-			return alert, nil
-		}
+	postgresContainer, err := postgres.Run(ctx,
+		"postgres:15-alpine",
+		postgres.WithDatabase(dbName),
+		postgres.WithUsername(dbUser),
+		postgres.WithPassword(dbPassword),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(5*time.Second)),
+	)
+	if err != nil {
+		t.Fatalf("failed to start postgres container: %s", err)
 	}
-	return nil, nil
-}
 
-func (m *MockAlertStorage) ListAlerts(ctx context.Context, filters *core.AlertFilters) (*core.AlertList, error) {
-	return &core.AlertList{
-		Alerts: m.alerts,
-		Total:  len(m.alerts),
-	}, nil
-}
-
-func (m *MockAlertStorage) UpdateAlert(ctx context.Context, alert *core.Alert) error {
-	for i, a := range m.alerts {
-		if a.Fingerprint == alert.Fingerprint {
-			m.alerts[i] = alert
-			return nil
+	t.Cleanup(func() {
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			t.Fatalf("failed to terminate postgres container: %s", err)
 		}
+	})
+
+	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatalf("failed to get connection string: %s", err)
 	}
-	return nil
-}
 
-func (m *MockAlertStorage) DeleteAlert(ctx context.Context, fingerprint string) error {
-	for i, alert := range m.alerts {
-		if alert.Fingerprint == fingerprint {
-			m.alerts = append(m.alerts[:i], m.alerts[i+1:]...)
-			return nil
-		}
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		t.Fatalf("failed to create pool: %s", err)
 	}
-	return nil
+
+	// Run migrations
+	// Note: In a real scenario, we would use the migration files.
+	// For this test, we'll create the schema manually to keep it self-contained
+	// matching the schema defined in migrations/000001_init_schema.up.sql
+	schema := `
+	CREATE TABLE IF NOT EXISTS alerts (
+		fingerprint VARCHAR(255) PRIMARY KEY,
+		alert_name VARCHAR(255) NOT NULL,
+		status VARCHAR(50) NOT NULL,
+		starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		ends_at TIMESTAMP WITH TIME ZONE,
+		generator_url TEXT,
+		labels JSONB,
+		annotations JSONB,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS alert_history (
+		id SERIAL PRIMARY KEY,
+		fingerprint VARCHAR(255) NOT NULL,
+		alert_name VARCHAR(255) NOT NULL,
+		status VARCHAR(50) NOT NULL,
+		starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		ends_at TIMESTAMP WITH TIME ZONE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		labels JSONB,
+		annotations JSONB
+	);
+
+	CREATE INDEX idx_alert_history_fingerprint ON alert_history(fingerprint);
+	CREATE INDEX idx_alert_history_created_at ON alert_history(created_at);
+	`
+	_, err = pool.Exec(ctx, schema)
+	if err != nil {
+		t.Fatalf("failed to create schema: %s", err)
+	}
+
+	return pool
 }
 
-func (m *MockAlertStorage) GetAlertStats(ctx context.Context) (*core.AlertStats, error) {
-	return &core.AlertStats{
-		TotalAlerts:       len(m.alerts),
-		AlertsByStatus:    make(map[string]int),
-		AlertsBySeverity:  make(map[string]int),
-		AlertsByNamespace: make(map[string]int),
-	}, nil
-}
-
-func (m *MockAlertStorage) CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error) {
-	return 0, nil
-}
-
-// TestGetTopAlerts_EmptyDatabase tests GetTopAlerts with no data
 func TestGetTopAlerts_EmptyDatabase(t *testing.T) {
-	// This test would require a real database connection or testcontainers
-	// For now, we document the test structure
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Create PostgresHistoryRepository
-	// 3. Call GetTopAlerts with empty database
-	// 4. Assert: empty result, no errors
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	timeRange := &core.TimeRange{
+		From: nil,
+		To:   nil,
+	}
+
+	alerts, err := repo.GetTopAlerts(context.Background(), timeRange, 10)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 0 {
+		t.Errorf("Expected 0 alerts, got %d", len(alerts))
+	}
 }
 
-// TestGetFlappingAlerts_NoStateTransitions tests flapping detection with stable alerts
 func TestGetFlappingAlerts_NoStateTransitions(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert alerts with same status (no transitions)
-	// 3. Call GetFlappingAlerts
-	// 4. Assert: empty result or low flapping score
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	// Insert a stable alert (always firing)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp1', 'StableAlert', 'firing', NOW(), NOW(), '{"namespace": "prod"}'),
+		('fp1', 'StableAlert', 'firing', NOW(), NOW() + INTERVAL '1 hour', '{"namespace": "prod"}')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	timeRange := &core.TimeRange{}
+	alerts, err := repo.GetFlappingAlerts(context.Background(), timeRange, 2)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 0 {
+		t.Errorf("Expected 0 flapping alerts, got %d", len(alerts))
+	}
 }
 
-// TestGetFlappingAlerts_MultipleTransitions tests detection of flapping alerts
 func TestGetFlappingAlerts_MultipleTransitions(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert alerts with multiple state transitions:
-	//    - firing → resolved → firing → resolved (4+ transitions)
-	// 3. Call GetFlappingAlerts with threshold=3
-	// 4. Assert: flapping alert detected, correct flapping_score
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	// Insert a flapping alert (firing -> resolved -> firing -> resolved)
+	// 4 transitions
+	baseTime := time.Now().Add(-24 * time.Hour)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp_flap', 'FlappingAlert', 'firing', $1, $1, '{"namespace": "prod"}'),
+		('fp_flap', 'FlappingAlert', 'resolved', $1, $1 + INTERVAL '10 minutes', '{"namespace": "prod"}'),
+		('fp_flap', 'FlappingAlert', 'firing', $1, $1 + INTERVAL '20 minutes', '{"namespace": "prod"}'),
+		('fp_flap', 'FlappingAlert', 'resolved', $1, $1 + INTERVAL '30 minutes', '{"namespace": "prod"}')
+	`, baseTime)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	timeRange := &core.TimeRange{}
+	// Threshold 3 should catch it (4 transitions)
+	alerts, err := repo.GetFlappingAlerts(context.Background(), timeRange, 3)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 1 {
+		t.Fatalf("Expected 1 flapping alert, got %d", len(alerts))
+	}
+
+	if alerts[0].Fingerprint != "fp_flap" {
+		t.Errorf("Expected fingerprint fp_flap, got %s", alerts[0].Fingerprint)
+	}
+	if alerts[0].TransitionCount < 4 {
+		t.Errorf("Expected at least 4 transitions, got %d", alerts[0].TransitionCount)
+	}
 }
 
-// TestGetAggregatedStats_WithData tests aggregated statistics calculation
 func TestGetAggregatedStats_WithData(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert diverse alerts:
-	//    - Different statuses (firing, resolved)
-	//    - Different severities (critical, warning, info)
-	//    - Different namespaces
-	// 3. Call GetAggregatedStats
-	// 4. Assert: correct counts for all dimensions
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	// Insert mixed alerts
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp1', 'Alert1', 'firing', NOW(), NOW(), '{"namespace": "prod", "severity": "critical"}'),
+		('fp2', 'Alert2', 'resolved', NOW(), NOW(), '{"namespace": "prod", "severity": "warning"}'),
+		('fp3', 'Alert3', 'firing', NOW(), NOW(), '{"namespace": "dev", "severity": "info"}')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	stats, err := repo.GetAggregatedStats(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if stats.TotalAlerts != 3 {
+		t.Errorf("Expected 3 total alerts, got %d", stats.TotalAlerts)
+	}
+	if stats.FiringAlerts != 2 {
+		t.Errorf("Expected 2 firing alerts, got %d", stats.FiringAlerts)
+	}
+	if stats.ResolvedAlerts != 1 {
+		t.Errorf("Expected 1 resolved alert, got %d", stats.ResolvedAlerts)
+	}
+	if stats.AlertsBySeverity["critical"] != 1 {
+		t.Errorf("Expected 1 critical alert, got %d", stats.AlertsBySeverity["critical"])
+	}
+	if stats.AlertsByNamespace["prod"] != 2 {
+		t.Errorf("Expected 2 prod alerts, got %d", stats.AlertsByNamespace["prod"])
+	}
 }
 
-// TestGetTopAlerts_WithTimeRange tests time range filtering
 func TestGetTopAlerts_WithTimeRange(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert alerts with different timestamps
-	// 3. Call GetTopAlerts with specific time range
-	// 4. Assert: only alerts within time range are counted
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	now := time.Now()
+	old := now.Add(-48 * time.Hour)
+
+	// Insert old and new alerts
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp_old', 'OldAlert', 'firing', $1, $1, '{"namespace": "prod"}'),
+		('fp_new', 'NewAlert', 'firing', $2, $2, '{"namespace": "prod"}'),
+		('fp_new', 'NewAlert', 'firing', $2, $2 + INTERVAL '1 minute', '{"namespace": "prod"}')
+	`, old, now)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	// Filter for last 24 hours
+	from := now.Add(-24 * time.Hour)
+	timeRange := &core.TimeRange{From: &from}
+
+	alerts, err := repo.GetTopAlerts(context.Background(), timeRange, 10)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 1 {
+		t.Fatalf("Expected 1 alert (new only), got %d", len(alerts))
+	}
+	if alerts[0].Fingerprint != "fp_new" {
+		t.Errorf("Expected fp_new, got %s", alerts[0].Fingerprint)
+	}
+	if alerts[0].FireCount != 2 {
+		t.Errorf("Expected fire count 2, got %d", alerts[0].FireCount)
+	}
 }
 
-// TestGetTopAlerts_LimitValidation tests limit parameter validation
 func TestGetTopAlerts_LimitValidation(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Test with limit=0 → should use default (10)
-	// 3. Test with limit=150 → should cap at 100
-	// 4. Test with limit=5 → should return exactly 5
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	// Insert 5 alerts
+	for i := 0; i < 5; i++ {
+		fp := fmt.Sprintf("fp%d", i)
+		_, err := pool.Exec(context.Background(), `
+			INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+			VALUES ($1, 'Alert', 'firing', NOW(), NOW(), '{"namespace": "prod"}')
+		`, fp)
+		if err != nil {
+			t.Fatalf("Failed to insert test data: %v", err)
+		}
+	}
+
+	// Request top 3
+	alerts, err := repo.GetTopAlerts(context.Background(), nil, 3)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 3 {
+		t.Errorf("Expected 3 alerts, got %d", len(alerts))
+	}
 }
 
-// TestGetFlappingAlerts_ThresholdFiltering tests threshold parameter
 func TestGetFlappingAlerts_ThresholdFiltering(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert alerts with 2, 3, 5 transitions
-	// 3. Test with threshold=3
-	// 4. Assert: only alerts with 3+ transitions returned
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	// Insert alert with 2 transitions (below threshold 3)
+	baseTime := time.Now()
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp_stable', 'Stable', 'firing', $1, $1, '{"namespace": "prod"}'),
+		('fp_stable', 'Stable', 'resolved', $1, $1 + INTERVAL '10 minutes', '{"namespace": "prod"}')
+	`, baseTime)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	alerts, err := repo.GetFlappingAlerts(context.Background(), nil, 3)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if len(alerts) != 0 {
+		t.Errorf("Expected 0 flapping alerts (threshold 3), got %d", len(alerts))
+	}
 }
 
-// TestGetAggregatedStats_TimeRange tests stats with time range
 func TestGetAggregatedStats_TimeRange(t *testing.T) {
-	t.Skip("Integration test - requires PostgreSQL with testcontainers")
+	pool := setupTestDB(t)
+	defer pool.Close()
 
-	// Test structure:
-	// 1. Setup testcontainers PostgreSQL
-	// 2. Insert alerts across multiple days
-	// 3. Call GetAggregatedStats with 24h time range
-	// 4. Assert: only last 24h alerts counted
+	repo := NewPostgresHistoryRepository(pool, nil, nil)
+
+	now := time.Now()
+	old := now.Add(-48 * time.Hour)
+
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO alert_history (fingerprint, alert_name, status, starts_at, created_at, labels)
+		VALUES
+		('fp_old', 'Old', 'firing', $1, $1, '{"namespace": "prod"}'),
+		('fp_new', 'New', 'firing', $2, $2, '{"namespace": "prod"}')
+	`, old, now)
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	from := now.Add(-24 * time.Hour)
+	timeRange := &core.TimeRange{From: &from}
+
+	stats, err := repo.GetAggregatedStats(context.Background(), timeRange)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if stats.TotalAlerts != 1 {
+		t.Errorf("Expected 1 alert (new only), got %d", stats.TotalAlerts)
+	}
 }
 
 // Example integration test structure (when testcontainers are added)

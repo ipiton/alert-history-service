@@ -209,6 +209,3 @@ func (mt MatcherType) IsRegexType() bool {
 func (mt MatcherType) String() string {
 	return string(mt)
 }
-
-
-

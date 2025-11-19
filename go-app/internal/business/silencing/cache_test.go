@@ -365,6 +365,3 @@ func TestCache_IndexConsistency(t *testing.T) {
 	expireds = cache.GetByStatus(silencing.SilenceStatusExpired)
 	assert.Len(t, expireds, 0, "Should have 0 expired after delete")
 }
-
-
-

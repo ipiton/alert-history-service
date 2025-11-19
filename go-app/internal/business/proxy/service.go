@@ -18,12 +18,11 @@ import (
 // ProxyWebhookService implements the ProxyWebhookService interface.
 type ProxyWebhookService struct {
 	// Core dependencies
-	alertProcessor    services.AlertProcessor                                     // TN-061 (storage)
-	classificationSvc services.ClassificationService                              // TN-033
-	filterEngine      services.FilterEngine                                       // TN-035
-	targetManager     publishing.TargetDiscoveryManager                           // TN-047
-	parallelPublisher publishing.ParallelPublisher                                // TN-058
-
+	alertProcessor    *services.AlertProcessor          // TN-061 (storage)
+	classificationSvc services.ClassificationService    // TN-033
+	filterEngine      services.FilterEngine             // TN-035
+	targetManager     publishing.TargetDiscoveryManager // TN-047
+	parallelPublisher publishing.ParallelPublisher      // TN-058
 
 	// Configuration
 	config  *proxy.ProxyWebhookConfig
@@ -59,7 +58,7 @@ type ProxyStats struct {
 
 // ServiceConfig holds configuration for ProxyWebhookService.
 type ServiceConfig struct {
-	AlertProcessor    services.AlertProcessor
+	AlertProcessor    *services.AlertProcessor
 	ClassificationSvc services.ClassificationService
 	FilterEngine      services.FilterEngine
 	TargetManager     publishing.TargetDiscoveryManager
@@ -312,7 +311,7 @@ func (s *ProxyWebhookService) classifyAlert(
 		Severity:        string(coreResult.Severity),
 		Category:        coreResult.Category,
 		Confidence:      coreResult.Confidence,
-		Source:          "llm", // TODO: Get from coreResult
+		Source:          "llm",      // TODO: Get from coreResult
 		Recommendations: []string{}, // TODO: Get from coreResult if available
 		Timestamp:       time.Now(),
 	}

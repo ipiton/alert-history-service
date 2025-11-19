@@ -88,7 +88,9 @@ func TestE2E_FullPublishingFlow(t *testing.T) {
 
 	// Create health monitor
 	healthMetrics, _ := NewHealthMetrics()
-	healthMonitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, healthMetrics)
+	config := DefaultHealthConfig()
+	config.WarmupDelay = 0 // Skip warmup for tests
+	healthMonitor, err := NewHealthMonitor(discovery, config, nil, healthMetrics)
 	if err != nil {
 		t.Fatalf("Failed to create health monitor: %v", err)
 	}
@@ -267,7 +269,9 @@ func TestE2E_ParallelPublishing(t *testing.T) {
 	discovery.SetTargets(targets)
 
 	healthMetrics, _ := NewHealthMetrics()
-	monitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, healthMetrics)
+	config := DefaultHealthConfig()
+	config.WarmupDelay = 0 // Skip warmup for tests
+	monitor, err := NewHealthMonitor(discovery, config, nil, healthMetrics)
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -379,7 +383,9 @@ func TestE2E_DynamicTargetDiscovery(t *testing.T) {
 	discovery.SetTargets(initialTargets)
 
 	healthMetrics, _ := NewHealthMetrics()
-	monitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, healthMetrics)
+	config := DefaultHealthConfig()
+	config.WarmupDelay = 0 // Skip warmup for tests
+	monitor, err := NewHealthMonitor(discovery, config, nil, healthMetrics)
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}

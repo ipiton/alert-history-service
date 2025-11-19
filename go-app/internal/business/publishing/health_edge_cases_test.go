@@ -24,31 +24,31 @@ func TestHealthMonitor_NetworkTimeouts(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		serverDelay    time.Duration
-		clientTimeout  time.Duration
-		expectTimeout  bool
+		name            string
+		serverDelay     time.Duration
+		clientTimeout   time.Duration
+		expectTimeout   bool
 		expectUnhealthy bool
 	}{
 		{
-			name:           "Fast response within timeout",
-			serverDelay:    100 * time.Millisecond,
-			clientTimeout:  1 * time.Second,
-			expectTimeout:  false,
+			name:            "Fast response within timeout",
+			serverDelay:     100 * time.Millisecond,
+			clientTimeout:   1 * time.Second,
+			expectTimeout:   false,
 			expectUnhealthy: false,
 		},
 		{
-			name:           "Slow response exceeds timeout",
-			serverDelay:    2 * time.Second,
-			clientTimeout:  500 * time.Millisecond,
-			expectTimeout:  true,
+			name:            "Slow response exceeds timeout",
+			serverDelay:     2 * time.Second,
+			clientTimeout:   500 * time.Millisecond,
+			expectTimeout:   true,
 			expectUnhealthy: true,
 		},
 		{
-			name:           "Edge case: exactly at timeout",
-			serverDelay:    1 * time.Second,
-			clientTimeout:  1 * time.Second,
-			expectTimeout:  false, // Should complete just in time
+			name:            "Edge case: exactly at timeout",
+			serverDelay:     1 * time.Second,
+			clientTimeout:   1 * time.Second,
+			expectTimeout:   false, // Should complete just in time
 			expectUnhealthy: false,
 		},
 	}
@@ -76,6 +76,7 @@ func TestHealthMonitor_NetworkTimeouts(t *testing.T) {
 			config := DefaultHealthConfig()
 			config.HTTPTimeout = tt.clientTimeout
 			config.FailureThreshold = 1 // Fail immediately
+			config.WarmupDelay = 0      // Skip warmup for tests
 
 			monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 			if err != nil {
@@ -154,7 +155,10 @@ func TestHealthMonitor_TLSErrors(t *testing.T) {
 				},
 			})
 
-			monitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, metrics)
+			config := DefaultHealthConfig()
+			config.WarmupDelay = 0      // Skip warmup for tests
+			config.FailureThreshold = 1 // Mark unhealthy immediately
+			monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 			if err != nil {
 				t.Fatalf("Failed to create monitor: %v", err)
 			}
@@ -218,6 +222,8 @@ func TestHealthMonitor_DNSFailures(t *testing.T) {
 
 			config := DefaultHealthConfig()
 			config.HTTPTimeout = 2 * time.Second // Short timeout for DNS failures
+			config.WarmupDelay = 0               // Skip warmup for tests
+			config.FailureThreshold = 1          // Mark unhealthy immediately
 
 			monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 			if err != nil {
@@ -270,6 +276,7 @@ func TestHealthMonitor_StateTransitions(t *testing.T) {
 
 	config := DefaultHealthConfig()
 	config.FailureThreshold = 3
+	config.WarmupDelay = 0 // Skip warmup for tests
 
 	monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 	if err != nil {
@@ -375,6 +382,7 @@ func TestHealthMonitor_StopDuringCheck(t *testing.T) {
 
 	config := DefaultHealthConfig()
 	config.CheckInterval = 100 * time.Millisecond
+	config.WarmupDelay = 0 // Skip warmup for tests
 
 	monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 	if err != nil {
@@ -416,7 +424,10 @@ func TestHealthMonitor_ConnectionRefused(t *testing.T) {
 		},
 	})
 
-	monitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, metrics)
+	config := DefaultHealthConfig()
+	config.WarmupDelay = 0 // Skip warmup for tests
+	monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
+	config.FailureThreshold = 1 // Mark unhealthy immediately
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -453,7 +464,10 @@ func TestHealthMonitor_ContextCancellation(t *testing.T) {
 		},
 	})
 
-	monitor, err := NewHealthMonitor(discovery, DefaultHealthConfig(), nil, metrics)
+	config := DefaultHealthConfig()
+	config.WarmupDelay = 0 // Skip warmup for tests
+	config.FailureThreshold = 1 // Mark unhealthy immediately
+	monitor, err := NewHealthMonitor(discovery, config, nil, metrics)
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}

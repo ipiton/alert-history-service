@@ -8,11 +8,11 @@ import (
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
 
+	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 	apierrors "github.com/vitaliisemenov/alert-history/internal/api/errors"
 	"github.com/vitaliisemenov/alert-history/internal/api/middleware"
 	apiservices "github.com/vitaliisemenov/alert-history/internal/api/services/publishing"
 	"github.com/vitaliisemenov/alert-history/internal/business/publishing"
-	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 )
 
 // RouterConfig holds router configuration
@@ -56,6 +56,7 @@ type RouterConfig struct {
 	} // services.ClassificationService (avoid circular import via interface)
 	ClassificationHandlers interface {
 		GetClassificationStats(w http.ResponseWriter, r *http.Request)
+		ClassifyAlert(w http.ResponseWriter, r *http.Request)
 	} // *classificationhandlers.ClassificationHandlers (avoid circular import via interface)
 }
 

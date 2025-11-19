@@ -525,6 +525,3 @@ silences_active_total{status="pending|active|expired"}
 **Designed**: 2025-11-04
 **Approved**: 2025-11-04
 **Implemented**: TBD
-
-
-

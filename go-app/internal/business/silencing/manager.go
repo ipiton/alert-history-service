@@ -386,6 +386,3 @@ type SilenceManagerStats struct {
 	SyncLastRun    time.Time // Last sync run time
 	SyncTotalRuns  int64     // Total number of sync runs
 }
-
-
-

@@ -737,6 +737,3 @@ type ValidatedConfig struct {
 **Дата создания**: 2025-11-04
 **Версия**: 1.0
 **Статус**: DESIGN COMPLETE
-
-
-

@@ -880,6 +880,3 @@ rate(alert_history_infra_silence_repo_cleanup_deleted_total[1h])
 **Status**: 🔄 IN PROGRESS
 **Target Completion**: 2025-11-05 (10-14 hours)
 **Quality Target**: 150% (Enterprise-Grade)
-
-
-

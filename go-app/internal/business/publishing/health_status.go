@@ -10,15 +10,15 @@ import (
 // processHealthCheckResult updates health status based on check result.
 //
 // This function:
-//   1. Retrieves current status from cache (or initializes new)
-//   2. Updates statistics (TotalChecks, TotalSuccesses, TotalFailures)
-//   3. Updates timestamps (LastCheck, LastSuccess, LastFailure)
-//   4. Applies failure threshold logic (3 consecutive failures → unhealthy)
-//   5. Applies degraded detection (latency >= 5s → degraded)
-//   6. Applies recovery detection (1 success → healthy)
-//   7. Calculates success rate
-//   8. Updates status cache
-//   9. Records Prometheus metrics
+//  1. Retrieves current status from cache (or initializes new)
+//  2. Updates statistics (TotalChecks, TotalSuccesses, TotalFailures)
+//  3. Updates timestamps (LastCheck, LastSuccess, LastFailure)
+//  4. Applies failure threshold logic (3 consecutive failures → unhealthy)
+//  5. Applies degraded detection (latency >= 5s → degraded)
+//  6. Applies recovery detection (1 success → healthy)
+//  7. Calculates success rate
+//  8. Updates status cache
+//  9. Records Prometheus metrics
 //  10. Logs status transitions (INFO/WARN)
 //
 // Parameters:
@@ -75,7 +75,7 @@ func processHealthCheckResult(
 			// Increment consecutive failures
 			status.ConsecutiveFailures++
 
-			// Check failure threshold
+			// Check failure threshold FIRST
 			if status.ConsecutiveFailures >= config.FailureThreshold {
 				// Unhealthy: Too many consecutive failures
 				transitionStatus(
@@ -84,8 +84,16 @@ func processHealthCheckResult(
 					fmt.Sprintf("%d consecutive failures", status.ConsecutiveFailures),
 					logger,
 				)
+			} else if status.Status == HealthStatusUnknown {
+				// First failure (below threshold): transition from unknown to degraded
+				transitionStatus(
+					status,
+					HealthStatusDegraded,
+					fmt.Sprintf("failure %d/%d", status.ConsecutiveFailures, config.FailureThreshold),
+					logger,
+				)
 			} else {
-				// Still healthy (below threshold)
+				// Still healthy/degraded (below threshold)
 				logger.Debug("Target failure (below threshold)",
 					"target_name", result.TargetName,
 					"consecutive_failures", status.ConsecutiveFailures,
@@ -109,13 +117,13 @@ func processHealthCheckResult(
 // transitionStatus transitions health status with logging.
 //
 // This function:
-//   1. Checks if status actually changed (skip if same)
-//   2. Updates status field
-//   3. Determines appropriate log level:
+//  1. Checks if status actually changed (skip if same)
+//  2. Updates status field
+//  3. Determines appropriate log level:
 //     - WARN: healthy → unhealthy (alert on degradation)
 //     - INFO: unhealthy → healthy (recovery celebration)
 //     - INFO: other transitions
-//   4. Logs transition with full context
+//  4. Logs transition with full context
 //
 // Parameters:
 //   - status: Target health status (modified in-place)
@@ -209,11 +217,11 @@ func initializeHealthStatus(targetName, targetType string, enabled bool) *Target
 // calculateAggregateStats calculates aggregate health statistics.
 //
 // This function:
-//   1. Iterates over all health statuses
-//   2. Counts targets by status (healthy/unhealthy/degraded/unknown)
-//   3. Calculates overall success rate (weighted average)
-//   4. Finds most recent check time
-//   5. Returns HealthStats
+//  1. Iterates over all health statuses
+//  2. Counts targets by status (healthy/unhealthy/degraded/unknown)
+//  3. Calculates overall success rate (weighted average)
+//  4. Finds most recent check time
+//  5. Returns HealthStats
 //
 // Parameters:
 //   - statuses: Array of all target health statuses

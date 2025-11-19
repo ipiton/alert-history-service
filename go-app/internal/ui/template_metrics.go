@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // TemplateMetrics tracks template engine metrics.
@@ -16,33 +15,46 @@ type TemplateMetrics struct {
 
 // NewTemplateMetrics creates a new metrics instance.
 func NewTemplateMetrics() *TemplateMetrics {
+	// Use prometheus.NewCounterVec instead of promauto to avoid global registration
+	// This allows tests to create multiple instances without conflicts
+	renderTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "alert_history",
+			Subsystem: "template",
+			Name:      "render_total",
+			Help:      "Total template renders by template and status",
+		},
+		[]string{"template", "status"},
+	)
+
+	renderDuration := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "alert_history",
+			Subsystem: "template",
+			Name:      "render_duration_seconds",
+			Help:      "Template render duration in seconds",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 10), // 1ms to ~1s
+		},
+	)
+
+	cacheHits := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "alert_history",
+			Subsystem: "template",
+			Name:      "cache_hits_total",
+			Help:      "Total template cache hits (production mode)",
+		},
+	)
+
+	// Register with default registry (will be ignored if already registered)
+	prometheus.DefaultRegisterer.Register(renderTotal)
+	prometheus.DefaultRegisterer.Register(renderDuration)
+	prometheus.DefaultRegisterer.Register(cacheHits)
+
 	return &TemplateMetrics{
-		renderTotal: promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "alert_history",
-				Subsystem: "template",
-				Name:      "render_total",
-				Help:      "Total template renders by template and status",
-			},
-			[]string{"template", "status"},
-		),
-		renderDuration: promauto.NewHistogram(
-			prometheus.HistogramOpts{
-				Namespace: "alert_history",
-				Subsystem: "template",
-				Name:      "render_duration_seconds",
-				Help:      "Template render duration in seconds",
-				Buckets:   prometheus.ExponentialBuckets(0.001, 2, 10), // 1ms to ~1s
-			},
-		),
-		cacheHits: promauto.NewCounter(
-			prometheus.CounterOpts{
-				Namespace: "alert_history",
-				Subsystem: "template",
-				Name:      "cache_hits_total",
-				Help:      "Total template cache hits (production mode)",
-			},
-		),
+		renderTotal:    renderTotal,
+		renderDuration: renderDuration,
+		cacheHits:      cacheHits,
 	}
 }
 

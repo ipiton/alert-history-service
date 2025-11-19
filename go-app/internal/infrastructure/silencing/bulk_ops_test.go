@@ -123,6 +123,3 @@ func TestGetSilenceStats_TopCreatorsLimit(t *testing.T) {
 	// 4. Verify: len(stats.ByCreator) == 10 (not 15!)
 	// 5. SQL: LIMIT 10 in GROUP BY query
 }
-
-
-
