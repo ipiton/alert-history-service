@@ -15,11 +15,13 @@ import (
 
 // AlertListUIHandler handles UI rendering for Alert List page.
 // TN-79: Alert List with Filtering
+// TN-80: Enhanced with Classification Display
 type AlertListUIHandler struct {
-	templateEngine *ui.TemplateEngine // TN-76: Dashboard Template Engine
-	historyRepo    core.AlertHistoryRepository
-	cache          cache.Cache // Response caching
-	logger         *slog.Logger
+	templateEngine   *ui.TemplateEngine // TN-76: Dashboard Template Engine
+	historyRepo      core.AlertHistoryRepository
+	classificationEnricher ui.ClassificationEnricher // TN-80: Classification Enricher
+	cache            cache.Cache // Response caching
+	logger           *slog.Logger
 }
 
 // NewAlertListUIHandler creates a new AlertListUIHandler.
@@ -34,7 +36,15 @@ func NewAlertListUIHandler(
 		historyRepo:    historyRepo,
 		cache:          cache,
 		logger:         logger,
+		// classificationEnricher will be set via SetClassificationEnricher if available
 	}
+}
+
+// SetClassificationEnricher sets the classification enricher (TN-80).
+// This allows optional integration - if classification service is not available,
+// the handler will work without it (graceful degradation).
+func (h *AlertListUIHandler) SetClassificationEnricher(enricher ui.ClassificationEnricher) {
+	h.classificationEnricher = enricher
 }
 
 // AlertListPageData represents data for alert list page template.
@@ -133,9 +143,30 @@ func (h *AlertListUIHandler) RenderAlertList(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// TN-80: Enrich alerts with classification data
+	var enrichedAlerts []*ui.EnrichedAlert
+	if h.classificationEnricher != nil && len(historyResp.Alerts) > 0 {
+		enriched, err := h.classificationEnricher.EnrichAlerts(ctx, historyResp.Alerts)
+		if err != nil {
+			h.logger.Warn("Failed to enrich alerts with classification, continuing without classification",
+				"error", err,
+				"alerts_count", len(historyResp.Alerts))
+			// Graceful degradation: convert alerts to enriched format without classification
+			enrichedAlerts = convertToEnrichedAlerts(historyResp.Alerts)
+		} else {
+			enrichedAlerts = enriched
+		}
+	} else {
+		// No classification enricher available, convert alerts to enriched format without classification
+		enrichedAlerts = convertToEnrichedAlerts(historyResp.Alerts)
+	}
+
+	// Convert enriched alerts to template-friendly format
+	alertCardDataList := ui.ToAlertCardDataList(enrichedAlerts)
+
 	// Prepare template data
 	alertListData := map[string]interface{}{
-		"Alerts":     historyResp.Alerts,
+		"Alerts":     alertCardDataList, // TN-80: Use enriched alert card data
 		"Total":      historyResp.Total,
 		"Page":       historyResp.Page,
 		"PerPage":    historyResp.PerPage,
@@ -336,4 +367,22 @@ func (h *AlertListUIHandler) renderError(w http.ResponseWriter, r *http.Request,
 func (h *AlertListUIHandler) generateCSRFToken(r *http.Request) string {
 	// TODO: Implement proper CSRF token generation
 	return "csrf-token-placeholder"
+}
+
+// convertToEnrichedAlerts converts a list of alerts to enriched alerts without classification.
+// This is used for graceful degradation when classification is not available.
+func convertToEnrichedAlerts(alerts []*core.Alert) []*ui.EnrichedAlert {
+	if len(alerts) == 0 {
+		return []*ui.EnrichedAlert{}
+	}
+
+	enriched := make([]*ui.EnrichedAlert, len(alerts))
+	for i, alert := range alerts {
+		enriched[i] = &ui.EnrichedAlert{
+			Alert:            alert,
+			HasClassification: false,
+		}
+	}
+
+	return enriched
 }

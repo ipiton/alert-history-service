@@ -957,6 +957,7 @@ func main() {
 	}
 
 	// TN-79: Initialize Alert List UI Handler (Alert List with Filtering - 150% quality target)
+	// TN-80: Enhanced with Classification Display
 	var alertListUIHandler *handlers.AlertListUIHandler
 	if dashboardTemplateEngine != nil && historyRepo != nil {
 		alertListUIHandler = handlers.NewAlertListUIHandler(
@@ -965,7 +966,22 @@ func main() {
 			redisCache,
 			appLogger,
 		)
-		slog.Info("✅ Alert List UI Handler initialized (TN-79, 150% quality target)",
+
+		// TN-80: Set Classification Enricher if classification service is available
+		if classificationService != nil {
+			classificationEnricher := ui.NewClassificationEnricher(classificationService, appLogger)
+			alertListUIHandler.SetClassificationEnricher(classificationEnricher)
+			slog.Info("✅ Classification Enricher initialized for Alert List UI (TN-80)",
+				"features", []string{
+					"Batch enrichment (20 alerts per batch)",
+					"Request-scoped cache",
+					"Graceful degradation",
+				})
+		} else {
+			slog.Debug("Classification Enricher not set (classification service unavailable, graceful degradation enabled)")
+		}
+
+		slog.Info("✅ Alert List UI Handler initialized (TN-79, TN-80, 150% quality target)",
 			"features", []string{
 				"Alert list page with filtering",
 				"15+ filter types support",
@@ -973,6 +989,7 @@ func main() {
 				"Sorting (multi-field)",
 				"Template Engine integration (TN-76)",
 				"History Repository integration (TN-63)",
+				"Classification Display (TN-80)",
 			})
 	} else {
 		slog.Warn("⚠️ Alert List UI Handler NOT initialized (template engine or history repository unavailable)")
