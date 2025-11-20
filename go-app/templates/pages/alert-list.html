@@ -227,10 +227,54 @@ function announceUpdate(message) {
   }
 }
 
+// TN-80: Classification Toggle Handler
+function initClassificationToggles() {
+  const toggles = document.querySelectorAll('[data-classification-toggle]');
+  toggles.forEach(toggle => {
+    // Click handler
+    toggle.addEventListener('click', function() {
+      toggleClassificationDetails(this);
+    });
+
+    // Keyboard handler (Enter/Space)
+    toggle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleClassificationDetails(this);
+      }
+    });
+  });
+}
+
+function toggleClassificationDetails(toggle) {
+  const fingerprint = toggle.getAttribute('data-fingerprint');
+  if (!fingerprint) return;
+
+  const details = document.getElementById(`classification-${fingerprint}`);
+  if (!details) return;
+
+  const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+
+  if (isExpanded) {
+    // Collapse
+    details.style.display = 'none';
+    toggle.setAttribute('aria-expanded', 'false');
+    announceUpdate(`Classification details collapsed for alert ${fingerprint}`);
+  } else {
+    // Expand
+    details.style.display = 'block';
+    toggle.setAttribute('aria-expanded', 'true');
+    announceUpdate(`Classification details expanded for alert ${fingerprint}`);
+  }
+}
+
 // Announce page load to screen readers
 document.addEventListener('DOMContentLoaded', function() {
   const alertCount = {{ .Data.Total }};
   announceUpdate(`Alert list loaded. ${alertCount} alerts found.`);
+
+  // TN-80: Initialize classification toggles
+  initClassificationToggles();
 
   // TN-78: Initialize Real-time Updates Client
   if (window.RealtimeClient) {

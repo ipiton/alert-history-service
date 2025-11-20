@@ -55,6 +55,11 @@ func createTemplateFuncs() template.FuncMap {
 
 		// Status badge (for silence templates)
 		"statusBadge": statusBadge,
+
+		// TN-80: Classification helper functions
+		"classificationSeverityClass": classificationSeverityClass,
+		"classificationConfidencePercent": classificationConfidencePercent,
+		"classificationConfidenceColor": classificationConfidenceColor,
 	}
 }
 
@@ -388,4 +393,50 @@ func statusBadge(status string) template.HTML {
 //	{{formatDateTime .CreatedAt}} → "2025-11-19T14:30:00Z"
 func formatDateTime(t time.Time) string {
 	return t.Format(time.RFC3339)
+}
+
+// TN-80: Classification helper functions
+
+// classificationSeverityClass returns CSS class for classification severity.
+//
+// Mapping:
+//   - critical → "severity-critical"
+//   - warning → "severity-warning"
+//   - info → "severity-info"
+//   - noise → "severity-noise"
+//
+// Template usage:
+//
+//	{{ classificationSeverityClass .Classification.Severity }} → "severity-critical"
+func classificationSeverityClass(severity string) string {
+	severityLower := strings.ToLower(severity)
+	return "severity-" + severityLower
+}
+
+// classificationConfidencePercent converts confidence (0.0-1.0) to percent (0-100).
+//
+// Template usage:
+//
+//	{{ classificationConfidencePercent .Classification.Confidence }} → 85
+func classificationConfidencePercent(confidence float64) int {
+	return int(confidence * 100)
+}
+
+// classificationConfidenceColor returns color class for confidence level.
+//
+// Mapping:
+//   - >= 0.8 → "high" (green)
+//   - >= 0.5 → "medium" (yellow)
+//   - < 0.5 → "low" (red)
+//
+// Template usage:
+//
+//	{{ classificationConfidenceColor .Classification.Confidence }} → "high"
+func classificationConfidenceColor(confidence float64) string {
+	if confidence >= 0.8 {
+		return "high"
+	} else if confidence >= 0.5 {
+		return "medium"
+	}
+	return "low"
 }
