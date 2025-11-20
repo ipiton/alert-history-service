@@ -33,6 +33,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/webhook"
 	"github.com/vitaliisemenov/alert-history/internal/middleware"
+	"github.com/vitaliisemenov/alert-history/internal/ui" // TN-77: Dashboard Template Engine
 
 	// proxyservice "github.com/vitaliisemenov/alert-history/internal/business/proxy" // TEMPORARILY DISABLED: API mismatch, needs refactoring
 	classificationhandlers "github.com/vitaliisemenov/alert-history/internal/api/handlers/classification"
@@ -936,6 +937,24 @@ func main() {
 		"middleware_count", 10,
 		"features", "recovery|request_id|logging|metrics|rate_limit|auth|compression|cors|size_limit|timeout")
 
+	// TN-77: Initialize Dashboard Handler (Modern Dashboard Page - 150% quality)
+	var dashboardHandler *handlers.SimpleDashboardHandler
+	dashboardTemplateEngine, err := ui.NewTemplateEngine(ui.DefaultTemplateOptions())
+	if err != nil {
+		slog.Error("Failed to create dashboard template engine", "error", err)
+	} else {
+		dashboardHandler = handlers.NewSimpleDashboardHandler(dashboardTemplateEngine, appLogger)
+		slog.Info("✅ Modern Dashboard Handler initialized (TN-77, 150% quality target)",
+			"features", []string{
+				"CSS Grid/Flexbox responsive layout",
+				"6 dashboard sections (stats, alerts, silences, timeline, health, actions)",
+				"6 partial templates + 3 component CSS",
+				"Accessibility: WCAG 2.1 AA foundation",
+				"Performance: <50ms SSR target",
+				"Progressive enhancement: Auto-refresh every 30s",
+			})
+	}
+
 	// TN-062: Register Intelligent Proxy Webhook Handler (if initialized)
 	if proxyWebhookHTTPHandler != nil {
 		// Rebuild middleware stack with the stored handler
@@ -1271,6 +1290,24 @@ func main() {
 				"POST /api/v2/silences/check - Check if alert would be silenced (150%)",
 				"POST /api/v2/silences/bulk/delete - Bulk delete silences (150%)",
 			})
+
+		// TN-77: Register Modern Dashboard endpoint (if handler initialized)
+		if dashboardHandler != nil {
+			mux.HandleFunc("GET /dashboard", dashboardHandler.ServeHTTP)
+			slog.Info("✅ Modern Dashboard endpoint registered (TN-77, 150% quality)",
+				"endpoint", "GET /dashboard",
+				"description", "Main dashboard page with CSS Grid layout, 6 sections",
+				"sections", []string{
+					"Stats Overview (4 cards)",
+					"Recent Alerts (with AI classification)",
+					"Active Silences",
+					"Alert Timeline (24h chart)",
+					"System Health (4 components)",
+					"Quick Actions (4 buttons)",
+				})
+		} else {
+			slog.Warn("⚠️ Dashboard endpoint NOT registered (handler not initialized)")
+		}
 
 		// TN-136: Register Silence UI endpoints (only if UI handler initialized)
 		if silenceUIHandler != nil && wsHub != nil {
