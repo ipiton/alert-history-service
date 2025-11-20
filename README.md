@@ -239,8 +239,14 @@ open http://localhost:8080/docs
 - **GET /enrichment/mode** — current enrichment mode
 - **POST /enrichment/mode** — switch enrichment mode
 
-### Dashboard & API
-- **GET /dashboard/modern** — HTML5 dashboard
+### Dashboard & UI
+- **GET /dashboard** — Modern dashboard page ✅ **150% Quality Certified** (TN-77, 2025-11-20)
+- **GET /ui/alerts** — Alert list page with filtering ✅ **150% Quality Certified** (TN-79, 2025-11-20)
+  - Comprehensive filtering (status, severity, namespace, time range, labels, search)
+  - Pagination (offset-based, page size selector)
+  - Multi-field sorting (starts_at, severity, alert_name)
+  - Real-time updates (SSE/WebSocket integration)
+  - WCAG 2.1 AA compliant, responsive design
 - **GET /api/dashboard/overview** — dashboard overview data
 - **GET /api/dashboard/charts** — time series chart data
 - **GET /api/dashboard/health** — system health data

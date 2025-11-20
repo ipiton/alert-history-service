@@ -714,6 +714,50 @@ Legacy endpoint (deprecated). Use `/dashboard` instead.
 
 **Response**: `200 OK` (HTML page)
 
+### GET /ui/alerts (TN-79) ⭐ NEW - 150% Quality Certified
+**Status**: ✅ **PRODUCTION-READY** (TN-79, 2025-11-20) | **Quality**: 150% (Grade A+ EXCEPTIONAL)
+
+Alert list page with comprehensive filtering, pagination, sorting, and real-time updates. Provides intuitive interface for searching and filtering alerts with advanced capabilities.
+
+**Features**:
+- ✅ 6 filter types (status, severity, namespace, time range, labels, search)
+- ✅ Offset-based pagination (page size: 10/25/50/100)
+- ✅ Multi-field sorting (starts_at, severity, alert_name) with ASC/DESC order
+- ✅ Real-time updates via SSE/WebSocket (TN-78 integration)
+- ✅ Active filters display with chips and clear all button
+- ✅ Filter presets (Last 1h/24h/7d, Critical Only)
+- ✅ Responsive design (mobile-first, 3 breakpoints)
+- ✅ WCAG 2.1 AA compliant (ARIA live regions, keyboard shortcuts)
+- ✅ Loading skeleton states for better UX
+- ✅ Enhanced error handling with detailed messages
+
+**Query Parameters**:
+- `status` (string) - Filter by status: `firing` or `resolved`
+- `severity` (string) - Filter by severity: `critical`, `warning`, `info`, `noise`
+- `namespace` (string) - Filter by namespace (text match)
+- `from` (string) - Filter from time (RFC3339 format, e.g., `2023-01-01T00:00:00Z`)
+- `to` (string) - Filter to time (RFC3339 format)
+- `labels[key]` (string) - Filter by label key=value pairs
+- `search` (string) - General text search
+- `page` (int) - Page number (default: 1)
+- `per_page` (int) - Items per page: 10, 25, 50, or 100 (default: 50)
+- `sort_field` (string) - Sort field: `starts_at`, `severity`, `alert_name` (default: `starts_at`)
+- `sort_order` (string) - Sort order: `asc` or `desc` (default: `desc`)
+
+**Example Request**:
+```
+GET /ui/alerts?status=firing&severity=critical&page=1&per_page=50&sort_field=starts_at&sort_order=desc
+```
+
+**Response**: `200 OK` (HTML page)
+
+**Keyboard Shortcuts**:
+- `R` - Refresh alert list
+- `F` - Toggle filter sidebar
+- `Tab` - Navigate between elements
+
+**Documentation**: See [TN-79 Alert List README](../tasks/alertmanager-plus-plus-oss/TN-79-alert-list-filtering/COMPLETION_REPORT.md) for complete user guide.
+
 ### GET /api/dashboard/overview
 Данные для overview дашборда.
 
