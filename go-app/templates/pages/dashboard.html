@@ -123,8 +123,11 @@
 {{ end }}
 
 {{ define "extra_js" }}
+<!-- TN-78: Real-time Updates Client -->
+<script src="/static/js/realtime-client.js"></script>
 <script>
 // TN-77: Enhanced Dashboard JavaScript (150% Quality Target)
+// TN-78: Real-time Updates Integration
 
 // Keyboard Shortcuts (WCAG 2.1 AA - 2.1.1 Keyboard Accessible)
 document.addEventListener('keydown', function(e) {
@@ -168,15 +171,24 @@ function announceUpdate(message) {
   }
 }
 
-// Progressive Enhancement: Auto-refresh dashboard every 30s (idle callback)
+// TN-78: Progressive Enhancement: Auto-refresh dashboard every 30s (fallback if real-time unavailable)
+// Auto-refresh is disabled when real-time updates are available
 if ('requestIdleCallback' in window) {
-  setInterval(() => {
-    requestIdleCallback(() => {
-      console.log('[Dashboard] Auto-refresh triggered');
-      announceUpdate('Dashboard refreshing...');
-      location.reload();
-    });
-  }, 30000); // 30 seconds
+  // Check if real-time client is connected (will be set by realtime-client.js)
+  setTimeout(() => {
+    if (!window.realtimeClient || !window.realtimeClient.isConnected) {
+      // Fallback: Use auto-refresh if real-time is not available
+      setInterval(() => {
+        requestIdleCallback(() => {
+          console.log('[Dashboard] Auto-refresh triggered (fallback, real-time unavailable)');
+          announceUpdate('Dashboard refreshing...');
+          location.reload();
+        });
+      }, 30000); // 30 seconds
+    } else {
+      console.log('[Dashboard] Real-time updates enabled, auto-refresh disabled');
+    }
+  }, 1000); // Wait 1s for real-time client to connect
 }
 
 // Announce page load to screen readers
