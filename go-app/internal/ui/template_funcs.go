@@ -20,8 +20,9 @@ import (
 func createTemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		// Time functions
-		"formatTime": formatTime,
-		"timeAgo":    timeAgo,
+		"formatTime":   formatTime,
+		"timeAgo":      timeAgo,
+		"formatDateTime": formatDateTime,
 
 		// CSS helper functions
 		"severity":    severity,
@@ -43,9 +44,17 @@ func createTemplateFuncs() template.FuncMap {
 		"sub": sub,
 		"mul": mul,
 		"div": div,
+		"min": min,
+		"max": max,
 
 		// String helpers
 		"plural": plural,
+
+		// Duration formatting
+		"humanDuration": humanDuration,
+
+		// Status badge (for silence templates)
+		"statusBadge": statusBadge,
 	}
 }
 
@@ -275,6 +284,30 @@ func div(a, b int) int {
 	return a / b
 }
 
+// min returns the minimum of two integers.
+//
+// Example:
+//
+//	{{ min .Value 100 }} → returns smaller value
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// max returns the maximum of two integers.
+//
+// Example:
+//
+//	{{ max .Value 0 }} → returns larger value
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // plural returns "s" if count != 1, empty string otherwise.
 //
 // Helper for pluralization.
@@ -287,4 +320,72 @@ func plural(count int) string {
 		return ""
 	}
 	return "s"
+}
+
+// humanDuration formats duration to human-readable string.
+//
+// Formats duration as "1h 30m", "45m", "2h", etc.
+//
+// Example:
+//
+//	{{humanDuration 5400000000000}} → "1h 30m" (1.5 hours in nanoseconds)
+func humanDuration(d time.Duration) string {
+	if d < 0 {
+		return "0s"
+	}
+
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	var parts []string
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+	}
+	if seconds > 0 && hours == 0 && minutes == 0 {
+		parts = append(parts, fmt.Sprintf("%ds", seconds))
+	}
+
+	if len(parts) == 0 {
+		return "0s"
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// statusBadge returns HTML badge for status.
+//
+// Returns colored badge HTML for status values: active, pending, expired.
+//
+// Example:
+//
+//	{{statusBadge "active"}} → <span class="badge badge-active">active</span>
+func statusBadge(status string) template.HTML {
+	statusLower := strings.ToLower(status)
+	var class string
+	switch statusLower {
+	case "active":
+		class = "badge badge-success"
+	case "pending":
+		class = "badge badge-warning"
+	case "expired":
+		class = "badge badge-secondary"
+	default:
+		class = "badge badge-info"
+	}
+	return template.HTML(fmt.Sprintf(`<span class="%s">%s</span>`, class, template.HTMLEscapeString(status)))
+}
+
+// formatDateTime formats time to RFC3339 datetime string.
+//
+// Format: "2006-01-02T15:04:05Z07:00"
+//
+// Example:
+//
+//	{{formatDateTime .CreatedAt}} → "2025-11-19T14:30:00Z"
+func formatDateTime(t time.Time) string {
+	return t.Format(time.RFC3339)
 }
