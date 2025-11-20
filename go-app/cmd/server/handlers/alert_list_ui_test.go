@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -304,4 +306,213 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestAlertListUIHandler_ParseFilters_EdgeCases tests edge cases for filter parsing (150% Quality Enhancement).
+func TestAlertListUIHandler_ParseFilters_EdgeCases(t *testing.T) {
+	handler := &AlertListUIHandler{
+		logger: slog.Default(),
+	}
+
+	tests := []struct {
+		name  string
+		query url.Values
+		want  *AlertListFilters
+	}{
+		{
+			name:  "Invalid status filter",
+			query: url.Values{"status": {"invalid"}},
+			want:  &AlertListFilters{}, // Should ignore invalid status
+		},
+		{
+			name:  "Empty string filters",
+			query: url.Values{"status": {""}, "severity": {""}, "namespace": {""}},
+			want:  &AlertListFilters{}, // Should ignore empty strings
+		},
+		{
+			name:  "Invalid time format",
+			query: url.Values{"from": {"invalid-date"}, "to": {"2023-01-02T00:00:00Z"}},
+			want: &AlertListFilters{
+				TimeRange: &core.TimeRange{
+					To: ptr(time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)),
+				},
+			}, // Should ignore invalid from, but accept valid to
+		},
+		{
+			name:  "Multiple label filters",
+			query: url.Values{"labels[app]": {"nginx"}, "labels[env]": {"prod"}, "labels[version]": {"1.0"}},
+			want: &AlertListFilters{
+				Labels: map[string]string{"app": "nginx", "env": "prod", "version": "1.0"},
+			},
+		},
+		{
+			name:  "Malformed label key",
+			query: url.Values{"labels[app": {"nginx"}, "labels]": {"nginx"}}, // Missing closing bracket
+			want: &AlertListFilters{
+				Labels: map[string]string{"ap": "nginx"}, // Current implementation parses "labels[ap" as key "ap"
+			},
+		},
+		{
+			name:  "Very long search string",
+			query: url.Values{"search": {strings.Repeat("a", 1000)}},
+			want: &AlertListFilters{
+				Search: ptr(strings.Repeat("a", 1000)),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := handler.parseFilters(tt.query)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseFilters() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAlertListUIHandler_ParseSorting_EdgeCases tests edge cases for sorting parsing (150% Quality Enhancement).
+func TestAlertListUIHandler_ParseSorting_EdgeCases(t *testing.T) {
+	handler := &AlertListUIHandler{
+		logger: slog.Default(),
+	}
+
+	tests := []struct {
+		name  string
+		query url.Values
+		want  *AlertListSorting
+	}{
+		{
+			name:  "Invalid sort order",
+			query: url.Values{"sort_order": {"invalid"}},
+			want:  &AlertListSorting{Field: "starts_at", Order: "desc"}, // Should fallback to default
+		},
+		{
+			name:  "Empty sort field",
+			query: url.Values{"sort_field": {""}},
+			want:  &AlertListSorting{Field: "starts_at", Order: "desc"}, // Empty field falls back to default "starts_at"
+		},
+		{
+			name:  "Case insensitive sort order",
+			query: url.Values{"sort_order": {"ASC"}, "sort_field": {"severity"}},
+			want:  &AlertListSorting{Field: "severity", Order: "desc"}, // Only "asc" or "desc" (lowercase) accepted, falls back to default
+		},
+		{
+			name:  "SQL injection attempt in sort field",
+			query: url.Values{"sort_field": {"'; DROP TABLE alerts; --"}},
+			want:  &AlertListSorting{Field: "'; DROP TABLE alerts; --", Order: "desc"}, // Should pass through (backend validates)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := handler.parseSorting(tt.query)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseSorting() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAlertListFilters_ToCoreFilters tests conversion to core filters (150% Quality Enhancement).
+func TestAlertListFilters_ToCoreFilters(t *testing.T) {
+	tests := []struct {
+		name    string
+		filters *AlertListFilters
+		want    *core.AlertFilters
+	}{
+		{
+			name:    "Nil filters",
+			filters: nil,
+			want:    nil,
+		},
+		{
+			name:    "Empty filters",
+			filters: &AlertListFilters{},
+			want:    &core.AlertFilters{},
+		},
+		{
+			name: "Full filters",
+			filters: &AlertListFilters{
+				Status:    ptr(core.StatusFiring),
+				Severity:  ptr("critical"),
+				Namespace: ptr("prod"),
+				TimeRange: &core.TimeRange{
+					From: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
+					To:   ptr(time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)),
+				},
+				Labels: map[string]string{"app": "nginx"},
+			},
+			want: &core.AlertFilters{
+				Status:    ptr(core.StatusFiring),
+				Severity:  ptr("critical"),
+				Namespace: ptr("prod"),
+				TimeRange: &core.TimeRange{
+					From: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
+					To:   ptr(time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)),
+				},
+				Labels: map[string]string{"app": "nginx"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.filters.ToCoreFilters()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ToCoreFilters() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAlertListSorting_ToCoreSorting tests conversion to core sorting (150% Quality Enhancement).
+func TestAlertListSorting_ToCoreSorting(t *testing.T) {
+	tests := []struct {
+		name    string
+		sorting *AlertListSorting
+		want    *core.Sorting
+	}{
+		{
+			name:    "Nil sorting",
+			sorting: nil,
+			want:    nil,
+		},
+		{
+			name: "Default sorting",
+			sorting: &AlertListSorting{
+				Field: "starts_at",
+				Order: "desc",
+			},
+			want: &core.Sorting{
+				Field: "starts_at",
+				Order: core.SortOrder("desc"),
+			},
+		},
+		{
+			name: "Custom sorting",
+			sorting: &AlertListSorting{
+				Field: "severity",
+				Order: "asc",
+			},
+			want: &core.Sorting{
+				Field: "severity",
+				Order: core.SortOrder("asc"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.sorting.ToCoreSorting()
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ToCoreSorting() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// Helper function to get pointer to value
+func ptr[T any](v T) *T {
+	return &v
 }

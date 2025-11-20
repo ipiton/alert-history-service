@@ -83,6 +83,11 @@
           </div>
         </div>
 
+        <!-- Loading Skeleton (150% Quality Enhancement) -->
+        <div class="loading-skeleton" id="loading-skeleton" style="display: none;" aria-label="Loading alerts" aria-live="polite">
+          <!-- Skeleton cards will be generated via JavaScript -->
+        </div>
+
         {{ if .Data.Alerts }}
         <div class="alert-list" role="list" aria-label="Alert list" id="alert-list-container">
           {{ range .Data.Alerts }}
@@ -123,6 +128,44 @@
 <script>
 // TN-79: Alert List JavaScript (150% Quality Target)
 
+// Loading Skeleton Management (150% Quality Enhancement)
+function showLoadingSkeleton() {
+  const skeleton = document.getElementById('loading-skeleton');
+  const container = document.getElementById('alert-list-container');
+  const emptyState = document.querySelector('.empty-state');
+
+  if (skeleton && container) {
+    // Generate skeleton cards
+    const skeletonHTML = Array.from({ length: 3 }, () => `
+      <div class="skeleton-card">
+        <div class="skeleton-header">
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-badge skeleton-line"></div>
+        </div>
+        <div class="skeleton-line long"></div>
+        <div class="skeleton-line medium"></div>
+        <div class="skeleton-line short"></div>
+      </div>
+    `).join('');
+
+    skeleton.innerHTML = skeletonHTML;
+    skeleton.style.display = 'flex';
+    container.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
+    announceUpdate('Loading alerts...');
+  }
+}
+
+function hideLoadingSkeleton() {
+  const skeleton = document.getElementById('loading-skeleton');
+  const container = document.getElementById('alert-list-container');
+  const emptyState = document.querySelector('.empty-state');
+
+  if (skeleton) skeleton.style.display = 'none';
+  if (container) container.style.display = 'flex';
+  if (emptyState) emptyState.style.display = 'block';
+}
+
 // Filter Sidebar Toggle (Mobile)
 function toggleFilterSidebar() {
   const sidebar = document.getElementById('filter-sidebar');
@@ -133,6 +176,7 @@ function toggleFilterSidebar() {
 
 // Remove Filter
 function removeFilter(filterName) {
+  showLoadingSkeleton();
   const url = new URL(window.location);
   url.searchParams.delete(filterName);
   window.location.href = url.toString();
@@ -145,6 +189,7 @@ function clearAllFilters() {
 
 // Apply Sorting
 function applySorting() {
+  showLoadingSkeleton();
   const select = document.getElementById('sort-select');
   const [field, order] = select.value.split(':');
   const url = new URL(window.location);
