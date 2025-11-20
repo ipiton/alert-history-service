@@ -5,6 +5,30 @@
  */
 
 /* ============================================================================
+   SKIP NAVIGATION LINK (WCAG 2.1 AA - 2.4.1)
+   ============================================================================ */
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-primary, #1976d2);
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 1000;
+  border-radius: 4px;
+  font-weight: 600;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--color-primary-dark, #1565c0);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
    CSS VARIABLES (DESIGN TOKENS)
    ============================================================================ */
 

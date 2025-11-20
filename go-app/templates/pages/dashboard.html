@@ -3,14 +3,17 @@
 
 {{ define "content" }}
 <div class="dashboard-page">
+  <!-- ARIA Live Region for Dynamic Updates (WCAG 2.1 AA - 3.2.1) -->
+  <div id="dashboard-updates" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
   <!-- Page Header -->
   <div class="page-header">
     <h1>Dashboard</h1>
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="location.reload()">
+      <button class="btn btn-secondary" onclick="location.reload()" aria-label="Refresh dashboard" data-shortcut="r">
         🔄 Refresh
       </button>
-      <a href="/ui/silences/create" class="btn btn-primary">
+      <a href="/ui/silences/create" class="btn btn-primary" aria-label="Create new silence" data-shortcut="shift+s">
         🔕 Create Silence
       </a>
     </div>
@@ -121,14 +124,65 @@
 
 {{ define "extra_js" }}
 <script>
+// TN-77: Enhanced Dashboard JavaScript (150% Quality Target)
+
+// Keyboard Shortcuts (WCAG 2.1 AA - 2.1.1 Keyboard Accessible)
+document.addEventListener('keydown', function(e) {
+  // Refresh: R key
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const refreshBtn = document.querySelector('[data-shortcut="r"]');
+    if (refreshBtn && document.activeElement !== refreshBtn) {
+      e.preventDefault();
+      refreshBtn.click();
+    }
+  }
+
+  // Create Silence: Shift+S
+  if (e.key === 'S' && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    const createBtn = document.querySelector('[data-shortcut="shift+s"]');
+    if (createBtn) {
+      e.preventDefault();
+      createBtn.click();
+    }
+  }
+
+  // Search Alerts: Shift+A
+  if (e.key === 'A' && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    const searchLink = document.querySelector('[data-shortcut="shift+a"]');
+    if (searchLink) {
+      e.preventDefault();
+      searchLink.click();
+    }
+  }
+});
+
+// ARIA Live Region Updates (WCAG 2.1 AA - 3.2.1 Change on Request)
+function announceUpdate(message) {
+  const liveRegion = document.getElementById('dashboard-updates');
+  if (liveRegion) {
+    liveRegion.textContent = message;
+    // Clear after announcement
+    setTimeout(() => {
+      liveRegion.textContent = '';
+    }, 1000);
+  }
+}
+
 // Progressive Enhancement: Auto-refresh dashboard every 30s (idle callback)
 if ('requestIdleCallback' in window) {
   setInterval(() => {
     requestIdleCallback(() => {
       console.log('[Dashboard] Auto-refresh triggered');
+      announceUpdate('Dashboard refreshing...');
       location.reload();
     });
   }, 30000); // 30 seconds
 }
+
+// Announce page load to screen readers
+document.addEventListener('DOMContentLoaded', function() {
+  announceUpdate('Dashboard loaded. ' +
+    document.querySelector('.stats-section')?.textContent?.trim().substring(0, 100) || '');
+});
 </script>
 {{ end }}

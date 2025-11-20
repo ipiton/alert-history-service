@@ -200,6 +200,15 @@
   text-align: center;
 }
 
+.action-shortcut {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
+  font-family: monospace;
+  opacity: 0.7;
+}
+
 /* Timeline Chart Styles */
 .timeline-chart {
   background: var(--color-bg);
