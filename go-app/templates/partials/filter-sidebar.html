@@ -70,7 +70,77 @@
            onchange="applyFilter('search', this.value)"
            aria-label="Search alerts">
   </div>
+
+  <!-- TN-80: Classification Filters -->
+  <div class="filter-group filter-group-divider">
+    <h3 class="filter-section-title">Classification</h3>
+  </div>
+
+  <!-- Classification Severity Filter -->
+  <div class="filter-group">
+    <label for="filter-classification-severity" class="filter-label">Classification Severity</label>
+    <select id="filter-classification-severity" name="classification_severity" onchange="applyFilter('classification_severity', this.value)" aria-label="Filter by classification severity">
+      <option value="">All</option>
+      <option value="critical" {{ if and $filters.ClassificationSeverity (eq $filters.ClassificationSeverity "critical") }}selected{{ end }}>Critical</option>
+      <option value="warning" {{ if and $filters.ClassificationSeverity (eq $filters.ClassificationSeverity "warning") }}selected{{ end }}>Warning</option>
+      <option value="info" {{ if and $filters.ClassificationSeverity (eq $filters.ClassificationSeverity "info") }}selected{{ end }}>Info</option>
+      <option value="noise" {{ if and $filters.ClassificationSeverity (eq $filters.ClassificationSeverity "noise") }}selected{{ end }}>Noise</option>
+    </select>
+  </div>
+
+  <!-- Confidence Range Filter -->
+  <div class="filter-group">
+    <label for="filter-min-confidence" class="filter-label">Min Confidence</label>
+    <input type="range" id="filter-min-confidence" name="min_confidence" min="0" max="100" step="5"
+           value="{{ if $filters.MinConfidence }}{{ mul $filters.MinConfidence 100 }}{{ else }}0{{ end }}"
+           oninput="updateConfidenceDisplay('min', this.value)"
+           onchange="applyFilter('min_confidence', (this.value / 100).toFixed(2))"
+           aria-label="Minimum confidence">
+    <span class="confidence-display" id="min-confidence-display">{{ if $filters.MinConfidence }}{{ mul $filters.MinConfidence 100 }}{{ else }}0{{ end }}%</span>
+  </div>
+
+  <div class="filter-group">
+    <label for="filter-max-confidence" class="filter-label">Max Confidence</label>
+    <input type="range" id="filter-max-confidence" name="max_confidence" min="0" max="100" step="5"
+           value="{{ if $filters.MaxConfidence }}{{ mul $filters.MaxConfidence 100 }}{{ else }}100{{ end }}"
+           oninput="updateConfidenceDisplay('max', this.value)"
+           onchange="applyFilter('max_confidence', (this.value / 100).toFixed(2))"
+           aria-label="Maximum confidence">
+    <span class="confidence-display" id="max-confidence-display">{{ if $filters.MaxConfidence }}{{ mul $filters.MaxConfidence 100 }}{{ else }}100{{ end }}%</span>
+  </div>
+
+  <!-- Has Classification Filter -->
+  <div class="filter-group">
+    <label class="filter-label">
+      <input type="checkbox" id="filter-has-classification" name="has_classification"
+             {{ if $filters.HasClassification }}{{ if $filters.HasClassification }}checked{{ end }}{{ end }}
+             onchange="applyFilter('has_classification', this.checked ? 'true' : '')"
+             aria-label="Filter alerts with classification">
+      Has Classification
+    </label>
+  </div>
+
+  <!-- Classification Source Filter -->
+  <div class="filter-group">
+    <label for="filter-classification-source" class="filter-label">Classification Source</label>
+    <select id="filter-classification-source" name="classification_source" onchange="applyFilter('classification_source', this.value)" aria-label="Filter by classification source">
+      <option value="">All</option>
+      <option value="llm" {{ if and $filters.ClassificationSource (eq $filters.ClassificationSource "llm") }}selected{{ end }}>LLM</option>
+      <option value="fallback" {{ if and $filters.ClassificationSource (eq $filters.ClassificationSource "fallback") }}selected{{ end }}>Fallback</option>
+      <option value="cache" {{ if and $filters.ClassificationSource (eq $filters.ClassificationSource "cache") }}selected{{ end }}>Cache</option>
+    </select>
+  </div>
 </div>
+
+<script>
+// TN-80: Update confidence display
+function updateConfidenceDisplay(type, value) {
+  const display = document.getElementById(type + '-confidence-display');
+  if (display) {
+    display.textContent = value + '%';
+  }
+}
+</script>
 
 <script>
 // Apply Filter
