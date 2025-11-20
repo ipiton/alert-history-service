@@ -956,6 +956,28 @@ func main() {
 			})
 	}
 
+	// TN-79: Initialize Alert List UI Handler (Alert List with Filtering - 150% quality target)
+	var alertListUIHandler *handlers.AlertListUIHandler
+	if dashboardTemplateEngine != nil && historyRepo != nil {
+		alertListUIHandler = handlers.NewAlertListUIHandler(
+			dashboardTemplateEngine,
+			historyRepo,
+			redisCache,
+			appLogger,
+		)
+		slog.Info("✅ Alert List UI Handler initialized (TN-79, 150% quality target)",
+			"features", []string{
+				"Alert list page with filtering",
+				"15+ filter types support",
+				"Pagination (offset-based)",
+				"Sorting (multi-field)",
+				"Template Engine integration (TN-76)",
+				"History Repository integration (TN-63)",
+			})
+	} else {
+		slog.Warn("⚠️ Alert List UI Handler NOT initialized (template engine or history repository unavailable)")
+	}
+
 	// TN-78: Initialize Real-time Updates System (SSE/WebSocket - 150% quality)
 	// Note: wsHub will be initialized later for silence UI, so we'll create dashboard WS hub after that
 	var realtimeEventBus *realtime.DefaultEventBus
@@ -1382,6 +1404,25 @@ func main() {
 				})
 		} else {
 			slog.Warn("⚠️ Dashboard endpoint NOT registered (handler not initialized)")
+		}
+
+		// TN-79: Register Alert List UI endpoint (if handler initialized)
+		if alertListUIHandler != nil {
+			mux.HandleFunc("GET /ui/alerts", alertListUIHandler.RenderAlertList)
+			slog.Info("✅ Alert List UI endpoint registered (TN-79, 150% quality target)",
+				"endpoint", "GET /ui/alerts",
+				"description", "Alert list page with filtering, pagination, and sorting",
+				"features", []string{
+					"15+ filter types (status, severity, namespace, time range, labels, search)",
+					"Pagination (offset-based, page size selector)",
+					"Sorting (multi-field, ASC/DESC)",
+					"Template Engine integration (TN-76)",
+					"History Repository integration (TN-63)",
+					"Responsive design (mobile-first)",
+					"Accessibility: WCAG 2.1 AA",
+				})
+		} else {
+			slog.Warn("⚠️ Alert List UI endpoint NOT registered (handler not initialized)")
 		}
 
 		// TN-78: Register Real-time Updates endpoints (SSE + WebSocket)

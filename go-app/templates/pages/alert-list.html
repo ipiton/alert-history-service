@@ -1,0 +1,189 @@
+{{/* TN-79: Alert List with Filtering (150% Quality Target) */}}
+{{ define "title" }}Alert List - Alertmanager++{{ end }}
+
+{{ define "content" }}
+<div class="alert-list-page">
+  <!-- ARIA Live Region for Dynamic Updates (WCAG 2.1 AA - 3.2.1) -->
+  <div id="alert-list-updates" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1>Alert List</h1>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="location.reload()" aria-label="Refresh alert list" data-shortcut="r">
+        🔄 Refresh
+      </button>
+      <a href="/ui/silences/create" class="btn btn-primary" aria-label="Create new silence" data-shortcut="shift+s">
+        🔕 Create Silence
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Content Layout -->
+  <div class="alert-list-layout">
+    <!-- Filter Sidebar (collapsible on mobile) -->
+    <aside class="filter-sidebar" id="filter-sidebar" aria-label="Filter alerts">
+      <div class="filter-sidebar-header">
+        <h2>Filters</h2>
+        <button class="btn-icon" onclick="toggleFilterSidebar()" aria-label="Toggle filter sidebar" aria-expanded="true">
+          <span class="icon">✕</span>
+        </button>
+      </div>
+
+      {{ template "partials/filter-sidebar" .Data.Filters }}
+    </aside>
+
+    <!-- Alert List Content -->
+    <main class="alert-list-content" id="main-content">
+      <!-- Active Filters Display -->
+      <div class="active-filters" id="active-filters" aria-label="Active filters">
+        {{ if .Data.Filters }}
+        {{ $filters := .Data.Filters }}
+        <div class="filter-chips">
+          {{ if $filters.Status }}
+          <span class="filter-chip">
+            Status: {{ printf "%s" $filters.Status }}
+            <button class="chip-remove" onclick="removeFilter('status')" aria-label="Remove status filter">×</button>
+          </span>
+          {{ end }}
+          {{ if $filters.Severity }}
+          <span class="filter-chip">
+            Severity: {{ $filters.Severity }}
+            <button class="chip-remove" onclick="removeFilter('severity')" aria-label="Remove severity filter">×</button>
+          </span>
+          {{ end }}
+          {{ if $filters.Namespace }}
+          <span class="filter-chip">
+            Namespace: {{ $filters.Namespace }}
+            <button class="chip-remove" onclick="removeFilter('namespace')" aria-label="Remove namespace filter">×</button>
+          </span>
+          {{ end }}
+        </div>
+        <button class="btn-link" onclick="clearAllFilters()" aria-label="Clear all filters">Clear All</button>
+        {{ end }}
+      </div>
+
+      <!-- Alert List -->
+      <section class="alert-list-section" aria-labelledby="alerts-heading">
+        <div class="section-header">
+          <h2 id="alerts-heading">
+            Alerts
+            {{ if .Data.Total }}
+            <span class="count-badge">({{ .Data.Total }})</span>
+            {{ end }}
+          </h2>
+          <div class="section-actions">
+            <!-- Sorting Dropdown -->
+            <select id="sort-select" onchange="applySorting()" aria-label="Sort alerts">
+              <option value="starts_at:desc" {{ if eq .Data.Sorting.Field "starts_at" }}{{ if eq .Data.Sorting.Order "desc" }}selected{{ end }}{{ end }}>Newest First</option>
+              <option value="starts_at:asc" {{ if eq .Data.Sorting.Field "starts_at" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Oldest First</option>
+              <option value="severity:desc" {{ if eq .Data.Sorting.Field "severity" }}{{ if eq .Data.Sorting.Order "desc" }}selected{{ end }}{{ end }}>Severity (High to Low)</option>
+              <option value="severity:asc" {{ if eq .Data.Sorting.Field "severity" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Severity (Low to High)</option>
+            </select>
+          </div>
+        </div>
+
+        {{ if .Data.Alerts }}
+        <div class="alert-list" role="list" aria-label="Alert list">
+          {{ range .Data.Alerts }}
+            {{ template "partials/alert-card" . }}
+          {{ end }}
+        </div>
+        {{ else }}
+        <div class="empty-state" role="status" aria-live="polite">
+          <div class="empty-icon">📭</div>
+          <p>No alerts found</p>
+          <p class="empty-hint">Try adjusting your filters or check back later.</p>
+          <button class="btn btn-secondary" onclick="clearAllFilters()">Clear Filters</button>
+        </div>
+        {{ end }}
+      </section>
+
+      <!-- Pagination -->
+      {{ if .Data.TotalPages }}
+      {{ template "partials/pagination" .Data }}
+      {{ end }}
+    </main>
+  </div>
+</div>
+{{ end }}
+
+{{ define "extra_css" }}
+<link rel="stylesheet" href="/static/css/alert-list.css">
+<link rel="stylesheet" href="/static/css/components/alert-card.css">
+<link rel="stylesheet" href="/static/css/components/filter-sidebar.css">
+<link rel="stylesheet" href="/static/css/components/pagination.css">
+{{ end }}
+
+{{ define "extra_js" }}
+<!-- TN-78: Real-time Updates Client -->
+<script src="/static/js/realtime-client.js"></script>
+<script>
+// TN-79: Alert List JavaScript (150% Quality Target)
+
+// Filter Sidebar Toggle (Mobile)
+function toggleFilterSidebar() {
+  const sidebar = document.getElementById('filter-sidebar');
+  const isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+  sidebar.setAttribute('aria-expanded', !isExpanded);
+  sidebar.classList.toggle('collapsed');
+}
+
+// Remove Filter
+function removeFilter(filterName) {
+  const url = new URL(window.location);
+  url.searchParams.delete(filterName);
+  window.location.href = url.toString();
+}
+
+// Clear All Filters
+function clearAllFilters() {
+  window.location.href = '/ui/alerts';
+}
+
+// Apply Sorting
+function applySorting() {
+  const select = document.getElementById('sort-select');
+  const [field, order] = select.value.split(':');
+  const url = new URL(window.location);
+  url.searchParams.set('sort_field', field);
+  url.searchParams.set('sort_order', order);
+  window.location.href = url.toString();
+}
+
+// Keyboard Shortcuts (WCAG 2.1 AA - 2.1.1 Keyboard Accessible)
+document.addEventListener('keydown', function(e) {
+  // Refresh: R key
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const refreshBtn = document.querySelector('[data-shortcut="r"]');
+    if (refreshBtn && document.activeElement !== refreshBtn) {
+      e.preventDefault();
+      refreshBtn.click();
+    }
+  }
+
+  // Toggle Filters: F key
+  if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    toggleFilterSidebar();
+  }
+});
+
+// ARIA Live Region Updates
+function announceUpdate(message) {
+  const liveRegion = document.getElementById('alert-list-updates');
+  if (liveRegion) {
+    liveRegion.textContent = message;
+    setTimeout(() => {
+      liveRegion.textContent = '';
+    }, 1000);
+  }
+}
+
+// Announce page load to screen readers
+document.addEventListener('DOMContentLoaded', function() {
+  const alertCount = {{ .Data.Total }};
+  announceUpdate(`Alert list loaded. ${alertCount} alerts found.`);
+});
+</script>
+{{ end }}
