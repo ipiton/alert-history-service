@@ -116,6 +116,23 @@
   gap: 1rem;
 }
 
+.alert-list > div[data-fingerprint] {
+  transition: all 0.3s ease;
+}
+
+.alert-list > div[data-fingerprint].updated {
+  animation: highlightUpdate 2s ease;
+}
+
+@keyframes highlightUpdate {
+  0% {
+    background-color: rgba(37, 99, 235, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 /* Empty State */
 .empty-state {
   text-align: center;
