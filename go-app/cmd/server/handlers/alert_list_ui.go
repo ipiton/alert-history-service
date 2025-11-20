@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -64,6 +65,7 @@ type AlertListPageData struct {
 }
 
 // AlertListFilters represents filter parameters for alert list.
+// TN-80: Enhanced with classification filters
 type AlertListFilters struct {
 	Status    *core.AlertStatus
 	Severity  *string
@@ -71,9 +73,17 @@ type AlertListFilters struct {
 	TimeRange *core.TimeRange
 	Labels    map[string]string
 	Search    *string
+
+	// TN-80: Classification filters
+	ClassificationSeverity *string  // "critical", "warning", "info", "noise"
+	MinConfidence         *float64  // 0.0-1.0
+	MaxConfidence         *float64  // 0.0-1.0
+	HasClassification     *bool     // true/false/nil (all)
+	ClassificationSource  *string   // "llm", "fallback", "cache"
 }
 
 // AlertListSorting represents sorting parameters for alert list.
+// TN-80: Enhanced with classification sorting
 type AlertListSorting struct {
 	Field string
 	Order string // "asc" or "desc"
@@ -160,6 +170,12 @@ func (h *AlertListUIHandler) RenderAlertList(w http.ResponseWriter, r *http.Requ
 		// No classification enricher available, convert alerts to enriched format without classification
 		enrichedAlerts = convertToEnrichedAlerts(historyResp.Alerts)
 	}
+
+	// TN-80: Apply classification filters (in-memory filtering after enrichment)
+	enrichedAlerts = h.applyClassificationFilters(enrichedAlerts, filters)
+
+	// TN-80: Apply classification sorting (in-memory sorting after enrichment)
+	enrichedAlerts = h.applyClassificationSorting(enrichedAlerts, sorting)
 
 	// Convert enriched alerts to template-friendly format
 	alertCardDataList := ui.ToAlertCardDataList(enrichedAlerts)
@@ -256,6 +272,56 @@ func (h *AlertListUIHandler) parseFilters(query url.Values) *AlertListFilters {
 		filters.Search = &searchStr
 	}
 
+	// TN-80: Parse classification filters
+	if classificationSeverityStr := query.Get("classification_severity"); classificationSeverityStr != "" {
+		validSeverities := map[string]bool{
+			"critical": true,
+			"warning":  true,
+			"info":     true,
+			"noise":    true,
+		}
+		if validSeverities[classificationSeverityStr] {
+			filters.ClassificationSeverity = &classificationSeverityStr
+		}
+	}
+
+	if minConfidenceStr := query.Get("min_confidence"); minConfidenceStr != "" {
+		if minConf, err := strconv.ParseFloat(minConfidenceStr, 64); err == nil {
+			if minConf >= 0.0 && minConf <= 1.0 {
+				filters.MinConfidence = &minConf
+			}
+		}
+	}
+
+	if maxConfidenceStr := query.Get("max_confidence"); maxConfidenceStr != "" {
+		if maxConf, err := strconv.ParseFloat(maxConfidenceStr, 64); err == nil {
+			if maxConf >= 0.0 && maxConf <= 1.0 {
+				filters.MaxConfidence = &maxConf
+			}
+		}
+	}
+
+	if hasClassificationStr := query.Get("has_classification"); hasClassificationStr != "" {
+		if hasClassificationStr == "true" {
+			hasClassification := true
+			filters.HasClassification = &hasClassification
+		} else if hasClassificationStr == "false" {
+			hasClassification := false
+			filters.HasClassification = &hasClassification
+		}
+	}
+
+	if classificationSourceStr := query.Get("classification_source"); classificationSourceStr != "" {
+		validSources := map[string]bool{
+			"llm":      true,
+			"fallback": true,
+			"cache":    true,
+		}
+		if validSources[classificationSourceStr] {
+			filters.ClassificationSource = &classificationSourceStr
+		}
+	}
+
 	return filters
 }
 
@@ -267,7 +333,17 @@ func (h *AlertListUIHandler) parseSorting(query url.Values) *AlertListSorting {
 	}
 
 	if sortField := query.Get("sort_field"); sortField != "" {
-		sorting.Field = sortField
+		// TN-80: Validate sort field (including classification fields)
+		validFields := map[string]bool{
+			"starts_at":              true,
+			"severity":               true,
+			"status":                 true,
+			"classification_severity": true, // TN-80
+			"classification_confidence": true, // TN-80
+		}
+		if validFields[sortField] {
+			sorting.Field = sortField
+		}
 	}
 
 	if sortOrder := query.Get("sort_order"); sortOrder != "" {
@@ -385,4 +461,127 @@ func convertToEnrichedAlerts(alerts []*core.Alert) []*ui.EnrichedAlert {
 	}
 
 	return enriched
+}
+
+// applyClassificationFilters applies classification filters to enriched alerts (TN-80).
+// This performs in-memory filtering since classification is not stored in DB.
+func (h *AlertListUIHandler) applyClassificationFilters(enriched []*ui.EnrichedAlert, filters *AlertListFilters) []*ui.EnrichedAlert {
+	if filters == nil {
+		return enriched
+	}
+
+	filtered := make([]*ui.EnrichedAlert, 0, len(enriched))
+
+	for _, alert := range enriched {
+		// Filter by has_classification
+		if filters.HasClassification != nil {
+			if *filters.HasClassification != alert.HasClassification {
+				continue
+			}
+		}
+
+		// If no classification, skip classification-specific filters
+		if !alert.HasClassification || alert.Classification == nil {
+			// If filter requires classification, skip this alert
+			if filters.ClassificationSeverity != nil || filters.MinConfidence != nil || filters.MaxConfidence != nil || filters.ClassificationSource != nil {
+				continue
+			}
+			filtered = append(filtered, alert)
+			continue
+		}
+
+		// Filter by classification severity
+		if filters.ClassificationSeverity != nil {
+			if string(alert.Classification.Severity) != *filters.ClassificationSeverity {
+				continue
+			}
+		}
+
+		// Filter by confidence range
+		if filters.MinConfidence != nil {
+			if alert.Classification.Confidence < *filters.MinConfidence {
+				continue
+			}
+		}
+		if filters.MaxConfidence != nil {
+			if alert.Classification.Confidence > *filters.MaxConfidence {
+				continue
+			}
+		}
+
+		// Filter by classification source
+		if filters.ClassificationSource != nil {
+			if alert.ClassificationSource != *filters.ClassificationSource {
+				continue
+			}
+		}
+
+		filtered = append(filtered, alert)
+	}
+
+	return filtered
+}
+
+// applyClassificationSorting applies classification sorting to enriched alerts (TN-80).
+// This performs in-memory sorting since classification is not stored in DB.
+func (h *AlertListUIHandler) applyClassificationSorting(enriched []*ui.EnrichedAlert, sorting *AlertListSorting) []*ui.EnrichedAlert {
+	if sorting == nil || len(enriched) == 0 {
+		return enriched
+	}
+
+	// Clone slice to avoid mutating original
+	sorted := make([]*ui.EnrichedAlert, len(enriched))
+	copy(sorted, enriched)
+
+	// Sort by classification fields
+	switch sorting.Field {
+	case "classification_severity":
+		sort.Slice(sorted, func(i, j int) bool {
+			severityI := getClassificationSeverityOrder(sorted[i])
+			severityJ := getClassificationSeverityOrder(sorted[j])
+			if sorting.Order == "asc" {
+				return severityI < severityJ
+			}
+			return severityI > severityJ
+		})
+	case "classification_confidence":
+		sort.Slice(sorted, func(i, j int) bool {
+			confI := getClassificationConfidence(sorted[i])
+			confJ := getClassificationConfidence(sorted[j])
+			if sorting.Order == "asc" {
+				return confI < confJ
+			}
+			return confI > confJ
+		})
+	}
+
+	return sorted
+}
+
+// getClassificationSeverityOrder returns numeric order for severity (for sorting).
+func getClassificationSeverityOrder(enriched *ui.EnrichedAlert) int {
+	if !enriched.HasClassification || enriched.Classification == nil {
+		return 999 // No classification goes to end
+	}
+
+	switch enriched.Classification.Severity {
+	case core.SeverityCritical:
+		return 1
+	case core.SeverityWarning:
+		return 2
+	case core.SeverityInfo:
+		return 3
+	case core.SeverityNoise:
+		return 4
+	default:
+		return 999
+	}
+}
+
+// getClassificationConfidence returns confidence value (for sorting).
+func getClassificationConfidence(enriched *ui.EnrichedAlert) float64 {
+	if !enriched.HasClassification || enriched.Classification == nil {
+		return -1.0 // No classification goes to end
+	}
+	return enriched.Classification.Confidence
 }
