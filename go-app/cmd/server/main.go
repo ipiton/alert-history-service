@@ -957,6 +957,7 @@ func main() {
 	}
 
 	// TN-79: Initialize Alert List UI Handler (Alert List with Filtering - 150% quality target)
+	// TN-80: Enhanced with Classification Display
 	var alertListUIHandler *handlers.AlertListUIHandler
 	if dashboardTemplateEngine != nil && historyRepo != nil {
 		alertListUIHandler = handlers.NewAlertListUIHandler(
@@ -965,7 +966,22 @@ func main() {
 			redisCache,
 			appLogger,
 		)
-		slog.Info("✅ Alert List UI Handler initialized (TN-79, 150% quality target)",
+
+		// TN-80: Set Classification Enricher if classification service is available
+		if classificationService != nil {
+			classificationEnricher := ui.NewClassificationEnricher(classificationService, appLogger)
+			alertListUIHandler.SetClassificationEnricher(classificationEnricher)
+			slog.Info("✅ Classification Enricher initialized for Alert List UI (TN-80)",
+				"features", []string{
+					"Batch enrichment (20 alerts per batch)",
+					"Request-scoped cache",
+					"Graceful degradation",
+				})
+		} else {
+			slog.Debug("Classification Enricher not set (classification service unavailable, graceful degradation enabled)")
+		}
+
+		slog.Info("✅ Alert List UI Handler initialized (TN-79, TN-80, 150% quality target)",
 			"features", []string{
 				"Alert list page with filtering",
 				"15+ filter types support",
@@ -973,6 +989,7 @@ func main() {
 				"Sorting (multi-field)",
 				"Template Engine integration (TN-76)",
 				"History Repository integration (TN-63)",
+				"Classification Display (TN-80)",
 			})
 	} else {
 		slog.Warn("⚠️ Alert List UI Handler NOT initialized (template engine or history repository unavailable)")
@@ -1406,6 +1423,50 @@ func main() {
 			slog.Warn("⚠️ Dashboard endpoint NOT registered (handler not initialized)")
 		}
 
+		// TN-84: Initialize Dashboard Alerts Handler (GET /api/dashboard/alerts/recent - 150% quality)
+		var dashboardAlertsHandler *handlers.DashboardAlertsHandler
+		if historyRepo != nil {
+			var dashboardClassificationEnricher ui.ClassificationEnricher
+			if classificationService != nil {
+				dashboardClassificationEnricher = ui.NewClassificationEnricher(classificationService, appLogger)
+			}
+			dashboardAlertsHandler = handlers.NewDashboardAlertsHandler(
+				historyRepo,
+				dashboardClassificationEnricher, // optional
+				redisCache,                        // optional, for response caching
+				appLogger,
+			)
+			slog.Info("✅ Dashboard Alerts Handler initialized (TN-84, 150% quality target)",
+				"features", []string{
+					"GET /api/dashboard/alerts/recent - Compact format for dashboard",
+					"Optional classification enrichment",
+					"Response caching (5-10s TTL)",
+					"Filtering by status and severity",
+					"Performance optimized (< 100ms p95)",
+				})
+		} else {
+			slog.Warn("⚠️ Dashboard Alerts Handler NOT initialized (history repository unavailable)")
+		}
+
+		// TN-84: Register Dashboard Alerts API endpoint (if handler initialized)
+		if dashboardAlertsHandler != nil {
+			mux.HandleFunc("GET /api/dashboard/alerts/recent", dashboardAlertsHandler.GetRecentAlerts)
+			slog.Info("✅ Dashboard Alerts API endpoint registered (TN-84, 150% quality target)",
+				"endpoint", "GET /api/dashboard/alerts/recent",
+				"description", "Recent alerts in compact format optimized for dashboard",
+				"features", []string{
+					"Compact response format (minimal fields)",
+					"Optional classification enrichment (include_classification=true)",
+					"Filtering by status and severity",
+					"Response caching (5-10s TTL)",
+					"Performance optimized (< 100ms p95)",
+					"Graceful degradation (works without classification)",
+				})
+		} else {
+			slog.Warn("⚠️ Dashboard Alerts API endpoint NOT registered (handler not initialized)")
+		}
+
+
 		// TN-79: Register Alert List UI endpoint (if handler initialized)
 		if alertListUIHandler != nil {
 			mux.HandleFunc("GET /ui/alerts", alertListUIHandler.RenderAlertList)
@@ -1808,6 +1869,57 @@ func main() {
 				"Thread-safe concurrent access",
 				"Zero race conditions",
 			})
+
+		// TN-81: Initialize Dashboard Overview Handler (GET /api/dashboard/overview - 150% quality)
+		var dashboardOverviewHandler *handlers.DashboardOverviewHandler
+		if historyRepo != nil {
+			var publishingStatsProvider handlers.PublishingStatsProvider
+			// Create publishing stats provider using metrics collector if available
+			if statsHandler != nil && metricsCollector != nil {
+				publishingStatsProvider = handlers.NewPublishingStatsProviderWithCollector(metricsCollector, appLogger)
+			}
+			dashboardOverviewHandler = handlers.NewDashboardOverviewHandler(
+				historyRepo,
+				classificationService, // optional
+				publishingStatsProvider, // optional
+				redisCache,              // optional, for response caching
+				appLogger,
+			)
+			slog.Info("✅ Dashboard Overview Handler initialized (TN-81, 150% quality target)",
+				"features", []string{
+					"GET /api/dashboard/overview - Consolidated overview statistics",
+					"Parallel statistics collection (goroutines)",
+					"Alert statistics (total, active, resolved, last 24h)",
+					"Classification statistics (enabled, classified, cache hit rate)",
+					"Publishing statistics (targets, mode, success/fail)",
+					"System health (Redis, LLM)",
+					"Response caching (15s TTL)",
+					"Graceful degradation (works without components)",
+					"Timeout protection (5s per component)",
+				})
+		} else {
+			slog.Warn("⚠️ Dashboard Overview Handler NOT initialized (history repository unavailable)")
+		}
+
+		// TN-81: Register Dashboard Overview API endpoint (if handler initialized)
+		if dashboardOverviewHandler != nil {
+			mux.HandleFunc("GET /api/dashboard/overview", dashboardOverviewHandler.GetOverview)
+			slog.Info("✅ Dashboard Overview API endpoint registered (TN-81, 150% quality target)",
+				"endpoint", "GET /api/dashboard/overview",
+				"description", "Consolidated overview statistics from multiple sources",
+				"features", []string{
+					"Alert statistics (total, active, resolved, last 24h)",
+					"Classification statistics (enabled, classified, cache hit rate, LLM available)",
+					"Publishing statistics (targets, mode, successful/failed publishes)",
+					"System health (Redis connected, LLM available)",
+					"Parallel collection (goroutines with timeout)",
+					"Response caching (15s TTL)",
+					"Performance optimized (< 200ms p95)",
+					"Graceful degradation (works without components)",
+				})
+		} else {
+			slog.Warn("⚠️ Dashboard Overview API endpoint NOT registered (handler not initialized)")
+		}
 
 		// TN-060: Initialize Metrics-Only Mode Fallback (150%+ quality, Phase 9: Main Integration)
 		// Provides graceful degradation when no publishing targets are available

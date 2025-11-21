@@ -58,6 +58,31 @@
             <button class="chip-remove" onclick="removeFilter('namespace')" aria-label="Remove namespace filter">×</button>
           </span>
           {{ end }}
+          <!-- TN-80: Classification Filter Chips -->
+          {{ if $filters.ClassificationSeverity }}
+          <span class="filter-chip">
+            Classification Severity: {{ $filters.ClassificationSeverity }}
+            <button class="chip-remove" onclick="removeFilter('classification_severity')" aria-label="Remove classification severity filter">×</button>
+          </span>
+          {{ end }}
+          {{ if or $filters.MinConfidence $filters.MaxConfidence }}
+          <span class="filter-chip">
+            Confidence: {{ if $filters.MinConfidence }}{{ mul $filters.MinConfidence 100 }}%{{ end }}{{ if and $filters.MinConfidence $filters.MaxConfidence }}-{{ end }}{{ if $filters.MaxConfidence }}{{ mul $filters.MaxConfidence 100 }}%{{ end }}
+            <button class="chip-remove" onclick="removeFilter('min_confidence'); removeFilter('max_confidence')" aria-label="Remove confidence filter">×</button>
+          </span>
+          {{ end }}
+          {{ if $filters.HasClassification }}
+          <span class="filter-chip">
+            Has Classification: {{ if $filters.HasClassification }}Yes{{ else }}No{{ end }}
+            <button class="chip-remove" onclick="removeFilter('has_classification')" aria-label="Remove has classification filter">×</button>
+          </span>
+          {{ end }}
+          {{ if $filters.ClassificationSource }}
+          <span class="filter-chip">
+            Classification Source: {{ $filters.ClassificationSource }}
+            <button class="chip-remove" onclick="removeFilter('classification_source')" aria-label="Remove classification source filter">×</button>
+          </span>
+          {{ end }}
         </div>
         <button class="btn-link" onclick="clearAllFilters()" aria-label="Clear all filters">Clear All</button>
         {{ end }}
@@ -79,6 +104,11 @@
               <option value="starts_at:asc" {{ if eq .Data.Sorting.Field "starts_at" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Oldest First</option>
               <option value="severity:desc" {{ if eq .Data.Sorting.Field "severity" }}{{ if eq .Data.Sorting.Order "desc" }}selected{{ end }}{{ end }}>Severity (High to Low)</option>
               <option value="severity:asc" {{ if eq .Data.Sorting.Field "severity" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Severity (Low to High)</option>
+              <!-- TN-80: Classification Sorting -->
+              <option value="classification_confidence:desc" {{ if eq .Data.Sorting.Field "classification_confidence" }}{{ if eq .Data.Sorting.Order "desc" }}selected{{ end }}{{ end }}>Confidence (High to Low)</option>
+              <option value="classification_confidence:asc" {{ if eq .Data.Sorting.Field "classification_confidence" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Confidence (Low to High)</option>
+              <option value="classification_severity:desc" {{ if eq .Data.Sorting.Field "classification_severity" }}{{ if eq .Data.Sorting.Order "desc" }}selected{{ end }}{{ end }}>Classification Severity (High to Low)</option>
+              <option value="classification_severity:asc" {{ if eq .Data.Sorting.Field "classification_severity" }}{{ if eq .Data.Sorting.Order "asc" }}selected{{ end }}{{ end }}>Classification Severity (Low to High)</option>
             </select>
           </div>
         </div>
@@ -227,10 +257,54 @@ function announceUpdate(message) {
   }
 }
 
+// TN-80: Classification Toggle Handler
+function initClassificationToggles() {
+  const toggles = document.querySelectorAll('[data-classification-toggle]');
+  toggles.forEach(toggle => {
+    // Click handler
+    toggle.addEventListener('click', function() {
+      toggleClassificationDetails(this);
+    });
+
+    // Keyboard handler (Enter/Space)
+    toggle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleClassificationDetails(this);
+      }
+    });
+  });
+}
+
+function toggleClassificationDetails(toggle) {
+  const fingerprint = toggle.getAttribute('data-fingerprint');
+  if (!fingerprint) return;
+
+  const details = document.getElementById(`classification-${fingerprint}`);
+  if (!details) return;
+
+  const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+
+  if (isExpanded) {
+    // Collapse
+    details.style.display = 'none';
+    toggle.setAttribute('aria-expanded', 'false');
+    announceUpdate(`Classification details collapsed for alert ${fingerprint}`);
+  } else {
+    // Expand
+    details.style.display = 'block';
+    toggle.setAttribute('aria-expanded', 'true');
+    announceUpdate(`Classification details expanded for alert ${fingerprint}`);
+  }
+}
+
 // Announce page load to screen readers
 document.addEventListener('DOMContentLoaded', function() {
   const alertCount = {{ .Data.Total }};
   announceUpdate(`Alert list loaded. ${alertCount} alerts found.`);
+
+  // TN-80: Initialize classification toggles
+  initClassificationToggles();
 
   // TN-78: Initialize Real-time Updates Client
   if (window.RealtimeClient) {
