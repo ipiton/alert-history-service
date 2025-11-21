@@ -1,0 +1,117 @@
+# Silence UI Components Kubernetes Deployment
+# Phase 15: Documentation - Kubernetes deployment manifests
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silence-ui
+  namespace: alert-history
+  labels:
+    app: silence-ui
+    component: ui
+    task: TN-136
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: silence-ui
+  template:
+    metadata:
+      labels:
+        app: silence-ui
+        component: ui
+        task: TN-136
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: alert-history
+      containers:
+      - name: silence-ui
+        image: alert-history:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        # Template Cache Configuration
+        - name: SILENCE_UI_CACHE_SIZE
+          value: "100"
+        - name: SILENCE_UI_CACHE_TTL
+          value: "5m"
+
+        # Compression Configuration
+        - name: SILENCE_UI_COMPRESSION_ENABLED
+          value: "true"
+        - name: SILENCE_UI_COMPRESSION_LEVEL
+          value: "6"
+
+        # CSRF Configuration
+        - name: SILENCE_UI_CSRF_ENABLED
+          value: "true"
+        - name: SILENCE_UI_CSRF_TTL
+          value: "24h"
+
+        # Rate Limiting Configuration
+        - name: SILENCE_UI_RATE_LIMIT_ENABLED
+          value: "true"
+        - name: SILENCE_UI_RATE_LIMIT_PER_IP
+          value: "100"
+        - name: SILENCE_UI_RATE_LIMIT_WINDOW
+          value: "1m"
+
+        # Security Configuration
+        - name: SILENCE_UI_ALLOWED_ORIGINS
+          value: "https://app.example.com,https://*.example.com"
+
+        # Performance Monitoring
+        - name: SILENCE_UI_PERFORMANCE_ENABLED
+          value: "true"
+        - name: SILENCE_UI_SLOW_REQUEST_THRESHOLD
+          value: "1s"
+
+        # Observability
+        - name: SILENCE_UI_LOG_LEVEL
+          value: "INFO"
+        - name: SILENCE_UI_METRICS_ENABLED
+          value: "true"
+
+        # Database Query Optimization
+        - name: SILENCE_UI_QUERY_TIMEOUT
+          value: "5s"
+        - name: SILENCE_UI_MAX_LIMIT
+          value: "1000"
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health/ui
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ui
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: config
+          mountPath: /etc/silence-ui
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: silence-ui-config

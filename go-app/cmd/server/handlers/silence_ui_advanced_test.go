@@ -216,8 +216,24 @@ func TestSilenceUIHandler_InvalidInput(t *testing.T) {
 
 // Benchmark tests for performance validation
 
+// setupUIHandlerForBenchmark creates a handler for benchmarks.
+func setupUIHandlerForBenchmark(b *testing.B) *SilenceUIHandler {
+	logger := slog.Default()
+	mockManager := &mockSilenceManager{
+		silences: make([]*coresilencing.Silence, 0),
+		logger:   logger,
+	}
+	apiHandler := &SilenceHandler{} // Minimal mock
+	wsHub := NewWebSocketHub(logger)
+	cache := nil // No cache for benchmarks
+
+	handler, err := NewSilenceUIHandler(mockManager, apiHandler, wsHub, cache, logger)
+	require.NoError(b, err)
+	return handler
+}
+
 func BenchmarkSilenceUIHandler_RenderDashboard(b *testing.B) {
-	handler := setupUIHandler(b)
+	handler := setupUIHandlerForBenchmark(b)
 	req := httptest.NewRequest("GET", "/ui/silences", nil)
 
 	b.ResetTimer()
@@ -264,7 +280,7 @@ func BenchmarkRateLimiter_Allow(b *testing.B) {
 }
 
 func BenchmarkSilenceUIHandler_RenderWithCache(b *testing.B) {
-	handler := setupUIHandler(b)
+	handler := setupUIHandlerForBenchmark(b)
 	req := httptest.NewRequest("GET", "/ui/silences", nil)
 
 	// Warm up cache

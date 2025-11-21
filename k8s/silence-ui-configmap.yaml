@@ -1,0 +1,33 @@
+# Silence UI ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: silence-ui-config
+  namespace: alert-history
+data:
+  config.yaml: |
+    template_cache:
+      enabled: true
+      max_size: 100
+      ttl: 5m
+    compression:
+      enabled: true
+      level: 6
+    csrf:
+      enabled: true
+      ttl: 24h
+    rate_limiting:
+      enabled: true
+      limit_per_ip: 100
+      window: 1m
+    security:
+      allowed_origins:
+        - "https://app.example.com"
+    performance:
+      enabled: true
+      track_render_times: true
+    observability:
+      metrics:
+        enabled: true
+      logging:
+        level: "INFO"
