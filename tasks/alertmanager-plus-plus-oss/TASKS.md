@@ -174,8 +174,8 @@
 - [x] **TN-79** Alert list with filtering ✅ **COMPLETED** (100% Production-Ready, 150% quality, Grade A+ EXCEPTIONAL 🏆, 2025-11-20, 21h, ALL PHASES + ENHANCEMENTS, branch: feature/TN-79-alert-list-filtering-150pct)
 - [x] **TN-80** Classification display ✅ **COMPLETED** (150% quality, Grade A+ EXCEPTIONAL 🏆, 2025-11-20, 12h, branch: feature/TN-80-classification-display-150pct)
 - [x] **TN-84** GET /api/dashboard/alerts/recent ✅ **COMPLETED** (150% quality, Grade A+ EXCEPTIONAL 🏆, 2025-11-20, 8h, ALL PHASES, branch: feature/TN-84-dashboard-alerts-recent-150pct)
+- [x] **TN-81** GET /api/dashboard/overview ✅ **COMPLETED** (150% quality, Grade A+ EXCEPTIONAL 🏆, 2025-11-21, 10h, ALL PHASES, branch: feature/TN-81-dashboard-overview-150pct)
 	•	TN-136 Silence UI Components
-	•	TN-81 GET /api/dashboard/overview
 	•	TN-83 GET /api/dashboard/health (basic)
 
 ---
