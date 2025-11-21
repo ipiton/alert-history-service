@@ -36,7 +36,8 @@ type SilenceUIHandler struct {
 	metrics            *SilenceUIMetrics                // Prometheus metrics (Phase 14 enhancement)
 	securityConfig        *SecurityConfig           // Security configuration (Phase 13 enhancement)
 	compressionMiddleware *CompressionMiddleware    // Compression middleware (Phase 10 enhancement)
-	rateLimiter           *RateLimiter             // Rate limiter (Phase 13 enhancement)
+	rateLimiter           *SilenceUIRateLimiter    // Rate limiter (Phase 13 enhancement)
+	gracefulDegradation   *GracefulDegradation     // Graceful degradation (Phase 12 enhancement)
 	logger                *slog.Logger
 }
 
@@ -66,10 +67,11 @@ func NewSilenceUIHandler(
 		wsHub:         wsHub,
 		cache:         cache,
 		templateCache: NewTemplateCache(100, 5*time.Minute, logger), // Phase 10: Template caching
-		csrfManager:   NewCSRFManager(nil, 24*time.Hour, logger),  // Phase 12: CSRF protection
-		metrics:       NewSilenceUIMetrics(logger),                  // Phase 14: Prometheus metrics
-		securityConfig: nil, // Will be set via SetSecurityConfig if needed (Phase 13)
-		logger:        logger,
+		csrfManager:        NewCSRFManager(nil, 24*time.Hour, logger),  // Phase 12: CSRF protection
+		metrics:            NewSilenceUIMetrics(logger),                  // Phase 14: Prometheus metrics
+		securityConfig:     nil, // Will be set via SetSecurityConfig if needed (Phase 13)
+		gracefulDegradation: NewGracefulDegradation(logger),            // Phase 12: Graceful degradation
+		logger:             logger,
 	}
 
 	logger.Info("✅ SilenceUIHandler initialized successfully",

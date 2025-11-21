@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// RateLimiter provides rate limiting for UI endpoints.
+// SilenceUIRateLimiter provides rate limiting for Silence UI endpoints.
 // Phase 13: Security Hardening enhancement.
-type RateLimiter struct {
+type SilenceUIRateLimiter struct {
 	requests map[string][]time.Time
 	mu       sync.RWMutex
 	limit    int
@@ -18,9 +18,9 @@ type RateLimiter struct {
 	logger   *slog.Logger
 }
 
-// NewRateLimiter creates a new rate limiter.
-func NewRateLimiter(limit int, window time.Duration, logger *slog.Logger) *RateLimiter {
-	rl := &RateLimiter{
+// NewSilenceUIRateLimiter creates a new rate limiter for Silence UI.
+func NewSilenceUIRateLimiter(limit int, window time.Duration, logger *slog.Logger) *SilenceUIRateLimiter {
+	rl := &SilenceUIRateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
@@ -34,7 +34,7 @@ func NewRateLimiter(limit int, window time.Duration, logger *slog.Logger) *RateL
 }
 
 // cleanup removes old entries periodically.
-func (rl *RateLimiter) cleanup() {
+func (rl *SilenceUIRateLimiter) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -60,7 +60,7 @@ func (rl *RateLimiter) cleanup() {
 }
 
 // Allow checks if a request should be allowed.
-func (rl *RateLimiter) Allow(ip string) bool {
+func (rl *SilenceUIRateLimiter) Allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -98,7 +98,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 }
 
 // Middleware returns a middleware function that enforces rate limiting.
-func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
+func (rl *SilenceUIRateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 		// Extract IP from X-Forwarded-For if present
@@ -120,7 +120,7 @@ func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // SetRateLimiter sets the rate limiter for the handler.
-func (h *SilenceUIHandler) SetRateLimiter(limiter *RateLimiter) {
+func (h *SilenceUIHandler) SetRateLimiter(limiter *SilenceUIRateLimiter) {
 	h.rateLimiter = limiter
 }
 
@@ -128,7 +128,7 @@ func (h *SilenceUIHandler) SetRateLimiter(limiter *RateLimiter) {
 func (h *SilenceUIHandler) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	if h.rateLimiter == nil {
 		// Use default rate limiter if not set
-		h.rateLimiter = NewRateLimiter(100, 1*time.Minute, h.logger)
+		h.rateLimiter = NewSilenceUIRateLimiter(100, 1*time.Minute, h.logger)
 	}
 	return h.rateLimiter.Middleware(next)
 }
