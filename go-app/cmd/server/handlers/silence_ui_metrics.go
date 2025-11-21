@@ -3,10 +3,16 @@ package handlers
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	metricsOnce sync.Once
+	metricsInstance *SilenceUIMetrics
 )
 
 // SilenceUIMetrics provides Prometheus metrics for Silence UI operations.
@@ -35,8 +41,10 @@ type SilenceUIMetrics struct {
 }
 
 // NewSilenceUIMetrics creates a new SilenceUIMetrics instance.
+// Uses singleton pattern to prevent duplicate metric registration.
 func NewSilenceUIMetrics(logger *slog.Logger) *SilenceUIMetrics {
-	return &SilenceUIMetrics{
+	metricsOnce.Do(func() {
+		metricsInstance = &SilenceUIMetrics{
 		PageRenderDuration: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "alert_history",
@@ -116,7 +124,9 @@ func NewSilenceUIMetrics(logger *slog.Logger) *SilenceUIMetrics {
 			[]string{"error_type", "page"},
 		),
 		logger: logger,
-	}
+		}
+	})
+	return metricsInstance
 }
 
 // RecordPageRender records a page render metric.

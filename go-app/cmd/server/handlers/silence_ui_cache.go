@@ -231,11 +231,20 @@ func (h *SilenceUIHandler) renderWithCache(
 
 	// Render template
 	var buf bytes.Buffer
+
+	// Record render start time for metrics
+	startTime := time.Now()
+
 	if err := h.templates.ExecuteTemplate(&buf, templateName, data); err != nil {
+		// Record error metric (Phase 14 enhancement)
+		if h.metrics != nil {
+			h.metrics.RecordError("template_render_error", templateName)
+		}
 		return fmt.Errorf("failed to render template %s: %w", templateName, err)
 	}
 
 	content := buf.Bytes()
+	renderDuration := time.Since(startTime)
 
 	// Cache rendered content (only for GET requests)
 	if r.Method == http.MethodGet && h.templateCache != nil {
@@ -248,6 +257,11 @@ func (h *SilenceUIHandler) renderWithCache(
 				h.metrics.UpdateTemplateCacheSize(size)
 			}
 		}
+	}
+
+	// Record page render metrics (Phase 14 enhancement)
+	if h.metrics != nil {
+		h.metrics.RecordPageRender(templateName, renderDuration, "success")
 	}
 
 	// Set headers

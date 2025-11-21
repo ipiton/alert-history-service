@@ -26,16 +26,18 @@ var staticFS embed.FS
 
 // SilenceUIHandler handles UI rendering for Silence Management.
 type SilenceUIHandler struct {
-	manager       businesssilencing.SilenceManager // Business logic
-	apiHandler    *SilenceHandler                  // API handler (reuse for data fetching)
-	templates     *template.Template               // Parsed templates
-	wsHub         *WebSocketHub                    // WebSocket hub for real-time updates
-	cache         cache.Cache                      // Response caching
-	templateCache *TemplateCache                  // Template rendering cache (Phase 10 enhancement)
-	csrfManager   *CSRFManager                    // CSRF token manager (Phase 12 enhancement)
-	metrics       *SilenceUIMetrics               // Prometheus metrics (Phase 14 enhancement)
-	securityConfig *SecurityConfig                // Security configuration (Phase 13 enhancement)
-	logger        *slog.Logger
+	manager            businesssilencing.SilenceManager // Business logic
+	apiHandler         *SilenceHandler                    // API handler (reuse for data fetching)
+	templates          *template.Template                // Parsed templates
+	wsHub              *WebSocketHub                     // WebSocket hub for real-time updates
+	cache              cache.Cache                       // Response caching
+	templateCache      *TemplateCache                    // Template rendering cache (Phase 10 enhancement)
+	csrfManager        *CSRFManager                     // CSRF token manager (Phase 12 enhancement)
+	metrics            *SilenceUIMetrics                // Prometheus metrics (Phase 14 enhancement)
+	securityConfig        *SecurityConfig           // Security configuration (Phase 13 enhancement)
+	compressionMiddleware *CompressionMiddleware    // Compression middleware (Phase 10 enhancement)
+	rateLimiter           *RateLimiter             // Rate limiter (Phase 13 enhancement)
+	logger                *slog.Logger
 }
 
 // NewSilenceUIHandler creates a new SilenceUIHandler.
