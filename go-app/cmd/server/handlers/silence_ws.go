@@ -42,8 +42,8 @@ type WebSocketHub struct {
 	// Logger
 	logger *slog.Logger
 
-	// Metrics (optional)
-	activeConnections int
+	// Metrics (Phase 14 enhancement)
+	metrics *SilenceUIMetrics
 }
 
 // SilenceEvent represents a WebSocket event.
@@ -61,7 +61,13 @@ func NewWebSocketHub(logger *slog.Logger) *WebSocketHub {
 		register:   make(chan *websocket.Conn),
 		unregister: make(chan *websocket.Conn),
 		logger:     logger,
+		metrics:    nil, // Will be set by SetMetrics if needed
 	}
+}
+
+// SetMetrics sets the metrics instance for the WebSocket hub.
+func (h *WebSocketHub) SetMetrics(metrics *SilenceUIMetrics) {
+	h.metrics = metrics
 }
 
 // Start starts the WebSocket hub (run in goroutine).
@@ -78,26 +84,44 @@ func (h *WebSocketHub) Start(ctx context.Context) {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
-			h.activeConnections = len(h.clients)
+			clientCount := len(h.clients)
 			h.mu.Unlock()
+
+			// Update metrics (Phase 14 enhancement)
+			if h.metrics != nil {
+				h.metrics.UpdateWebSocketConnections(clientCount)
+			}
+
 			h.logger.Debug("WebSocket client registered",
-				"total_clients", h.activeConnections,
+				"total_clients", clientCount,
 				"remote_addr", client.RemoteAddr().String(),
 			)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
+			clientCount := len(h.clients)
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				client.Close()
-				h.activeConnections = len(h.clients)
+				clientCount = len(h.clients)
 			}
 			h.mu.Unlock()
+
+			// Update metrics (Phase 14 enhancement)
+			if h.metrics != nil {
+				h.metrics.UpdateWebSocketConnections(clientCount)
+			}
+
 			h.logger.Debug("WebSocket client unregistered",
-				"total_clients", h.activeConnections,
+				"total_clients", clientCount,
 			)
 
 		case event := <-h.broadcast:
+			// Record metrics (Phase 14 enhancement)
+			if h.metrics != nil {
+				h.metrics.RecordWebSocketMessage(event.Type)
+			}
+
 			h.mu.RLock()
 			clientCount := len(h.clients)
 			h.mu.RUnlock()
@@ -231,7 +255,11 @@ func (h *WebSocketHub) closeAllConnections() {
 	}
 
 	h.clients = make(map[*websocket.Conn]bool)
-	h.activeConnections = 0
+
+	// Update metrics (Phase 14 enhancement)
+	if h.metrics != nil {
+		h.metrics.UpdateWebSocketConnections(0)
+	}
 
 	h.logger.Info("All WebSocket connections closed")
 }
