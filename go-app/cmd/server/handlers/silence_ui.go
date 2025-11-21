@@ -38,6 +38,9 @@ type SilenceUIHandler struct {
 	compressionMiddleware *CompressionMiddleware    // Compression middleware (Phase 10 enhancement)
 	rateLimiter           *SilenceUIRateLimiter    // Rate limiter (Phase 13 enhancement)
 	gracefulDegradation   *GracefulDegradation     // Graceful degradation (Phase 12 enhancement)
+	structuredLogging     *StructuredLogging      // Structured logging (Phase 14 enhancement)
+	performanceMonitor    *PerformanceMonitor     // Performance monitoring (Phase 10 enhancement)
+	queryOptimizer        *DatabaseQueryOptimizer // Query optimization (Phase 10 enhancement)
 	logger                *slog.Logger
 }
 
@@ -71,6 +74,9 @@ func NewSilenceUIHandler(
 		metrics:            NewSilenceUIMetrics(logger),                  // Phase 14: Prometheus metrics
 		securityConfig:     nil, // Will be set via SetSecurityConfig if needed (Phase 13)
 		gracefulDegradation: NewGracefulDegradation(logger),            // Phase 12: Graceful degradation
+		structuredLogging:  NewStructuredLogging(logger),              // Phase 14: Structured logging
+		performanceMonitor: NewPerformanceMonitor(logger),             // Phase 10: Performance monitoring
+		queryOptimizer:     NewDatabaseQueryOptimizer(logger),         // Phase 10: Query optimization
 		logger:             logger,
 	}
 
@@ -99,8 +105,17 @@ func (h *SilenceUIHandler) RenderDashboard(w http.ResponseWriter, r *http.Reques
 		// Continue with sanitized filters
 	}
 
+	// Optimize filter (Phase 10 enhancement)
+	silenceFilter := filters.ToSilenceFilter()
+	if h.queryOptimizer != nil {
+		silenceFilter = h.queryOptimizer.OptimizeFilter(silenceFilter)
+		// Update filters with optimized values
+		filters.Limit = silenceFilter.Limit
+		filters.Offset = silenceFilter.Offset
+	}
+
 	// Fetch silences from manager
-	silences, err := h.manager.ListSilences(ctx, filters.ToSilenceFilter())
+	silences, err := h.manager.ListSilences(ctx, silenceFilter)
 	if err != nil {
 		h.logger.Error("Failed to list silences", "error", err)
 		h.renderError(w, r, "Failed to load silences", http.StatusInternalServerError)
@@ -140,6 +155,14 @@ func (h *SilenceUIHandler) RenderDashboard(w http.ResponseWriter, r *http.Reques
 	// Record metrics (Phase 14 enhancement)
 	if h.metrics != nil {
 		h.metrics.RecordPageRender("dashboard", duration, "success")
+	}
+
+	// Enhanced structured logging (Phase 14 enhancement)
+	h.logPageRenderWithContext(r, "dashboard", duration, http.StatusOK)
+
+	// Performance monitoring (Phase 10 enhancement)
+	if h.performanceMonitor != nil {
+		h.performanceMonitor.RecordRenderTime("dashboard", duration)
 	}
 
 	h.logger.Debug("Dashboard rendered",
