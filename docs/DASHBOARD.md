@@ -72,10 +72,10 @@ GET /dashboard/modern
 
 ### API Endpoints
 Dashboard использует следующие API endpoints:
-- `/api/dashboard/overview` - основная статистика
+- `/api/dashboard/overview` - основная статистика ✅ **150% Quality Certified** (TN-81, 2025-11-21)
 - `/api/dashboard/health` - здоровье системы
 - `/api/dashboard/charts` - данные для графиков
-- `/api/dashboard/alerts/recent` - недавние алерты
+- `/api/dashboard/alerts/recent` - недавние алерты ✅ **150% Quality Certified** (TN-84, 2025-11-20)
 - `/publishing/mode` - режим публикации
 - `/publishing/stats` - статистика публикации
 - `/publishing/targets` - список targets

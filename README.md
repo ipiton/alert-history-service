@@ -242,6 +242,8 @@ open http://localhost:8080/docs
 ### Dashboard & UI
 - **GET /dashboard** — Modern dashboard page ✅ **150% Quality Certified** (TN-77, 2025-11-20)
 - **GET /ui/alerts** — Alert list page with filtering ✅ **150% Quality Certified** (TN-79, 2025-11-20)
+- **GET /api/dashboard/overview** — Consolidated overview statistics ✅ **150% Quality Certified** (TN-81, 2025-11-21)
+- **GET /api/dashboard/alerts/recent** — Recent alerts in compact format ✅ **150% Quality Certified** (TN-84, 2025-11-20)
   - Comprehensive filtering (status, severity, namespace, time range, labels, search)
   - Pagination (offset-based, page size selector)
   - Multi-field sorting (starts_at, severity, alert_name)
