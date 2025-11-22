@@ -5,10 +5,10 @@
 
 ## 📊 Overall Progress
 
-- **Total Tasks for OSS Core**: 109 tasks
-- **Completed**: 72 tasks (66%)
+- **Total Tasks for OSS Core**: 114 tasks (109 original + 5 Deployment Profiles)
+- **Completed**: 72 tasks (63%)
 - **In Progress**: 0 tasks
-- **Not Started**: 37 tasks (34%)
+- **Not Started**: 42 tasks (37%)
 
 ---
 
@@ -222,14 +222,55 @@
 
 ---
 
-## 🔄 Phase 13: Production Packaging (NOT STARTED 0%)
+## 🔄 Phase 13: Production Packaging (NOT STARTED 0% - 10 tasks)
+
+### Deployment Profiles Implementation
+
+- [ ] **TN-200** Deployment Profile Configuration Support
+  - Add `profile` field to Config struct (values: `lite`, `standard`)
+  - Add `storage.backend` field (`filesystem` for Lite, `postgres` for Standard)
+  - Add profile validation logic
+  - Update config.yaml with profile examples
+
+- [ ] **TN-201** Storage Backend Selection Logic
+  - Implement conditional storage initialization based on profile
+  - **Lite Profile**: SQLite/BadgerDB embedded storage (PVC-based)
+  - **Standard Profile**: PostgreSQL external storage
+  - Add storage backend detection and fallback logic
+  - Ensure all components work with both backends
+
+- [ ] **TN-202** Redis Conditional Initialization
+  - Add conditional Redis initialization (Standard Profile only)
+  - Graceful degradation for Lite Profile (memory-only cache)
+  - Update cache layer to support both Redis and in-memory modes
+  - Add metrics for cache backend type
+
+- [ ] **TN-203** Main.go Profile-Based Initialization
+  - Update main.go to initialize components based on selected profile
+  - Add profile detection and validation at startup
+  - Conditional service initialization (Postgres/Redis only for Standard)
+  - Add startup logging with profile information
+
+- [ ] **TN-204** Profile Configuration Validation
+  - Validate Lite Profile: no Postgres/Redis required
+  - Validate Standard Profile: Postgres required, Redis optional
+  - Add helpful error messages for misconfiguration
+  - Add configuration health checks
+
+### Helm & Kubernetes
 
 - [x] **TN-24** Basic Helm chart ✅ **COMPLETED** (helm/alert-history-go/)
-- [ ] **TN-96** Production Helm chart with all features
-- [ ] **TN-97** HPA configuration (2-10 replicas)
-- [ ] **TN-98** PostgreSQL StatefulSet
-- [ ] **TN-99** Redis StatefulSet
-- [ ] **TN-100** ConfigMaps & Secrets management
+- [ ] **TN-96** Production Helm chart with Deployment Profiles (Lite & Standard)
+  - **Lite Profile**: Single-node, PVC-based, embedded storage (SQLite/BadgerDB), no Postgres/Redis
+  - **Standard Profile**: HA-ready, Postgres + Redis, extended history, 2-10 replicas
+  - Add `profile` value with conditional logic
+  - Update values.yaml with profile-specific defaults
+  - Add profile documentation in Helm chart README
+  - See [ROADMAP.md Deployment Profiles](../ROADMAP.md#deployment-profiles) for details
+- [ ] **TN-97** HPA configuration (2-10 replicas) - **Standard Profile only**
+- [ ] **TN-98** PostgreSQL StatefulSet - **Standard Profile only**
+- [ ] **TN-99** Redis StatefulSet - **Standard Profile only** (optional)
+- [ ] **TN-100** ConfigMaps & Secrets management (both profiles)
 
 ---
 
@@ -296,9 +337,18 @@
 - [ ] TN-153 to TN-156: Template System (4 tasks)
 
 ### P2 - Production Ready (Nice to Have)
-**Status: 1/20 tasks (5%)**
+**Status: 1/25 tasks (4%)**
 - [x] TN-24: Basic Helm chart ✅
-- [ ] TN-96 to TN-100: Production Packaging (5 tasks)
+- [ ] TN-200 to TN-204: Deployment Profiles Implementation (5 tasks)
+  - **TN-200**: Profile configuration support
+  - **TN-201**: Storage backend selection logic
+  - **TN-202**: Redis conditional initialization
+  - **TN-203**: Main.go profile-based initialization
+  - **TN-204**: Profile configuration validation
+- [ ] TN-96 to TN-100: Production Packaging with Deployment Profiles (Lite & Standard) (5 tasks)
+  - **TN-96**: Production Helm chart with Lite/Standard profiles
+  - **TN-97-99**: HA components (Standard Profile only)
+  - **TN-100**: ConfigMaps & Secrets (both profiles)
 - [ ] TN-106 to TN-109: Testing Suite (4 tasks)
 - [ ] TN-116 to TN-120, TN-176 to TN-180: Documentation (10 tasks)
 
@@ -334,8 +384,8 @@
 - **Average**: ~10 tasks/week
 
 ### Projected Timeline
-- **Remaining OSS Core Tasks**: 37 tasks
-- **At current velocity**: ~4 weeks
+- **Remaining OSS Core Tasks**: 42 tasks (37 original + 5 Deployment Profiles)
+- **At current velocity**: ~4-5 weeks
 - **With reduced team**: ~6-8 weeks
 - **Target Release**: v1.0 in 8 weeks
 
@@ -348,9 +398,14 @@
 3. **Performance**: All benchmarks exceed targets by 2-100x
 4. **Technical Debt**: Zero in completed components
 5. **Breaking Changes**: Zero - full backward compatibility maintained
+6. **Deployment Profiles**: Alertmanager++ supports two deployment profiles:
+   - **Lite Profile**: Single-node, PVC-based, embedded storage (SQLite/BadgerDB), no external dependencies
+   - **Standard Profile**: HA-ready, Postgres + Redis, extended history, scalable
+   - See [ROADMAP.md Deployment Profiles](../ROADMAP.md#deployment-profiles) for complete details
 
 ---
 
 *Task list based on original tasks.md*
 *Last updated: November 2025*
-*Total OSS Core Tasks: 109 (72 complete, 37 remaining)*
+*Total OSS Core Tasks: 114 (72 complete, 42 remaining)*
+*Includes 5 new Deployment Profiles tasks (TN-200 to TN-204)*
