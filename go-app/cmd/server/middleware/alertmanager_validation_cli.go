@@ -182,15 +182,15 @@ func (m *AlertmanagerValidationCLIMiddleware) validateWithCLI(ctx context.Contex
 	args := []string{
 		"validate",
 		"--mode", m.mode,
-		"--format", "json", // Request JSON output
+		"--output", "json", // Request JSON output
 		tmpFile.Name(),
 	}
 
 	if m.enableSecurity {
-		args = append(args, "--enable-security")
+		args = append(args, "--security")
 	}
 	if m.enableBestPractices {
-		args = append(args, "--enable-best-practices")
+		args = append(args, "--best-practices")
 	}
 
 	// Execute CLI with timeout
