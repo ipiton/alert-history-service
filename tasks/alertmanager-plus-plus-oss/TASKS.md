@@ -371,7 +371,7 @@
 ### Sprint 3 (Week 3) - Config & Templates
 1. [ ] TN-149: GET /api/v2/config
 2. [x] TN-152: Hot Reload ✅ (COMPLETED 2025-11-22, Quality: 155%)
-3. [ ] TN-153: Template Engine
+3. [x] TN-153: Template Engine ✅ (COMPLETED 2025-11-22, Quality: 150%)
 4. [ ] TN-154: Default Templates
 
 ---
