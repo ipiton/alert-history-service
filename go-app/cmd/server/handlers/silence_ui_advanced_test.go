@@ -3,7 +3,6 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,9 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"log/slog"
 
-	businesssilencing "github.com/vitaliisemenov/alert-history/internal/business/silencing"
 	coresilencing "github.com/vitaliisemenov/alert-history/internal/core/silencing"
 	infrasilencing "github.com/vitaliisemenov/alert-history/internal/infrastructure/silencing"
+	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
 )
 
 // TestSilenceUIHandler_ConcurrentAccess tests concurrent access to UI handler.
@@ -221,11 +220,10 @@ func setupUIHandlerForBenchmark(b *testing.B) *SilenceUIHandler {
 	logger := slog.Default()
 	mockManager := &mockSilenceManager{
 		silences: make([]*coresilencing.Silence, 0),
-		logger:   logger,
 	}
 	apiHandler := &SilenceHandler{} // Minimal mock
 	wsHub := NewWebSocketHub(logger)
-	cache := nil // No cache for benchmarks
+	var cache cache.Cache = nil // No cache for benchmarks
 
 	handler, err := NewSilenceUIHandler(mockManager, apiHandler, wsHub, cache, logger)
 	require.NoError(b, err)
