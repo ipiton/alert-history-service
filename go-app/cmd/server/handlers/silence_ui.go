@@ -26,12 +26,22 @@ var staticFS embed.FS
 
 // SilenceUIHandler handles UI rendering for Silence Management.
 type SilenceUIHandler struct {
-	manager    businesssilencing.SilenceManager // Business logic
-	apiHandler *SilenceHandler                  // API handler (reuse for data fetching)
-	templates  *template.Template               // Parsed templates
-	wsHub      *WebSocketHub                    // WebSocket hub for real-time updates
-	cache      cache.Cache                      // Response caching
-	logger     *slog.Logger
+	manager            businesssilencing.SilenceManager // Business logic
+	apiHandler         *SilenceHandler                    // API handler (reuse for data fetching)
+	templates          *template.Template                // Parsed templates
+	wsHub              *WebSocketHub                     // WebSocket hub for real-time updates
+	cache              cache.Cache                       // Response caching
+	templateCache      *TemplateCache                    // Template rendering cache (Phase 10 enhancement)
+	csrfManager        *CSRFManager                     // CSRF token manager (Phase 12 enhancement)
+	metrics            *SilenceUIMetrics                // Prometheus metrics (Phase 14 enhancement)
+	securityConfig        *SecurityConfig           // Security configuration (Phase 13 enhancement)
+	compressionMiddleware *CompressionMiddleware    // Compression middleware (Phase 10 enhancement)
+	rateLimiter           *SilenceUIRateLimiter    // Rate limiter (Phase 13 enhancement)
+	gracefulDegradation   *GracefulDegradation     // Graceful degradation (Phase 12 enhancement)
+	structuredLogging     *StructuredLogging      // Structured logging (Phase 14 enhancement)
+	performanceMonitor    *PerformanceMonitor     // Performance monitoring (Phase 10 enhancement)
+	queryOptimizer        *DatabaseQueryOptimizer // Query optimization (Phase 10 enhancement)
+	logger                *slog.Logger
 }
 
 // NewSilenceUIHandler creates a new SilenceUIHandler.
@@ -54,12 +64,20 @@ func NewSilenceUIHandler(
 	}
 
 	handler := &SilenceUIHandler{
-		manager:    manager,
-		apiHandler: apiHandler,
-		templates:  tmpl,
-		wsHub:      wsHub,
-		cache:      cache,
-		logger:     logger,
+		manager:       manager,
+		apiHandler:    apiHandler,
+		templates:     tmpl,
+		wsHub:         wsHub,
+		cache:         cache,
+		templateCache: NewTemplateCache(100, 5*time.Minute, logger), // Phase 10: Template caching
+		csrfManager:        NewCSRFManager(nil, 24*time.Hour, logger),  // Phase 12: CSRF protection
+		metrics:            NewSilenceUIMetrics(logger),                  // Phase 14: Prometheus metrics
+		securityConfig:     nil, // Will be set via SetSecurityConfig if needed (Phase 13)
+		gracefulDegradation: NewGracefulDegradation(logger),            // Phase 12: Graceful degradation
+		structuredLogging:  NewStructuredLogging(logger),              // Phase 14: Structured logging
+		performanceMonitor: NewPerformanceMonitor(logger),             // Phase 10: Performance monitoring
+		queryOptimizer:     NewDatabaseQueryOptimizer(logger),         // Phase 10: Query optimization
+		logger:             logger,
 	}
 
 	logger.Info("✅ SilenceUIHandler initialized successfully",
@@ -87,8 +105,17 @@ func (h *SilenceUIHandler) RenderDashboard(w http.ResponseWriter, r *http.Reques
 		// Continue with sanitized filters
 	}
 
+	// Optimize filter (Phase 10 enhancement)
+	silenceFilter := filters.ToSilenceFilter()
+	if h.queryOptimizer != nil {
+		silenceFilter = h.queryOptimizer.OptimizeFilter(silenceFilter)
+		// Update filters with optimized values
+		filters.Limit = silenceFilter.Limit
+		filters.Offset = silenceFilter.Offset
+	}
+
 	// Fetch silences from manager
-	silences, err := h.manager.ListSilences(ctx, filters.ToSilenceFilter())
+	silences, err := h.manager.ListSilences(ctx, silenceFilter)
 	if err != nil {
 		h.logger.Error("Failed to list silences", "error", err)
 		h.renderError(w, r, "Failed to load silences", http.StatusInternalServerError)
@@ -116,15 +143,28 @@ func (h *SilenceUIHandler) RenderDashboard(w http.ResponseWriter, r *http.Reques
 		CSRF:       h.generateCSRFToken(r),
 	}
 
-	// Render template
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "dashboard.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "dashboard.html", data); err != nil {
 		h.logger.Error("Failed to render dashboard template", "error", err)
 		h.renderError(w, r, "Failed to render page", http.StatusInternalServerError)
 		return
 	}
 
 	duration := time.Since(startTime)
+
+	// Record metrics (Phase 14 enhancement)
+	if h.metrics != nil {
+		h.metrics.RecordPageRender("dashboard", duration, "success")
+	}
+
+	// Enhanced structured logging (Phase 14 enhancement)
+	h.logPageRenderWithContext(r, "dashboard", duration, http.StatusOK)
+
+	// Performance monitoring (Phase 10 enhancement)
+	if h.performanceMonitor != nil {
+		h.performanceMonitor.RecordRenderTime("dashboard", duration)
+	}
+
 	h.logger.Debug("Dashboard rendered",
 		"duration_ms", duration.Milliseconds(),
 		"silences_count", len(silences),
@@ -154,8 +194,8 @@ func (h *SilenceUIHandler) RenderCreateForm(w http.ResponseWriter, r *http.Reque
 		ErrorFields: make(map[string]string),
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "create_form.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "create_form.html", data); err != nil {
 		h.logger.Error("Failed to render create form", "error", err)
 		h.renderError(w, r, "Failed to render form", http.StatusInternalServerError)
 		return
@@ -194,8 +234,8 @@ func (h *SilenceUIHandler) RenderDetailView(w http.ResponseWriter, r *http.Reque
 		RefreshRate:  10, // 10 seconds
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "detail_view.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "detail_view.html", data); err != nil {
 		h.logger.Error("Failed to render detail view", "error", err)
 		h.renderError(w, r, "Failed to render page", http.StatusInternalServerError)
 		return
@@ -235,8 +275,8 @@ func (h *SilenceUIHandler) RenderEditForm(w http.ResponseWriter, r *http.Request
 		ErrorFields: make(map[string]string),
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "edit_form.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "edit_form.html", data); err != nil {
 		h.logger.Error("Failed to render edit form", "error", err)
 		h.renderError(w, r, "Failed to render form", http.StatusInternalServerError)
 		return
@@ -253,8 +293,8 @@ func (h *SilenceUIHandler) RenderTemplates(w http.ResponseWriter, r *http.Reques
 		CSRF:      h.generateCSRFToken(r),
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "templates.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "templates.html", data); err != nil {
 		h.logger.Error("Failed to render templates page", "error", err)
 		h.renderError(w, r, "Failed to render page", http.StatusInternalServerError)
 		return
@@ -298,8 +338,8 @@ func (h *SilenceUIHandler) RenderAnalytics(w http.ResponseWriter, r *http.Reques
 		RefreshRate: 5 * time.Minute,
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "analytics.html", data); err != nil {
+	// Render template with caching (Phase 10 enhancement)
+	if err := h.renderWithCache(w, r, "analytics.html", data); err != nil {
 		h.logger.Error("Failed to render analytics page", "error", err)
 		h.renderError(w, r, "Failed to render page", http.StatusInternalServerError)
 		return
@@ -406,12 +446,8 @@ func (h *SilenceUIHandler) extractIDFromPath(path, prefix string) string {
 }
 
 // generateCSRFToken generates a CSRF token for forms.
-// TODO: Implement proper CSRF token generation with secret key + session.
-func (h *SilenceUIHandler) generateCSRFToken(r *http.Request) string {
-	// Placeholder: return a static token for now
-	// In production, use crypto/rand and store in session
-	return "csrf-token-placeholder"
-}
+// Phase 12: CSRF protection implementation.
+// Note: Actual implementation is in silence_ui_csrf.go
 
 // renderError renders an error page.
 func (h *SilenceUIHandler) renderError(w http.ResponseWriter, r *http.Request, message string, statusCode int) {

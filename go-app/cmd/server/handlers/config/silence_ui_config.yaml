@@ -1,0 +1,95 @@
+# Silence UI Components Configuration
+# Phase 15: Documentation - Configuration examples
+
+# Template Cache Configuration
+template_cache:
+  enabled: true
+  max_size: 100              # Maximum number of cached templates
+  ttl: 5m                    # Time-to-live for cached templates
+  eviction_policy: "LRU"     # Eviction policy (LRU only)
+
+# Compression Configuration
+compression:
+  enabled: true
+  level: 6                   # Gzip compression level (1-9)
+  min_size: 1024             # Minimum response size to compress (bytes)
+  content_types:             # Content types to compress
+    - "text/html"
+    - "text/css"
+    - "application/javascript"
+    - "application/json"
+    - "text/plain"
+
+# CSRF Protection Configuration
+csrf:
+  enabled: true
+  ttl: 24h                   # CSRF token time-to-live
+  secret_key: ""             # Secret key (leave empty for auto-generation)
+  cleanup_interval: 5m       # Cleanup interval for expired tokens
+
+# Rate Limiting Configuration
+rate_limiting:
+  enabled: true
+  limit_per_ip: 100          # Requests per IP per window
+  window: 1m                 # Rate limit window
+  cleanup_interval: 5m       # Cleanup interval for old entries
+
+# Security Configuration
+security:
+  allowed_origins:            # Allowed origins (CORS)
+    - "*"                     # Allow all (development)
+    # - "https://app.example.com"
+    # - "https://*.example.com"
+  security_headers:          # Security headers
+    x_content_type_options: "nosniff"
+    x_frame_options: "DENY"
+    x_xss_protection: "1; mode=block"
+    referrer_policy: "strict-origin-when-cross-origin"
+
+# Performance Monitoring Configuration
+performance:
+  enabled: true
+  track_render_times: true   # Track page render times
+  max_samples: 100           # Maximum samples per page
+  log_slow_requests: true   # Log requests slower than threshold
+  slow_request_threshold: 1s # Threshold for slow requests
+
+# Database Query Optimization
+query_optimization:
+  enabled: true
+  default_limit: 100         # Default pagination limit
+  max_limit: 1000            # Maximum pagination limit
+  query_timeout: 5s          # Query timeout
+
+# Observability Configuration
+observability:
+  metrics:
+    enabled: true
+    namespace: "alert_history"
+    subsystem: "ui"
+  logging:
+    level: "INFO"            # Log level (DEBUG, INFO, WARN, ERROR)
+    structured: true        # Use structured logging
+    include_context: true   # Include request context in logs
+
+# WebSocket Configuration
+websocket:
+  enabled: true
+  buffer_size: 256          # Broadcast channel buffer size
+  ping_interval: 30s        # Ping interval for keep-alive
+  pong_timeout: 10s         # Pong timeout
+  max_reconnect_attempts: 10 # Maximum reconnection attempts
+
+# Error Handling Configuration
+error_handling:
+  retry:
+    enabled: true
+    max_attempts: 3
+    initial_backoff: 100ms
+    max_backoff: 5s
+    backoff_multiplier: 2.0
+  graceful_degradation:
+    enabled: true
+    fallback_to_direct_render: true
+    continue_on_metrics_failure: true
+    continue_on_cache_failure: true
