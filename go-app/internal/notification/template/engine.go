@@ -400,26 +400,4 @@ func (e *DefaultNotificationTemplateEngine) handleExecutionError(tmpl string, er
 	return "", NewExecuteError(tmpl, err)
 }
 
-// createTemplateFuncs creates template function map
-//
-// This will be implemented in functions.go with 50+ functions.
-// For now, return empty map to allow compilation.
-func createTemplateFuncs() template.FuncMap {
-	funcs := make(template.FuncMap)
-
-	// TODO: Implement 50+ functions in functions.go
-	// - Time functions (20): date, humanizeTimestamp, since, etc.
-	// - String functions (15): toUpper, toLower, truncate, etc.
-	// - URL functions (5): urlEncode, pathJoin, etc.
-	// - Math functions (10): add, sub, humanize, etc.
-	// - Conditional functions (5): default, empty, ternary, etc.
-	// - Collection functions (10): sortAlpha, reverse, uniq, etc.
-	// - Encoding functions (5): b64enc, toJson, etc.
-
-	// Placeholder: Add basic functions
-	funcs["toUpper"] = func(s string) string {
-		return s // TODO: implement
-	}
-
-	return funcs
-}
+// createTemplateFuncs is implemented in functions.go
