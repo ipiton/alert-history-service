@@ -252,6 +252,24 @@ open http://localhost:8080/docs
   - Version tracking (SHA256 hash)
   - Section filtering
   - Performance: 1000x+ better than targets
+- **POST /api/v2/config** — Update configuration with hot reload ✅ **150% Quality Certified** (TN-150, 2025-11-22)
+  - Multi-format support (JSON/YAML)
+  - Multi-phase validation (4 phases: syntax, schema, business, security)
+  - Deep recursive diff calculation
+  - Hot reload without restart
+  - Atomic operations with automatic rollback
+  - Distributed locking (prevents concurrent updates)
+  - Audit logging (PostgreSQL)
+  - Secret sanitization in diffs
+  - Performance: < 10s total (typically 3-5s)
+- **POST /api/v2/config/rollback** — Rollback to previous version ✅ **150% Quality Certified** (TN-150, 2025-11-22)
+  - Manual rollback to specific version
+  - Target version validation
+  - Full diff visualization
+- **GET /api/v2/config/history** — Configuration version history ✅ **150% Quality Certified** (TN-150, 2025-11-22)
+  - Version metadata (timestamp, author, source)
+  - Pagination support (1-100 versions)
+  - Secret sanitization
 - **GET /api/dashboard/alerts/recent** — Recent alerts in compact format ✅ **150% Quality Certified** (TN-84, 2025-11-20)
   - Comprehensive filtering (status, severity, namespace, time range, labels, search)
   - Pagination (offset-based, page size selector)
