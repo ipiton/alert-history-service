@@ -2077,6 +2077,28 @@ func main() {
 			})
 	}
 
+	// TN-149: Initialize Config Service and register config export endpoint
+	slog.Info("Initializing Config Service (TN-149)")
+	configSource := appconfig.ConfigSourceDefaults
+	if resolvedConfigPath != "" {
+		configSource = appconfig.ConfigSourceFile
+	} else if len(os.Environ()) > 0 {
+		configSource = appconfig.ConfigSourceEnv
+	}
+	configService := appconfig.NewConfigService(cfg, resolvedConfigPath, time.Now(), configSource)
+	configHandler := handlers.NewConfigHandler(configService, appLogger)
+	mux.HandleFunc("GET /api/v2/config", configHandler.HandleGetConfig)
+	slog.Info("✅ Config export endpoint registered (TN-149)",
+		"endpoint", "GET /api/v2/config",
+		"features", []string{
+			"JSON format (default)",
+			"YAML format (?format=yaml)",
+			"Secret sanitization (default)",
+			"Section filtering (?sections=server,database)",
+			"Version tracking (SHA256 hash)",
+			"Source detection (file/env/defaults)",
+		})
+
 	// Add Prometheus metrics endpoint if enabled
 	// TN-65: Enhanced metrics endpoint with self-observability and error handling
 	if cfg.Metrics.Enabled {

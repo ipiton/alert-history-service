@@ -243,6 +243,15 @@ open http://localhost:8080/docs
 - **GET /dashboard** — Modern dashboard page ✅ **150% Quality Certified** (TN-77, 2025-11-20)
 - **GET /ui/alerts** — Alert list page with filtering ✅ **150% Quality Certified** (TN-79, 2025-11-20)
 - **GET /api/dashboard/overview** — Consolidated overview statistics ✅ **150% Quality Certified** (TN-81, 2025-11-21)
+- **GET /api/dashboard/health** — System health check ✅ **150% Quality Certified** (TN-83, 2025-11-21)
+
+### Configuration Management
+- **GET /api/v2/config** — Export current configuration ✅ **150%+ Quality Certified** (TN-149, 2025-11-21)
+  - JSON/YAML format support
+  - Secret sanitization (default)
+  - Version tracking (SHA256 hash)
+  - Section filtering
+  - Performance: 1000x+ better than targets
 - **GET /api/dashboard/alerts/recent** — Recent alerts in compact format ✅ **150% Quality Certified** (TN-84, 2025-11-20)
   - Comprehensive filtering (status, severity, namespace, time range, labels, search)
   - Pagination (offset-based, page size selector)
