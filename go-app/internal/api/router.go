@@ -58,6 +58,11 @@ type RouterConfig struct {
 		GetClassificationStats(w http.ResponseWriter, r *http.Request)
 		ClassifyAlert(w http.ResponseWriter, r *http.Request)
 	} // *classificationhandlers.ClassificationHandlers (avoid circular import via interface)
+
+	// TN-149: Config export endpoint dependency
+	ConfigService interface {
+		GetConfig(ctx interface{}, opts interface{}) (interface{}, error)
+	} // appconfig.ConfigService (avoid circular import via interface)
 }
 
 // DefaultRouterConfig returns default router configuration
@@ -146,6 +151,9 @@ func setupAPIv2Routes(router *mux.Router, config RouterConfig) {
 
 	// History routes (Phase 4)
 	setupHistoryRoutes(v2, config)
+
+	// Config routes (Phase 10)
+	setupConfigRoutes(v2, config)
 
 	// Enrichment routes (existing)
 	// setupEnrichmentRoutes(v2, config)
@@ -303,6 +311,19 @@ func setupAPIv1Routes(router *mux.Router, config RouterConfig) {
 		v1Publishing.HandleFunc("/mode", PlaceholderHandler("GetPublishingMode_v1")).Methods("GET")
 	}
 	// ... more legacy routes as needed
+}
+
+// setupConfigRoutes configures /api/v2/config routes
+func setupConfigRoutes(router *mux.Router, config RouterConfig) {
+	configRouter := router.PathPrefix("/config").Subrouter()
+
+	// TN-149: GET /api/v2/config - Export current configuration
+	if config.ConfigService != nil {
+		configHandler := handlers.NewConfigHandler(config.ConfigService, config.Logger)
+		configRouter.HandleFunc("", configHandler.HandleGetConfig).Methods("GET")
+	} else {
+		configRouter.HandleFunc("", PlaceholderHandler("GetConfig")).Methods("GET")
+	}
 }
 
 // setupDocumentationRoutes configures documentation routes
