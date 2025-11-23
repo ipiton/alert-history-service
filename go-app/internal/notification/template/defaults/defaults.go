@@ -91,6 +91,31 @@ func ValidateAllTemplates() error {
 			Reason:   "template is empty",
 		}
 	}
+	if registry.Slack.Pretext == "" {
+		return &TemplateValidationError{
+			Template: "Slack.Pretext",
+			Reason:   "template is empty",
+		}
+	}
+	if registry.Slack.FieldsSingle == "" {
+		return &TemplateValidationError{
+			Template: "Slack.FieldsSingle",
+			Reason:   "template is empty",
+		}
+	}
+	if registry.Slack.FieldsMulti == "" {
+		return &TemplateValidationError{
+			Template: "Slack.FieldsMulti",
+			Reason:   "template is empty",
+		}
+	}
+	// Validate Slack message size (combined size should be reasonable)
+	if !ValidateSlackMessageSize(registry.Slack.Title, registry.Slack.Text, registry.Slack.Pretext, registry.Slack.FieldsSingle) {
+		return &TemplateValidationError{
+			Template: "Slack",
+			Reason:   "combined template size exceeds 3000 char limit",
+		}
+	}
 
 	// Validate PagerDuty templates
 	if registry.PagerDuty.Description == "" {
@@ -103,6 +128,18 @@ func ValidateAllTemplates() error {
 		return &TemplateValidationError{
 			Template: "PagerDuty.Description",
 			Reason:   "template exceeds 1024 char limit",
+		}
+	}
+	if registry.PagerDuty.DetailsSingle == "" {
+		return &TemplateValidationError{
+			Template: "PagerDuty.DetailsSingle",
+			Reason:   "template is empty",
+		}
+	}
+	if registry.PagerDuty.DetailsMulti == "" {
+		return &TemplateValidationError{
+			Template: "PagerDuty.DetailsMulti",
+			Reason:   "template is empty",
 		}
 	}
 
@@ -123,6 +160,12 @@ func ValidateAllTemplates() error {
 		return &TemplateValidationError{
 			Template: "Email.HTML",
 			Reason:   "template exceeds 100KB limit",
+		}
+	}
+	if registry.Email.Text == "" {
+		return &TemplateValidationError{
+			Template: "Email.Text",
+			Reason:   "template is empty",
 		}
 	}
 
