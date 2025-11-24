@@ -1,0 +1,14 @@
+# Invalid Configuration: Missing Receiver Reference
+# This will fail validation with error E102
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: nonexistent-receiver  # ERROR: This receiver doesn't exist!
+  group_by: [alertname]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: https://example.com/webhook

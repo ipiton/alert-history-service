@@ -1,0 +1,142 @@
+# Production-Grade Alertmanager Configuration
+# Demonstrates best practices for production environments
+
+global:
+  resolve_timeout: 5m
+  http_config:
+    follow_redirects: true
+  smtp_smarthost: smtp.example.com:587
+  smtp_from: alertmanager@example.com
+  smtp_require_tls: true
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  receiver: default
+  group_by: [alertname, cluster, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Critical alerts go to PagerDuty
+    - receiver: critical-pagerduty
+      matchers:
+        - severity=critical
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true  # Also send to Slack
+
+    # Critical alerts also go to Slack
+    - receiver: critical-slack
+      matchers:
+        - severity=critical
+      group_wait: 10s
+
+    # Database team alerts
+    - receiver: database-team
+      matchers:
+        - service=~database.*
+      group_by: [alertname, instance]
+
+      routes:
+        - receiver: dba-oncall
+          matchers:
+            - severity=critical
+        - receiver: dba-team
+          matchers:
+            - severity=warning
+
+    # Frontend team alerts
+    - receiver: frontend-team
+      matchers:
+        - service=~frontend.*
+        - team=frontend
+      group_by: [alertname, instance]
+
+    # Backend team alerts
+    - receiver: backend-team
+      matchers:
+        - service=~backend.*
+        - team=backend
+      group_by: [alertname, instance]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: https://example.com/webhook/default
+        send_resolved: true
+
+  - name: critical-pagerduty
+    pagerduty_configs:
+      - service_key_file: /etc/alertmanager/secrets/pagerduty-key-critical
+        description: '{{ .CommonAnnotations.summary }}'
+        severity: '{{ .CommonLabels.severity }}'
+
+  - name: critical-slack
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-critical
+        channel: "#critical-alerts"
+        title: "🔴 CRITICAL: {{ .CommonLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        send_resolved: true
+
+  - name: database-team
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-database
+        channel: "#database-alerts"
+        title: "{{ .CommonLabels.alertname }}"
+
+  - name: dba-oncall
+    pagerduty_configs:
+      - service_key_file: /etc/alertmanager/secrets/pagerduty-key-dba
+        description: '{{ .GroupLabels.alertname }}: {{ .GroupLabels.instance }}'
+
+  - name: dba-team
+    email_configs:
+      - to: dba-team@example.com
+        from: alertmanager@example.com
+        headers:
+          Subject: 'Database Alert: {{ .CommonLabels.alertname }}'
+
+  - name: frontend-team
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-frontend
+        channel: "#frontend-alerts"
+    email_configs:
+      - to: frontend-team@example.com
+
+  - name: backend-team
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-backend
+        channel: "#backend-alerts"
+    email_configs:
+      - to: backend-team@example.com
+
+inhibit_rules:
+  # Inhibit warning alerts when critical alerts are firing
+  - source_matchers:
+      - severity=critical
+    target_matchers:
+      - severity=warning
+    equal:
+      - alertname
+      - instance
+
+  # Inhibit HostNetworkDown when HostDown is firing
+  - source_matchers:
+      - alertname=HostDown
+    target_matchers:
+      - alertname=HostNetworkDown
+    equal:
+      - instance
+
+  # Inhibit HighErrorRate when ServiceDown is firing
+  - source_matchers:
+      - alertname=ServiceDown
+    target_matchers:
+      - alertname=HighErrorRate
+    equal:
+      - service
+      - instance
