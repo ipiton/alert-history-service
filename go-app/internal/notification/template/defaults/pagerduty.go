@@ -29,7 +29,7 @@ import "strings"
 // Example outputs:
 // - "[RESOLVED] HighCPU: CPU usage above threshold"
 // - "HighCPU: CPU usage above threshold"
-const DefaultPagerDutyDescription = `{{ if eq .Status "resolved" }}[RESOLVED] {{ end }}{{ .GroupLabels.alertname }}{{ if .CommonAnnotations.summary }}: {{ .CommonAnnotations.summary | trunc 100 }}{{ end }}`
+const DefaultPagerDutyDescription = `{{ if eq .Status "resolved" }}[RESOLVED] {{ end }}{{ .GroupLabels.alertname }}{{ if .CommonAnnotations.summary }}: {{ .CommonAnnotations.summary | truncate 100 }}{{ end }}`
 
 // DefaultPagerDutyDetailsSingle is the default template for PagerDuty incident details (single alert).
 // Returns JSON object with detailed context.
