@@ -186,7 +186,8 @@ func printHuman(result *configvalidator.Result) error {
 	// Print errors
 	if len(result.Errors) > 0 {
 		printSection("ERRORS", len(result.Errors))
-		for _, issue := range result.Errors {
+		for _, err := range result.Errors {
+			issue := errorToIssue(&err)
 			printIssue(issue, "ERROR")
 		}
 		fmt.Println()
@@ -195,7 +196,8 @@ func printHuman(result *configvalidator.Result) error {
 	// Print warnings (unless quiet mode)
 	if !quiet && len(result.Warnings) > 0 {
 		printSection("WARNINGS", len(result.Warnings))
-		for _, issue := range result.Warnings {
+		for _, warn := range result.Warnings {
+			issue := warningToIssue(&warn)
 			printIssue(issue, "WARNING")
 		}
 		fmt.Println()
@@ -205,7 +207,8 @@ func printHuman(result *configvalidator.Result) error {
 	if verbose {
 		if len(result.Info) > 0 {
 			printSection("INFO", len(result.Info))
-			for _, issue := range result.Info {
+			for _, info := range result.Info {
+				issue := infoToIssue(&info)
 				printIssue(issue, "INFO")
 			}
 			fmt.Println()
@@ -213,7 +216,8 @@ func printHuman(result *configvalidator.Result) error {
 
 		if len(result.Suggestions) > 0 {
 			printSection("SUGGESTIONS", len(result.Suggestions))
-			for _, issue := range result.Suggestions {
+			for _, sugg := range result.Suggestions {
+				issue := suggestionToIssue(&sugg)
 				printIssue(issue, "SUGGESTION")
 			}
 			fmt.Println()
@@ -231,6 +235,51 @@ func printSection(title string, count int) {
 		fmt.Printf("=== %s (%d) ===\n", title, count)
 	} else {
 		fmt.Printf("\033[1m=== %s (%d) ===\033[0m\n", title, count)
+	}
+}
+
+// Helper functions to convert types to Issue
+func errorToIssue(err *configvalidator.Error) *configvalidator.Issue {
+	return &configvalidator.Issue{
+		Level:      "error",
+		Code:       err.Code,
+		Message:    err.Message,
+		Location:   &err.Location,
+		Context:    err.Context,
+		Suggestion: err.Suggestion,
+		DocsURL:    err.DocsURL,
+		FieldPath:  err.Location.Field,
+	}
+}
+
+func warningToIssue(warn *configvalidator.Warning) *configvalidator.Issue {
+	return &configvalidator.Issue{
+		Level:      "warning",
+		Code:       warn.Code,
+		Message:    warn.Message,
+		Location:   &warn.Location,
+		Suggestion: warn.Suggestion,
+		DocsURL:    warn.DocsURL,
+		FieldPath:  warn.Location.Field,
+	}
+}
+
+func infoToIssue(info *configvalidator.Info) *configvalidator.Issue {
+	return &configvalidator.Issue{
+		Level:     "info",
+		Code:      info.Type,
+		Message:   info.Message,
+		Location:  &info.Location,
+		FieldPath: info.Location.Field,
+	}
+}
+
+func suggestionToIssue(sugg *configvalidator.Suggestion) *configvalidator.Issue {
+	return &configvalidator.Issue{
+		Level:     "suggestion",
+		Code:      sugg.Type,
+		Message:   sugg.Message,
+		FieldPath: "",
 	}
 }
 
@@ -369,17 +418,20 @@ func convertToSARIFResults(result *configvalidator.Result) []map[string]interfac
 	var results []map[string]interface{}
 
 	// Add errors
-	for _, issue := range result.Errors {
+	for _, err := range result.Errors {
+		issue := errorToIssue(&err)
 		results = append(results, issueToSARIF(issue, "error"))
 	}
 
 	// Add warnings
-	for _, issue := range result.Warnings {
+	for _, warn := range result.Warnings {
+		issue := warningToIssue(&warn)
 		results = append(results, issueToSARIF(issue, "warning"))
 	}
 
 	// Add info
-	for _, issue := range result.Info {
+	for _, info := range result.Info {
+		issue := infoToIssue(&info)
 		results = append(results, issueToSARIF(issue, "note"))
 	}
 
