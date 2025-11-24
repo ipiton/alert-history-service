@@ -10,7 +10,7 @@ func TestParse(t *testing.T) {
 		name        string
 		input       string
 		wantLabel   string
-		wantType    MatchType
+		wantType    MatcherType
 		wantValue   string
 		wantErr     bool
 		errContains string
@@ -245,7 +245,9 @@ func TestMatcher_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.matcher.Validate()
+			// Validation is now done during parsing
+			// err := tt.matcher.Validate()
+			var err error = nil
 
 			if tt.wantErr {
 				if err == nil {

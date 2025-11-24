@@ -64,6 +64,30 @@ func (m *Matcher) IsRegex() bool {
 	return m.Type == MatchRegexp || m.Type == MatchNotRegexp
 }
 
+// Matches tests if a set of labels matches the matcher.
+func (m *Matcher) Matches(labels map[string]string) bool {
+	val, exists := labels[m.Label]
+	
+	switch m.Type {
+	case MatchEqual:
+		return exists && val == m.Value
+	case MatchNotEqual:
+		return !exists || val != m.Value
+	case MatchRegexp:
+		if !exists {
+			return false
+		}
+		return m.CompiledRegex != nil && m.CompiledRegex.MatchString(val)
+	case MatchNotRegexp:
+		if !exists {
+			return true
+		}
+		return m.CompiledRegex != nil && !m.CompiledRegex.MatchString(val)
+	default:
+		return false
+	}
+}
+
 // ParseError represents a matcher parse error.
 type ParseError struct {
 	Matcher    string

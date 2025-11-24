@@ -360,7 +360,7 @@ func TestResult_ExitCode(t *testing.T) {
 			name: "warnings in strict mode",
 			result: &Result{
 				Valid: false,
-				Warnings: []Warning{
+				Warnings: []Error{
 					{Code: "W001", Message: "test warning"},
 				},
 			},
@@ -371,7 +371,7 @@ func TestResult_ExitCode(t *testing.T) {
 			name: "warnings in lenient mode",
 			result: &Result{
 				Valid: true,
-				Warnings: []Warning{
+				Warnings: []Error{
 					{Code: "W001", Message: "test warning"},
 				},
 			},
