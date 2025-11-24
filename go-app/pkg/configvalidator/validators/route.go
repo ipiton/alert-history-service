@@ -30,12 +30,14 @@ import (
 // RouteValidator validates route configuration.
 type RouteValidator struct {
 	receiverNames map[string]bool
+	opts          types.Options
 }
 
 // NewRouteValidator creates a new route validator.
-func NewRouteValidator() *RouteValidator {
+func NewRouteValidator(opts types.Options) *RouteValidator {
 	return &RouteValidator{
 		receiverNames: make(map[string]bool),
+		opts:          opts,
 	}
 }
 
