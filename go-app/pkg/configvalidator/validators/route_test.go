@@ -57,8 +57,15 @@ func TestRouteValidator_ValidReceiver(t *testing.T) {
 			validator := NewRouteValidator(types.DefaultOptions())
 			validator.receiverNames = tt.receiverNames
 
+			// Build receivers array from receiverNames map
+			receivers := make([]config.Receiver, 0, len(tt.receiverNames))
+			for name := range tt.receiverNames {
+				receivers = append(receivers, config.Receiver{Name: name})
+			}
+
 			cfg := &config.AlertmanagerConfig{
-				Route: tt.route,
+				Route:     tt.route,
+				Receivers: receivers,
 			}
 
 			result := validator.Validate(context.Background(), cfg)
@@ -119,6 +126,7 @@ func TestRouteValidator_Matchers(t *testing.T) {
 					Receiver: "default",
 					Matchers: tt.matchers,
 				},
+				Receivers: []config.Receiver{{Name: "default"}},
 			}
 
 			result := validator.Validate(context.Background(), cfg)
@@ -179,6 +187,7 @@ func TestRouteValidator_DeprecatedMatch(t *testing.T) {
 					Match:    tt.match,
 					MatchRE:  tt.matchRE,
 				},
+				Receivers: []config.Receiver{{Name: "default"}},
 			}
 
 			result := validator.Validate(context.Background(), cfg)
@@ -244,6 +253,7 @@ func TestRouteValidator_GroupBy(t *testing.T) {
 					Receiver: "default",
 					GroupBy:  tt.groupBy,
 				},
+				Receivers: []config.Receiver{{Name: "default"}},
 			}
 
 			result := validator.Validate(context.Background(), cfg)
@@ -303,6 +313,11 @@ func TestRouteValidator_NestedRoutes(t *testing.T) {
 				Route: &config.Route{
 					Receiver: "default",
 					Routes:   tt.routes,
+				},
+				Receivers: []config.Receiver{
+					{Name: "default"},
+					{Name: "team-a"},
+					{Name: "team-b"},
 				},
 			}
 
@@ -366,6 +381,10 @@ func TestRouteValidator_EdgeCases(t *testing.T) {
 
 			cfg := &config.AlertmanagerConfig{
 				Route: tt.route,
+				Receivers: []config.Receiver{
+					{Name: "default"},
+					{Name: "team-a"},
+				},
 			}
 
 			result := validator.Validate(context.Background(), cfg)
