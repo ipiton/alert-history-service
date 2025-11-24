@@ -2,9 +2,9 @@
 
 **Enterprise-Grade Template Engine for Alertmanager++ OSS**
 
-Version: 1.0.0  
-Date: 2025-11-24  
-Quality: 150% Enterprise Grade  
+Version: 1.0.0
+Date: 2025-11-24
+Quality: 150% Enterprise Grade
 Author: Alertmanager++ Team
 
 ---
@@ -30,12 +30,12 @@ The Template Engine provides a powerful and flexible way to format notification 
 
 ### Key Features
 
-✅ **Alertmanager Compatibility**: 100% compatible with Alertmanager template functions  
-✅ **High Performance**: LRU cache with 95%+ hit ratio, <5ms p95 execution  
-✅ **Enterprise Security**: Timeout protection, graceful fallbacks, sanitization  
-✅ **Rich Function Library**: 50+ functions for time, strings, URLs, math, collections  
-✅ **Hot Reload**: Cache invalidation on configuration changes (SIGHUP)  
-✅ **Observability**: Prometheus metrics, structured logging (slog)  
+✅ **Alertmanager Compatibility**: 100% compatible with Alertmanager template functions
+✅ **High Performance**: LRU cache with 95%+ hit ratio, <5ms p95 execution
+✅ **Enterprise Security**: Timeout protection, graceful fallbacks, sanitization
+✅ **Rich Function Library**: 50+ functions for time, strings, URLs, math, collections
+✅ **Hot Reload**: Cache invalidation on configuration changes (SIGHUP)
+✅ **Observability**: Prometheus metrics, structured logging (slog)
 ✅ **Multi-Receiver Support**: Slack, PagerDuty, Email, Webhook
 
 ### Architecture
@@ -166,7 +166,7 @@ type TemplateData struct {
     Labels      map[string]string // Alert labels
     Annotations map[string]string // Alert annotations
     StartsAt    time.Time         // Alert start time
-    
+
     // Computed fields
     IsFiring    bool              // true if Status == "firing"
     IsResolved  bool              // true if Status == "resolved"
@@ -700,7 +700,7 @@ template_errors_total{error_type="timeout"}
 histogram_quantile(0.95, rate(template_execution_duration_seconds_bucket[5m]))
 
 # Cache hit rate
-rate(template_cache_hits_total[5m]) / 
+rate(template_cache_hits_total[5m]) /
 (rate(template_cache_hits_total[5m]) + rate(template_cache_misses_total[5m]))
 
 # Error rate
@@ -717,10 +717,10 @@ groups:
         expr: rate(template_errors_total[5m]) > 0.1
         annotations:
           summary: "High template error rate"
-          
+
       - alert: LowCacheHitRate
         expr: |
-          rate(template_cache_hits_total[5m]) / 
+          rate(template_cache_hits_total[5m]) /
           (rate(template_cache_hits_total[5m]) + rate(template_cache_misses_total[5m])) < 0.9
         annotations:
           summary: "Template cache hit rate below 90%"
@@ -760,10 +760,9 @@ groups:
 
 ---
 
-**Quality Grade: A (150% Enterprise)**  
-**Production Ready: ✅ YES**  
-**Test Coverage: 75.4%**  
+**Quality Grade: A (150% Enterprise)**
+**Production Ready: ✅ YES**
+**Test Coverage: 75.4%**
 **Performance: Exceeds Targets**
 
 *For questions or support, contact the Alertmanager++ team.*
-

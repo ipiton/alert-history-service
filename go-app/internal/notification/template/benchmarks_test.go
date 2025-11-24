@@ -483,4 +483,3 @@ func BenchmarkMemory_NewTemplateData(b *testing.B) {
 		_ = NewTemplateData("firing", labels, annotations, now)
 	}
 }
-
