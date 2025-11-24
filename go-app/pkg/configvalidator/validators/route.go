@@ -243,26 +243,28 @@ func (rv *RouteValidator) validateRouteTree(
 
 	// Validate group_by
 	if len(route.GroupBy) == 0 && depth == 0 {
-		result.AddInfo(
-			"I100",
-			"Root route has no 'group_by', alerts will be grouped by all labels",
-			&types.Location{Field: path + ".group_by", Section: "route"},
-			path+".group_by",
-			"route",
-			"",
-			"",
-			"",
-		)
-		result.AddSuggestion(
-			"S100",
-			"Consider adding group_by for better alert grouping",
-			&types.Location{Field: path + ".group_by", Section: "route"},
-			path+".group_by",
-			"route",
-			"",
-			"Example: group_by: ['alertname', 'cluster']",
-			"",
-		)
+		if rv.opts.EnableBestPractices {
+			result.AddInfo(
+				"I100",
+				"Root route has no 'group_by', alerts will be grouped by all labels",
+				&types.Location{Field: path + ".group_by", Section: "route"},
+				path+".group_by",
+				"route",
+				"",
+				"",
+				"",
+			)
+			result.AddSuggestion(
+				"S100",
+				"Consider adding group_by for better alert grouping",
+				&types.Location{Field: path + ".group_by", Section: "route"},
+				path+".group_by",
+				"route",
+				"",
+				"Example: group_by: ['alertname', 'cluster']",
+				"",
+			)
+		}
 	}
 
 	// Validate group_by labels

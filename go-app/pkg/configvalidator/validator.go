@@ -277,7 +277,7 @@ func (v *defaultValidator) ValidateConfig(cfg *config.AlertmanagerConfig) (*Resu
 	// Phase 2: Semantic validation (parallel)
 	// Route validator
 	if v.shouldRunValidator([]string{"route", "routes", "all"}) {
-		routeValidator := validators.NewRouteValidator()
+		routeValidator := validators.NewRouteValidator(v.opts)
 		routeResult := routeValidator.Validate(ctx, cfg)
 		result.Merge(routeResult)
 	}
