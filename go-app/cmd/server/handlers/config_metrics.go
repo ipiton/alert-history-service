@@ -2,10 +2,16 @@
 package handlers
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	configExportMetricsOnce sync.Once
+	configExportMetrics     *ConfigExportMetrics
 )
 
 // ConfigExportMetrics tracks metrics for GET /api/v2/config endpoint.
@@ -52,15 +58,15 @@ type ConfigExportMetrics struct {
 //   4. alert_history_api_config_export_size_bytes (Histogram)
 //
 // Metrics are automatically registered with the default Prometheus registry.
-// Uses promauto for automatic registration (panic on duplicate registration).
+// Uses sync.Once to ensure metrics are registered only once, preventing duplicate registration errors.
 //
 // Returns:
-//   - *ConfigExportMetrics: Initialized metrics collector
+//   - *ConfigExportMetrics: Initialized metrics collector (singleton)
 //
-// Panics:
-//   - If metrics are already registered (duplicate call)
+// Thread-safe: Multiple calls return the same instance
 func NewConfigExportMetrics() *ConfigExportMetrics {
-	return &ConfigExportMetrics{
+	configExportMetricsOnce.Do(func() {
+		configExportMetrics = &ConfigExportMetrics{
 		// Metric 1: HTTP request counter by format, sanitized, status
 		requestsTotal: promauto.NewCounterVec(
 			prometheus.CounterOpts{
@@ -100,7 +106,9 @@ func NewConfigExportMetrics() *ConfigExportMetrics {
 				Buckets: []float64{100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000},
 			},
 		),
-	}
+		}
+	})
+	return configExportMetrics
 }
 
 // RecordRequest records metrics for a completed request.
