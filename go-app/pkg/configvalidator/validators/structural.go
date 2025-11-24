@@ -3,7 +3,6 @@ package validators
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 

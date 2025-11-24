@@ -112,34 +112,29 @@ func (rv *RouteValidator) validateRouteTree(
 	// Validate receiver reference
 	if route.Receiver != "" {
 		if !rv.receiverNames[route.Receiver] {
-			result.AddError(types.Error{
-				Type:    "route",
-				Code:    "E102",
-				Message: fmt.Sprintf("Receiver '%s' not found", route.Receiver),
-				Location: types.Location{
-					Field:   path + ".receiver",
-					Section: "route",
-				},
-				Suggestion: fmt.Sprintf(
-					"Add receiver '%s' to 'receivers' section or fix typo. Available: %s",
-					route.Receiver,
-					rv.formatReceiverNames(),
-				),
-				DocsURL: "https://prometheus.io/docs/alerting/latest/configuration/#receiver",
-			})
+			result.AddError(
+				"E102",
+				fmt.Sprintf("Receiver '%s' not found", route.Receiver),
+				&types.Location{Field: path + ".receiver", Section: "route"},
+				path+".receiver",
+				"route",
+				"",
+				fmt.Sprintf("Add receiver '%s' to 'receivers' section or fix typo. Available: %s", route.Receiver, rv.formatReceiverNames()),
+				"https://prometheus.io/docs/alerting/latest/configuration/#receiver",
+			)
 		}
 	} else if depth == 0 {
 		// Root route must have receiver
-		result.AddError(types.Error{
-			Type:    "route",
-			Code:    "E103",
-			Message: "Root route must specify a receiver",
-			Location: types.Location{
-				Field:   path + ".receiver",
-				Section: "route",
-			},
-			Suggestion: "Set 'receiver' field to the name of a configured receiver",
-		})
+		result.AddError(
+			"E103",
+			"Root route must specify a receiver",
+			&types.Location{Field: path + ".receiver", Section: "route"},
+			path+".receiver",
+			"route",
+			"",
+			"Set 'receiver' field to the name of a configured receiver",
+			"",
+		)
 	}
 
 	// Validate matchers (new format)
@@ -147,126 +142,127 @@ func (rv *RouteValidator) validateRouteTree(
 		m, err := matcher.Parse(matcherStr)
 		if err != nil {
 			parseErr := err.(*matcher.ParseError)
-			result.AddError(types.Error{
-				Type:    "route",
-				Code:    "E104",
-				Message: fmt.Sprintf("Invalid matcher: %s", parseErr.Message),
-				Location: types.Location{
-					Field:   fmt.Sprintf("%s.matchers[%d]", path, i),
-					Section: "route",
-				},
-				Suggestion: parseErr.Suggestion,
-				DocsURL:    "https://prometheus.io/docs/alerting/latest/configuration/#matcher",
-			})
+			result.AddError(
+				"E104",
+				fmt.Sprintf("Invalid matcher: %s", parseErr.Message),
+				&types.Location{Field: fmt.Sprintf("%s.matchers[%d]", path, i), Section: "route"},
+				fmt.Sprintf("%s.matchers[%d]", path, i),
+				"route",
+				"",
+				parseErr.Suggestion,
+				"https://prometheus.io/docs/alerting/latest/configuration/#matcher",
+			)
 		} else {
 			// Validate regex if regex matcher
 			if m.IsRegex() && m.CompiledRegex == nil {
-				result.AddError(types.Error{
-					Type:    "route",
-					Code:    "E105",
-					Message: fmt.Sprintf("Invalid regex in matcher '%s'", matcherStr),
-					Location: types.Location{
-						Field:   fmt.Sprintf("%s.matchers[%d]", path, i),
-						Section: "route",
-					},
-					Suggestion: "Check regex syntax. Common issues: unmatched parentheses, invalid character classes",
-				})
+				result.AddError(
+					"E105",
+					fmt.Sprintf("Invalid regex in matcher '%s'", matcherStr),
+					&types.Location{Field: fmt.Sprintf("%s.matchers[%d]", path, i), Section: "route"},
+					fmt.Sprintf("%s.matchers[%d]", path, i),
+					"route",
+					"",
+					"Check regex syntax. Common issues: unmatched parentheses, invalid character classes",
+					"",
+				)
 			}
 		}
 	}
 
 	// Validate deprecated match/match_re format
 	if len(route.Match) > 0 {
-		result.AddWarning(types.Warning{
-			Type:    "route",
-			Code:    "W100",
-			Message: "Using deprecated 'match' field. Consider migrating to 'matchers'",
-			Location: types.Location{
-				Field:   path + ".match",
-				Section: "route",
-			},
-			Suggestion: "Use 'matchers' field instead: matchers: [\"label=value\"]",
-		})
+		result.AddWarning(
+			"W100",
+			"Using deprecated 'match' field. Consider migrating to 'matchers'",
+			&types.Location{Field: path + ".match", Section: "route"},
+			path+".match",
+			"route",
+			"",
+			"Use 'matchers' field instead: matchers: [\"label=value\"]",
+			"",
+		)
 
 		// Validate match labels
 		for label := range route.Match {
 			if err := matcher.ValidateLabelName(label); err != nil {
-				result.AddError(types.Error{
-					Type:    "route",
-					Code:    "E106",
-					Message: fmt.Sprintf("Invalid label name '%s' in match: %v", label, err),
-					Location: types.Location{
-						Field:   fmt.Sprintf("%s.match.%s", path, label),
-						Section: "route",
-					},
-					Suggestion: "Label names must match [a-zA-Z_][a-zA-Z0-9_]*",
-				})
+				result.AddError(
+					"E106",
+					fmt.Sprintf("Invalid label name '%s' in match: %v", label, err),
+					&types.Location{Field: fmt.Sprintf("%s.match.%s", path, label), Section: "route"},
+					fmt.Sprintf("%s.match.%s", path, label),
+					"route",
+					"",
+					"Label names must match [a-zA-Z_][a-zA-Z0-9_]*",
+					"",
+				)
 			}
 		}
 	}
 
 	if len(route.MatchRE) > 0 {
-		result.AddWarning(types.Warning{
-			Type:    "route",
-			Code:    "W101",
-			Message: "Using deprecated 'match_re' field. Consider migrating to 'matchers'",
-			Location: types.Location{
-				Field:   path + ".match_re",
-				Section: "route",
-			},
-			Suggestion: "Use 'matchers' field instead: matchers: [\"label=~regex\"]",
-		})
+		result.AddWarning(
+			"W101",
+			"Using deprecated 'match_re' field. Consider migrating to 'matchers'",
+			&types.Location{Field: path + ".match_re", Section: "route"},
+			path+".match_re",
+			"route",
+			"",
+			"Use 'matchers' field instead: matchers: [\"label=~regex\"]",
+			"",
+		)
 
 		// Validate match_re regexes
 		for label, pattern := range route.MatchRE {
 			if err := matcher.ValidateLabelName(label); err != nil {
-				result.AddError(types.Error{
-					Type:    "route",
-					Code:    "E107",
-					Message: fmt.Sprintf("Invalid label name '%s' in match_re: %v", label, err),
-					Location: types.Location{
-						Field:   fmt.Sprintf("%s.match_re.%s", path, label),
-						Section: "route",
-					},
-				})
+				result.AddError(
+					"E107",
+					fmt.Sprintf("Invalid label name '%s' in match_re: %v", label, err),
+					&types.Location{Field: fmt.Sprintf("%s.match_re.%s", path, label), Section: "route"},
+					fmt.Sprintf("%s.match_re.%s", path, label),
+					"route",
+					"",
+					"Label names must match [a-zA-Z_][a-zA-Z0-9_]*",
+					"",
+				)
 			}
 
 			if _, err := matcher.ValidateRegex(pattern); err != nil {
-				result.AddError(types.Error{
-					Type:    "route",
-					Code:    "E108",
-					Message: fmt.Sprintf("Invalid regex in match_re['%s']: %v", label, err),
-					Location: types.Location{
-						Field:   fmt.Sprintf("%s.match_re.%s", path, label),
-						Section: "route",
-					},
-					Suggestion: "Check regex syntax",
-				})
+				result.AddError(
+					"E108",
+					fmt.Sprintf("Invalid regex in match_re['%s']: %v", label, err),
+					&types.Location{Field: fmt.Sprintf("%s.match_re.%s", path, label), Section: "route"},
+					fmt.Sprintf("%s.match_re.%s", path, label),
+					"route",
+					"",
+					"Check regex syntax",
+					"",
+				)
 			}
 		}
 	}
 
 	// Validate group_by
 	if len(route.GroupBy) == 0 && depth == 0 {
-		result.AddInfo(types.Info{
-			Type:    "route",
-			Code:    "I100",
-			Message: "Root route has no 'group_by', alerts will be grouped by all labels",
-			Location: types.Location{
-				Field:   path + ".group_by",
-				Section: "route",
-			},
-		})
-		result.AddSuggestion(types.Suggestion{
-			Type:    "route",
-			Code:    "S100",
-			Message: "Consider adding group_by for better alert grouping",
-			Location: types.Location{
-				Field:   path + ".group_by",
-				Section: "route",
-			},
-			After: "group_by: ['alertname', 'cluster']",
-		})
+		result.AddInfo(
+			"I100",
+			"Root route has no 'group_by', alerts will be grouped by all labels",
+			&types.Location{Field: path + ".group_by", Section: "route"},
+			path+".group_by",
+			"route",
+			"",
+			"",
+			"",
+		)
+		result.AddSuggestion(
+			"S100",
+			"Consider adding group_by for better alert grouping",
+			&types.Location{Field: path + ".group_by", Section: "route"},
+			path+".group_by",
+			"route",
+			"",
+			"Example: group_by: ['alertname', 'cluster']",
+			"",
+		)
 	}
 
 	// Validate group_by labels

@@ -39,6 +39,9 @@ type (
 	// Location represents location in configuration file
 	Location = types.Location
 
+	// Issue represents a generic validation issue (for CLI output)
+	Issue = types.Issue
+
 	// Options contains validation configuration
 	Options = types.Options
 
@@ -172,7 +175,7 @@ type Validator interface {
 // Example:
 //   validator := configvalidator.New(configvalidator.Options{
 //       Mode: configvalidator.StrictMode,
-//       EnableSecurity: true,
+//       EnableSecurityChecks: true,
 //       EnableBestPractices: true,
 //   })
 func New(opts Options) Validator {
@@ -214,7 +217,7 @@ func (v *defaultValidator) ValidateFile(path string) (*Result, error) {
 	// Set metadata
 	result.FilePath = path
 	result.Duration = time.Since(startTime)
-	result.DurationMS = result.Duration.Milliseconds()
+	result.DurationMs = result.Duration.Milliseconds()
 
 	return result, nil
 }
@@ -231,10 +234,19 @@ func (v *defaultValidator) ValidateBytes(data []byte) (*Result, error) {
 		// Parse errors - return them immediately
 		result := NewResult()
 		for _, err := range parseErrors {
-			result.AddError(err)
+			result.AddError(
+				err.Code,
+				err.Message,
+				&err.Location,
+				err.Location.Field,
+				err.Location.Section,
+				err.Context,
+				err.Suggestion,
+				err.DocsURL,
+			)
 		}
 		result.Duration = time.Since(startTime)
-		result.DurationMS = result.Duration.Milliseconds()
+		result.DurationMs = result.Duration.Milliseconds()
 		return result, nil
 	}
 
@@ -245,7 +257,7 @@ func (v *defaultValidator) ValidateBytes(data []byte) (*Result, error) {
 	}
 
 	result.Duration = time.Since(startTime)
-	result.DurationMS = result.Duration.Milliseconds()
+	result.DurationMs = result.Duration.Milliseconds()
 
 	return result, nil
 }
@@ -295,7 +307,7 @@ func (v *defaultValidator) ValidateConfig(cfg *config.AlertmanagerConfig) (*Resu
 	}
 
 	// Phase 3: Security validation
-	if v.opts.EnableSecurity {
+	if v.opts.EnableSecurityChecks {
 		// TODO: Implement security validation
 	}
 
