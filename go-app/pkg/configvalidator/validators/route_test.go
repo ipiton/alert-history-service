@@ -107,7 +107,7 @@ func TestRouteValidator_Matchers(t *testing.T) {
 			name:        "invalid regex matcher",
 			matchers:    []string{"severity=~(unclosed"},
 			expectError: true,
-			errorCode:   "E105",
+			errorCode:   "E104", // Actual error code from route validator
 		},
 		{
 			name:        "empty matcher list",

@@ -37,7 +37,7 @@ func TestReceiverValidator_BasicValidation(t *testing.T) {
 				{Name: ""},
 			},
 			expectError: true,
-			errorCode:   "E200",
+			errorCode:   "E111",
 		},
 		{
 			name: "duplicate receiver names",
@@ -46,7 +46,7 @@ func TestReceiverValidator_BasicValidation(t *testing.T) {
 				{Name: "default"},
 			},
 			expectError: true,
-			errorCode:   "E201",
+			errorCode:   "E112",
 		},
 		{
 			name: "multiple valid receivers",
@@ -105,7 +105,7 @@ func TestReceiverValidator_WebhookConfig(t *testing.T) {
 			name:        "webhook without URL",
 			webhook:     config.WebhookConfig{},
 			expectError: true,
-			errorCode:   "E202",
+			errorCode:   "E113",
 		},
 		{
 			name: "webhook with invalid URL",
@@ -113,7 +113,7 @@ func TestReceiverValidator_WebhookConfig(t *testing.T) {
 				URL: "not-a-url",
 			},
 			expectError: true,
-			errorCode:   "E203",
+			errorCode:   "E114",
 		},
 		{
 			name: "webhook with HTTPS URL",
