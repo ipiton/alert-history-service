@@ -9,17 +9,17 @@ import (
 	"strings"
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
-	"github.com/vitaliisemenov/alert-history/pkg/configvalidator"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 )
 
 // GlobalConfigValidator performs validation of global Alertmanager settings.
 type GlobalConfigValidator struct {
-	options configvalidator.Options
+	options types.Options
 	logger  *slog.Logger
 }
 
 // NewGlobalConfigValidator creates a new GlobalConfigValidator instance.
-func NewGlobalConfigValidator(opts configvalidator.Options, logger *slog.Logger) *GlobalConfigValidator {
+func NewGlobalConfigValidator(opts types.Options, logger *slog.Logger) *GlobalConfigValidator {
 	return &GlobalConfigValidator{
 		options: opts,
 		logger:  logger,
@@ -27,7 +27,7 @@ func NewGlobalConfigValidator(opts configvalidator.Options, logger *slog.Logger)
 }
 
 // Validate performs comprehensive validation of global configuration.
-func (gv *GlobalConfigValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *types.Result) {
 	gv.logger.Debug("starting global config validation")
 
 	if cfg.Global == nil {
@@ -71,7 +71,7 @@ func (gv *GlobalConfigValidator) Validate(ctx context.Context, cfg *config.Alert
 }
 
 // validateResolveTimeout validates the global resolve_timeout setting.
-func (gv *GlobalConfigValidator) validateResolveTimeout(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validateResolveTimeout(global *config.GlobalConfig, result *types.Result) {
 	if global.ResolveTimeout <= 0 {
 		// Zero or negative resolve timeout
 		result.AddError(
@@ -115,7 +115,7 @@ func (gv *GlobalConfigValidator) validateResolveTimeout(global *config.GlobalCon
 }
 
 // validateSMTPConfig validates global SMTP settings.
-func (gv *GlobalConfigValidator) validateSMTPConfig(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validateSMTPConfig(global *config.GlobalConfig, result *types.Result) {
 	hasSMTPConfig := global.SMTPFrom != "" || global.SMTPSmartHost != ""
 
 	if !hasSMTPConfig {
@@ -202,7 +202,7 @@ func (gv *GlobalConfigValidator) validateSMTPConfig(global *config.GlobalConfig,
 }
 
 // validateSlackAPIURL validates global Slack API URL.
-func (gv *GlobalConfigValidator) validateSlackAPIURL(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validateSlackAPIURL(global *config.GlobalConfig, result *types.Result) {
 	if global.SlackAPIURL == "" && global.SlackAPIURLFile == "" {
 		return
 	}
@@ -267,7 +267,7 @@ func (gv *GlobalConfigValidator) validateSlackAPIURL(global *config.GlobalConfig
 }
 
 // validatePagerDutyURL validates global PagerDuty URL.
-func (gv *GlobalConfigValidator) validatePagerDutyURL(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validatePagerDutyURL(global *config.GlobalConfig, result *types.Result) {
 	if global.PagerdutyURL == "" {
 		return
 	}
@@ -303,7 +303,7 @@ func (gv *GlobalConfigValidator) validatePagerDutyURL(global *config.GlobalConfi
 }
 
 // validateOpsGenieConfig validates global OpsGenie settings.
-func (gv *GlobalConfigValidator) validateOpsGenieConfig(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validateOpsGenieConfig(global *config.GlobalConfig, result *types.Result) {
 	hasOpsGenieConfig := global.OpsGenieAPIURL != "" || global.OpsGenieAPIKey != "" || global.OpsGenieAPIKeyFile != ""
 
 	if !hasOpsGenieConfig {
@@ -356,7 +356,7 @@ func (gv *GlobalConfigValidator) validateOpsGenieConfig(global *config.GlobalCon
 }
 
 // validateHTTPConfig validates global HTTP client configuration.
-func (gv *GlobalConfigValidator) validateHTTPConfig(global *config.GlobalConfig, result *configvalidator.Result) {
+func (gv *GlobalConfigValidator) validateHTTPConfig(global *config.GlobalConfig, result *types.Result) {
 	if global.HTTPConfig == nil {
 		return
 	}

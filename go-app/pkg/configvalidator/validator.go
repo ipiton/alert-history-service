@@ -9,7 +9,62 @@ import (
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
 	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/parser"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/validators"
+)
+
+// ================================================================================
+// Re-exported Types for Backward Compatibility
+// ================================================================================
+// These types are re-exported from types/ package to maintain backward
+// compatibility and provide a convenient API surface.
+
+// Type aliases for core validation types
+type (
+	// Result represents validation result
+	Result = types.Result
+
+	// Error represents a validation error
+	Error = types.Error
+
+	// Warning represents a validation warning
+	Warning = types.Warning
+
+	// Info represents informational message
+	Info = types.Info
+
+	// Suggestion represents improvement suggestion
+	Suggestion = types.Suggestion
+
+	// Location represents location in configuration file
+	Location = types.Location
+
+	// Options contains validation configuration
+	Options = types.Options
+
+	// ValidationMode defines validation strictness
+	ValidationMode = types.ValidationMode
+)
+
+// Re-exported constructors
+var (
+	// NewResult creates a new empty validation result
+	NewResult = types.NewResult
+
+	// DefaultOptions returns default validation options
+	DefaultOptions = types.DefaultOptions
+)
+
+// Re-exported constants for validation modes
+const (
+	// StrictMode: Errors and warnings block validation
+	StrictMode = types.StrictMode
+
+	// LenientMode: Only errors block validation, warnings pass
+	LenientMode = types.LenientMode
+
+	// PermissiveMode: Nothing blocks, all issues reported
+	PermissiveMode = types.PermissiveMode
 )
 
 // ================================================================================

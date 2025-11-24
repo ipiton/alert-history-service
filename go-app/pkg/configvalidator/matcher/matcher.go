@@ -148,7 +148,7 @@ func Parse(matcher string) (*Matcher, error) {
 		}
 	}
 
-	if !isValidLabelName(label) {
+	if !IsValidLabelName(label) {
 		return nil, &ParseError{
 			Matcher:    matcher,
 			Message:    fmt.Sprintf("invalid label name '%s' (must match [a-zA-Z_][a-zA-Z0-9_]*)", label),
@@ -218,7 +218,7 @@ func ParseMatchers(matchers []string) ([]*Matcher, []error) {
 	return parsed, errors
 }
 
-// isValidLabelName checks if label name is valid per Prometheus conventions.
+// IsValidLabelName checks if label name is valid per Prometheus conventions.
 //
 // Valid label names must match: [a-zA-Z_][a-zA-Z0-9_]*
 //
@@ -226,7 +226,8 @@ func ParseMatchers(matchers []string) ([]*Matcher, []error) {
 // - Must start with letter (a-z, A-Z) or underscore (_)
 // - Can contain letters, digits, and underscores
 // - Cannot be empty
-func isValidLabelName(name string) bool {
+// IsValidLabelName checks if a label name is valid according to Prometheus naming rules.
+func IsValidLabelName(name string) bool {
 	if len(name) == 0 {
 		return false
 	}
@@ -257,7 +258,7 @@ func isValidLabelName(name string) bool {
 //
 // Returns error if label name is invalid.
 func ValidateLabelName(name string) error {
-	if !isValidLabelName(name) {
+	if !IsValidLabelName(name) {
 		if len(name) == 0 {
 			return fmt.Errorf("label name is empty")
 		}

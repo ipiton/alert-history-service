@@ -9,17 +9,17 @@ import (
 	"strings"
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
-	"github.com/vitaliisemenov/alert-history/pkg/configvalidator"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 )
 
 // ReceiverValidator performs semantic validation of Alertmanager receivers and their integrations.
 type ReceiverValidator struct {
-	options configvalidator.Options
+	options types.Options
 	logger  *slog.Logger
 }
 
 // NewReceiverValidator creates a new ReceiverValidator instance.
-func NewReceiverValidator(opts configvalidator.Options, logger *slog.Logger) *ReceiverValidator {
+func NewReceiverValidator(opts types.Options, logger *slog.Logger) *ReceiverValidator {
 	return &ReceiverValidator{
 		options: opts,
 		logger:  logger,
@@ -27,7 +27,7 @@ func NewReceiverValidator(opts configvalidator.Options, logger *slog.Logger) *Re
 }
 
 // Validate performs comprehensive validation of all receivers and their integrations.
-func (rv *ReceiverValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (rv *ReceiverValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *types.Result) {
 	rv.logger.Debug("starting receiver validation")
 
 	if cfg.Receivers == nil || len(cfg.Receivers) == 0 {
@@ -95,21 +95,21 @@ func (rv *ReceiverValidator) Validate(ctx context.Context, cfg *config.Alertmana
 		}
 
 		// Validate individual integrations
-		rv.validateWebhookConfigs(ctx, receiver, i, result)
-		rv.validateSlackConfigs(ctx, receiver, i, result)
-		rv.validateEmailConfigs(ctx, receiver, i, result)
-		rv.validatePagerDutyConfigs(ctx, receiver, i, result)
-		rv.validateOpsGenieConfigs(ctx, receiver, i, result)
-		rv.validateVictorOpsConfigs(ctx, receiver, i, result)
-		rv.validatePushoverConfigs(ctx, receiver, i, result)
-		rv.validateWeChatConfigs(ctx, receiver, i, result)
+		rv.validateWebhookConfigs(ctx, &receiver, i, result)
+		rv.validateSlackConfigs(ctx, &receiver, i, result)
+		rv.validateEmailConfigs(ctx, &receiver, i, result)
+		rv.validatePagerdutyConfigs(ctx, &receiver, i, result)
+		rv.validateOpsGenieConfigs(ctx, &receiver, i, result)
+		rv.validateVictorOpsConfigs(ctx, &receiver, i, result)
+		rv.validatePushoverConfigs(ctx, &receiver, i, result)
+		rv.validateWeChatConfigs(ctx, &receiver, i, result)
 	}
 
 	rv.logger.Debug("receiver validation finished")
 }
 
 // validateWebhookConfigs validates webhook integrations.
-func (rv *ReceiverValidator) validateWebhookConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateWebhookConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.WebhookConfigs == nil {
 		return
 	}
@@ -173,7 +173,7 @@ func (rv *ReceiverValidator) validateWebhookConfigs(ctx context.Context, receive
 }
 
 // validateSlackConfigs validates Slack integrations.
-func (rv *ReceiverValidator) validateSlackConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateSlackConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.SlackConfigs == nil {
 		return
 	}
@@ -288,7 +288,7 @@ func (rv *ReceiverValidator) validateSlackConfigs(ctx context.Context, receiver 
 }
 
 // validateEmailConfigs validates email integrations.
-func (rv *ReceiverValidator) validateEmailConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateEmailConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.EmailConfigs == nil {
 		return
 	}
@@ -383,13 +383,13 @@ func (rv *ReceiverValidator) validateEmailConfigs(ctx context.Context, receiver 
 	}
 }
 
-// validatePagerDutyConfigs validates PagerDuty integrations.
-func (rv *ReceiverValidator) validatePagerDutyConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
-	if receiver.PagerDutyConfigs == nil {
+// validatePagerdutyConfigs validates PagerDuty integrations.
+func (rv *ReceiverValidator) validatePagerdutyConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
+	if receiver.PagerdutyConfigs == nil {
 		return
 	}
 
-	for i, pd := range receiver.PagerDutyConfigs {
+	for i, pd := range receiver.PagerdutyConfigs {
 		fieldPath := fmt.Sprintf("receivers[%d].pagerduty_configs[%d]", receiverIdx, i)
 
 		// Either routing_key or service_key is required
@@ -473,7 +473,7 @@ func (rv *ReceiverValidator) validatePagerDutyConfigs(ctx context.Context, recei
 }
 
 // validateOpsGenieConfigs validates OpsGenie integrations.
-func (rv *ReceiverValidator) validateOpsGenieConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateOpsGenieConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.OpsGenieConfigs == nil {
 		return
 	}
@@ -548,7 +548,7 @@ func (rv *ReceiverValidator) validateOpsGenieConfigs(ctx context.Context, receiv
 }
 
 // validateVictorOpsConfigs validates VictorOps integrations.
-func (rv *ReceiverValidator) validateVictorOpsConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateVictorOpsConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.VictorOpsConfigs == nil {
 		return
 	}
@@ -636,7 +636,7 @@ func (rv *ReceiverValidator) validateVictorOpsConfigs(ctx context.Context, recei
 }
 
 // validatePushoverConfigs validates Pushover integrations.
-func (rv *ReceiverValidator) validatePushoverConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validatePushoverConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.PushoverConfigs == nil {
 		return
 	}
@@ -694,7 +694,7 @@ func (rv *ReceiverValidator) validatePushoverConfigs(ctx context.Context, receiv
 }
 
 // validateWeChatConfigs validates WeChat integrations.
-func (rv *ReceiverValidator) validateWeChatConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateWeChatConfigs(ctx context.Context, receiver *config.Receiver, receiverIdx int, result *types.Result) {
 	if receiver.WeChatConfigs == nil {
 		return
 	}
@@ -767,7 +767,7 @@ func (rv *ReceiverValidator) validateWeChatConfigs(ctx context.Context, receiver
 }
 
 // validateHTTPConfig validates common HTTP configuration.
-func (rv *ReceiverValidator) validateHTTPConfig(httpConfig *config.HTTPConfig, fieldPath, integration string, result *configvalidator.Result) {
+func (rv *ReceiverValidator) validateHTTPConfig(httpConfig *config.HTTPConfig, fieldPath, integration string, result *types.Result) {
 	if httpConfig == nil {
 		return
 	}
@@ -842,7 +842,7 @@ func (rv *ReceiverValidator) validateURL(rawURL, fieldPath string) error {
 	return nil
 }
 
-func (rv *ReceiverValidator) checkInternalURL(rawURL, fieldPath, integration string, result *configvalidator.Result) {
+func (rv *ReceiverValidator) checkInternalURL(rawURL, fieldPath, integration string, result *types.Result) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return
@@ -863,10 +863,10 @@ func (rv *ReceiverValidator) checkInternalURL(rawURL, fieldPath, integration str
 	}
 }
 
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+var receiverEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 func (rv *ReceiverValidator) isValidEmail(email string) bool {
-	return emailRegex.MatchString(email)
+	return receiverEmailRegex.MatchString(email)
 }
 
 func (rv *ReceiverValidator) isValidSmarthost(smarthost string) bool {

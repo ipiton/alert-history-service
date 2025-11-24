@@ -322,6 +322,43 @@ func (r *Result) AddWarning(code, message string, location *Location, field, sec
 	})
 }
 
+// AddInfo adds an informational message to the result.
+func (r *Result) AddInfo(code, message string, location *Location, field, section, context, suggestion, docsURL string) {
+	if location == nil {
+		location = &Location{}
+	}
+	if field != "" {
+		location.Field = field
+	}
+	if section != "" {
+		location.Section = section
+	}
+
+	r.Info = append(r.Info, Info{
+		Type:     "info",
+		Message:  message,
+		Location: *location,
+	})
+}
+
+// AddSuggestion adds an improvement suggestion to the result.
+func (r *Result) AddSuggestion(code, message string, location *Location, field, section, context, suggestion, docsURL string) {
+	if location == nil {
+		location = &Location{}
+	}
+	if field != "" {
+		location.Field = field
+	}
+	if section != "" {
+		location.Section = section
+	}
+
+	r.Suggestions = append(r.Suggestions, Suggestion{
+		Type:    "suggestion",
+		Message: message,
+	})
+}
+
 // Merge merges another result into this result.
 func (r *Result) Merge(other *Result) {
 	if other == nil {

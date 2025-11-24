@@ -10,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
-	validatorpkg "github.com/vitaliisemenov/alert-history/pkg/configvalidator"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 )
 
 // ================================================================================
@@ -56,17 +56,17 @@ func NewStructuralValidator() *StructuralValidator {
 //   - cfg: Alertmanager configuration
 //
 // Returns:
-//   - *validatorpkg.Result: Validation result
+//   - *types.Result: Validation result
 //
 // Performance: < 10ms p95
-func (sv *StructuralValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig) *validatorpkg.Result {
-	result := validatorpkg.NewResult()
+func (sv *StructuralValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig) *types.Result {
+	result := types.NewResult()
 
 	// Validate struct using validator tags
 	if err := sv.v.Struct(cfg); err != nil {
 		if validationErrs, ok := err.(validator.ValidationErrors); ok {
 			for _, e := range validationErrs {
-				result.AddError(sv.convertValidationError(e))
+				sv.addValidationError(result, e)
 			}
 		}
 	}
@@ -79,23 +79,23 @@ func (sv *StructuralValidator) Validate(ctx context.Context, cfg *config.Alertma
 	return result
 }
 
-// convertValidationError converts go-playground validator error to our error format.
-func (sv *StructuralValidator) convertValidationError(err validator.FieldError) validatorpkg.Error {
+// addValidationError adds a go-playground validator error to result.
+func (sv *StructuralValidator) addValidationError(result *types.Result, err validator.FieldError) {
 	field := sv.fieldPath(err)
 	message := sv.formatValidationMessage(err)
 	suggestion := sv.generateSuggestion(err)
+	section := sv.sectionFromField(field)
 
-	return validatorpkg.Error{
-		Type:    "structural",
-		Code:    fmt.Sprintf("E%03d", sv.errorCodeFromTag(err.Tag())),
-		Message: message,
-		Location: validatorpkg.Location{
-			Field:   field,
-			Section: sv.sectionFromField(field),
-		},
-		Suggestion: suggestion,
-		DocsURL:    "https://prometheus.io/docs/alerting/latest/configuration/",
-	}
+	result.AddError(
+		fmt.Sprintf("E%03d", sv.errorCodeFromTag(err.Tag())),
+		message,
+		&types.Location{Field: field, Section: section},
+		field,
+		section,
+		"",
+		suggestion,
+		"https://prometheus.io/docs/alerting/latest/configuration/",
+	)
 }
 
 // fieldPath constructs field path from validator error.
@@ -238,19 +238,18 @@ func (sv *StructuralValidator) errorCodeFromTag(tag string) int {
 }
 
 // validateReceivers validates receivers section.
-func (sv *StructuralValidator) validateReceivers(cfg *config.AlertmanagerConfig, result *validatorpkg.Result) {
+func (sv *StructuralValidator) validateReceivers(cfg *config.AlertmanagerConfig, result *types.Result) {
 	if len(cfg.Receivers) == 0 {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E020",
-			Message: "At least one receiver must be defined",
-			Location: validatorpkg.Location{
-				Field:   "receivers",
-				Section: "receivers",
-			},
-			Suggestion: "Add at least one receiver with notification integration (webhook, email, slack, etc.)",
-			DocsURL:    "https://prometheus.io/docs/alerting/latest/configuration/#receiver",
-		})
+		result.AddError(
+			"E020",
+			"At least one receiver must be defined",
+			&types.Location{Field: "receivers", Section: "receivers"},
+			"receivers",
+			"receivers",
+			"",
+			"Add at least one receiver with notification integration (webhook, email, slack, etc.)",
+			"https://prometheus.io/docs/alerting/latest/configuration/#receiver",
+		)
 		return
 	}
 
@@ -258,16 +257,16 @@ func (sv *StructuralValidator) validateReceivers(cfg *config.AlertmanagerConfig,
 	names := make(map[string]int)
 	for i, receiver := range cfg.Receivers {
 		if prev, exists := names[receiver.Name]; exists {
-			result.AddError(validatorpkg.Error{
-				Type:    "structural",
-				Code:    "E021",
-				Message: fmt.Sprintf("Duplicate receiver name '%s' (first at index %d, duplicate at %d)", receiver.Name, prev, i),
-				Location: validatorpkg.Location{
-					Field:   fmt.Sprintf("receivers[%d].name", i),
-					Section: "receivers",
-				},
-				Suggestion: "Each receiver must have a unique name. Rename one of the receivers.",
-			})
+			result.AddError(
+				"E021",
+				fmt.Sprintf("Duplicate receiver name '%s' (first at index %d, duplicate at %d)", receiver.Name, prev, i),
+				&types.Location{Field: fmt.Sprintf("receivers[%d].name", i), Section: "receivers"},
+				fmt.Sprintf("receivers[%d].name", i),
+				"receivers",
+				"",
+				"Each receiver must have a unique name. Rename one of the receivers.",
+				"",
+			)
 		}
 		names[receiver.Name] = i
 
@@ -278,49 +277,48 @@ func (sv *StructuralValidator) validateReceivers(cfg *config.AlertmanagerConfig,
 			len(receiver.WebhookConfigs) == 0 &&
 			len(receiver.OpsGenieConfigs) == 0 {
 
-			result.AddWarning(validatorpkg.Warning{
-				Type:    "structural",
-				Code:    "W020",
-				Message: fmt.Sprintf("Receiver '%s' has no notification integrations configured", receiver.Name),
-				Location: validatorpkg.Location{
-					Field:   fmt.Sprintf("receivers[%d]", i),
-					Section: "receivers",
-				},
-				Suggestion: "Add at least one notification integration (webhook_configs, email_configs, slack_configs, etc.)",
-			})
+			result.AddWarning(
+				"W020",
+				fmt.Sprintf("Receiver '%s' has no notification integrations configured", receiver.Name),
+				&types.Location{Field: fmt.Sprintf("receivers[%d]", i), Section: "receivers"},
+				fmt.Sprintf("receivers[%d]", i),
+				"receivers",
+				"",
+				"Add at least one notification integration (webhook_configs, email_configs, slack_configs, etc.)",
+				"",
+			)
 		}
 	}
 }
 
 // validateRoute validates route configuration.
-func (sv *StructuralValidator) validateRoute(cfg *config.AlertmanagerConfig, result *validatorpkg.Result) {
+func (sv *StructuralValidator) validateRoute(cfg *config.AlertmanagerConfig, result *types.Result) {
 	if cfg.Route == nil {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E030",
-			Message: "Route configuration is required",
-			Location: validatorpkg.Location{
-				Field:   "route",
-				Section: "route",
-			},
-			Suggestion: "Add 'route' section with at least a receiver",
-			DocsURL:    "https://prometheus.io/docs/alerting/latest/configuration/#route",
-		})
+		result.AddError(
+			"E030",
+			"Route configuration is required",
+			&types.Location{Field: "route", Section: "route"},
+			"route",
+			"route",
+			"",
+			"Add 'route' section with at least a receiver",
+			"https://prometheus.io/docs/alerting/latest/configuration/#route",
+		)
 		return
 	}
 
 	// Root route must have receiver
 	if cfg.Route.Receiver == "" {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E031",
-			Message: "Root route must specify a receiver",
-			Location: validatorpkg.Location{
-				Field:   "route.receiver",
-				Section: "route",
-			},
-			Suggestion: "Set 'receiver' field to the name of a configured receiver",
-		})
+		result.AddError(
+			"E031",
+			"Root route must specify a receiver",
+			&types.Location{Field: "route.receiver", Section: "route"},
+			"route.receiver",
+			"route",
+			"",
+			"Set 'receiver' field to the name of a configured receiver",
+			"",
+		)
 	}
 
 	// Validate intervals
@@ -328,47 +326,47 @@ func (sv *StructuralValidator) validateRoute(cfg *config.AlertmanagerConfig, res
 }
 
 // validateRouteIntervals validates route time intervals.
-func (sv *StructuralValidator) validateRouteIntervals(route *config.Route, path string, result *validatorpkg.Result) {
+func (sv *StructuralValidator) validateRouteIntervals(route *config.Route, path string, result *types.Result) {
 	// Check GroupWait
 	if route.GroupWait != nil && time.Duration(*route.GroupWait) <= 0 {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E032",
-			Message: fmt.Sprintf("group_wait must be positive (got: %s)", time.Duration(*route.GroupWait)),
-			Location: validatorpkg.Location{
-				Field:   path + ".group_wait",
-				Section: "route",
-			},
-			Suggestion: "Use positive duration: 10s, 30s, 1m",
-		})
+		result.AddError(
+			"E032",
+			fmt.Sprintf("group_wait must be positive (got: %s)", time.Duration(*route.GroupWait)),
+			&types.Location{Field: path + ".group_wait", Section: "route"},
+			path+".group_wait",
+			"route",
+			"",
+			"Use positive duration: 10s, 30s, 1m",
+			"",
+		)
 	}
 
 	// Check GroupInterval
 	if route.GroupInterval != nil && time.Duration(*route.GroupInterval) <= 0 {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E033",
-			Message: fmt.Sprintf("group_interval must be positive (got: %s)", time.Duration(*route.GroupInterval)),
-			Location: validatorpkg.Location{
-				Field:   path + ".group_interval",
-				Section: "route",
-			},
-			Suggestion: "Use positive duration: 5m, 10m, 1h",
-		})
+		result.AddError(
+			"E033",
+			fmt.Sprintf("group_interval must be positive (got: %s)", time.Duration(*route.GroupInterval)),
+			&types.Location{Field: path + ".group_interval", Section: "route"},
+			path+".group_interval",
+			"route",
+			"",
+			"Use positive duration: 5m, 10m, 1h",
+			"",
+		)
 	}
 
 	// Check RepeatInterval
 	if route.RepeatInterval != nil && time.Duration(*route.RepeatInterval) <= 0 {
-		result.AddError(validatorpkg.Error{
-			Type:    "structural",
-			Code:    "E034",
-			Message: fmt.Sprintf("repeat_interval must be positive (got: %s)", time.Duration(*route.RepeatInterval)),
-			Location: validatorpkg.Location{
-				Field:   path + ".repeat_interval",
-				Section: "route",
-			},
-			Suggestion: "Use positive duration: 4h, 12h, 24h",
-		})
+		result.AddError(
+			"E034",
+			fmt.Sprintf("repeat_interval must be positive (got: %s)", time.Duration(*route.RepeatInterval)),
+			&types.Location{Field: path + ".repeat_interval", Section: "route"},
+			path+".repeat_interval",
+			"route",
+			"",
+			"Use positive duration: 4h, 12h, 24h",
+			"",
+		)
 	}
 
 	// Recursively validate child routes
@@ -379,36 +377,36 @@ func (sv *StructuralValidator) validateRouteIntervals(route *config.Route, path 
 }
 
 // validateInhibitRules validates inhibition rules.
-func (sv *StructuralValidator) validateInhibitRules(cfg *config.AlertmanagerConfig, result *validatorpkg.Result) {
+func (sv *StructuralValidator) validateInhibitRules(cfg *config.AlertmanagerConfig, result *types.Result) {
 	for i, rule := range cfg.InhibitRules {
 		// Check that at least one matcher is defined
 		hasSourceMatcher := len(rule.SourceMatchers) > 0 || len(rule.SourceMatch) > 0 || len(rule.SourceMatchRE) > 0
 		hasTargetMatcher := len(rule.TargetMatchers) > 0 || len(rule.TargetMatch) > 0 || len(rule.TargetMatchRE) > 0
 
 		if !hasSourceMatcher {
-			result.AddError(validatorpkg.Error{
-				Type:    "structural",
-				Code:    "E040",
-				Message: "Inhibit rule must have source matchers",
-				Location: validatorpkg.Location{
-					Field:   fmt.Sprintf("inhibit_rules[%d].source_matchers", i),
-					Section: "inhibit_rules",
-				},
-				Suggestion: "Add source_matchers to define which alerts inhibit others",
-			})
+			result.AddError(
+				"E040",
+				"Inhibit rule must have source matchers",
+				&types.Location{Field: fmt.Sprintf("inhibit_rules[%d].source_matchers", i), Section: "inhibit_rules"},
+				fmt.Sprintf("inhibit_rules[%d].source_matchers", i),
+				"inhibit_rules",
+				"",
+				"Add source_matchers to define which alerts inhibit others",
+				"",
+			)
 		}
 
 		if !hasTargetMatcher {
-			result.AddError(validatorpkg.Error{
-				Type:    "structural",
-				Code:    "E041",
-				Message: "Inhibit rule must have target matchers",
-				Location: validatorpkg.Location{
-					Field:   fmt.Sprintf("inhibit_rules[%d].target_matchers", i),
-					Section: "inhibit_rules",
-				},
-				Suggestion: "Add target_matchers to define which alerts are inhibited",
-			})
+			result.AddError(
+				"E041",
+				"Inhibit rule must have target matchers",
+				&types.Location{Field: fmt.Sprintf("inhibit_rules[%d].target_matchers", i), Section: "inhibit_rules"},
+				fmt.Sprintf("inhibit_rules[%d].target_matchers", i),
+				"inhibit_rules",
+				"",
+				"Add target_matchers to define which alerts are inhibited",
+				"",
+			)
 		}
 	}
 }

@@ -7,18 +7,18 @@ import (
 	"strings"
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
-	"github.com/vitaliisemenov/alert-history/pkg/configvalidator"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/matcher"
 )
 
 // InhibitionValidator performs semantic validation of Alertmanager inhibition rules.
 type InhibitionValidator struct {
-	options configvalidator.Options
+	options types.Options
 	logger  *slog.Logger
 }
 
 // NewInhibitionValidator creates a new InhibitionValidator instance.
-func NewInhibitionValidator(opts configvalidator.Options, logger *slog.Logger) *InhibitionValidator {
+func NewInhibitionValidator(opts types.Options, logger *slog.Logger) *InhibitionValidator {
 	return &InhibitionValidator{
 		options: opts,
 		logger:  logger,
@@ -26,7 +26,7 @@ func NewInhibitionValidator(opts configvalidator.Options, logger *slog.Logger) *
 }
 
 // Validate performs comprehensive validation of all inhibition rules.
-func (iv *InhibitionValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (iv *InhibitionValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *types.Result) {
 	iv.logger.Debug("starting inhibition validation")
 
 	if cfg.InhibitRules == nil || len(cfg.InhibitRules) == 0 {
@@ -48,7 +48,7 @@ func (iv *InhibitionValidator) Validate(ctx context.Context, cfg *config.Alertma
 }
 
 // validateInhibitRule validates a single inhibition rule.
-func (iv *InhibitionValidator) validateInhibitRule(ctx context.Context, rule *config.InhibitRule, ruleIdx int, fieldPath string, result *configvalidator.Result) {
+func (iv *InhibitionValidator) validateInhibitRule(ctx context.Context, rule *config.InhibitRule, ruleIdx int, fieldPath string, result *types.Result) {
 	// Check that rule has source matchers (new or old format)
 	hasSourceMatchers := len(rule.SourceMatchers) > 0
 	hasDeprecatedSourceMatch := len(rule.SourceMatch) > 0 || len(rule.SourceMatchRE) > 0
@@ -163,7 +163,7 @@ func (iv *InhibitionValidator) validateInhibitRule(ctx context.Context, rule *co
 	} else {
 		// Validate that equal labels are valid label names
 		for j, label := range rule.Equal {
-			if !isValidLabelName(label) {
+			if !matcher.IsValidLabelName(label) {
 				result.AddError(
 					"E152",
 					fmt.Sprintf("Invalid label name in 'equal' field: '%s'", label),
@@ -185,13 +185,13 @@ func (iv *InhibitionValidator) validateInhibitRule(ctx context.Context, rule *co
 }
 
 // validateMatchers validates a list of matchers for inhibition rules.
-func (iv *InhibitionValidator) validateMatchers(matchers []string, fieldPath, matcherType string, ruleIdx int, result *configvalidator.Result) {
+func (iv *InhibitionValidator) validateMatchers(matchers []string, fieldPath, matcherType string, ruleIdx int, result *types.Result) {
 	if len(matchers) == 0 {
 		return
 	}
 
 	for i, matcherStr := range matchers {
-		m, err := matcher.Parse(matcherStr)
+		_, err := matcher.Parse(matcherStr)
 		if err != nil {
 			result.AddError(
 				"E153",
@@ -200,30 +200,16 @@ func (iv *InhibitionValidator) validateMatchers(matchers []string, fieldPath, ma
 				fmt.Sprintf("%s[%d]", fieldPath, i),
 				"inhibit_rules",
 				"",
-				"Use format: label=value, label!=value, label=~regex, or label!~regex",
+				"Use format: label=value, label!=value, label=~regex, or label!~regex. Check label name and regex pattern.",
 				iv.options.DefaultDocsURL+"#inhibit_rule",
 			)
 			continue
-		}
-
-		// Validate the matcher
-		if err := m.Validate(); err != nil {
-			result.AddError(
-				"E154",
-				fmt.Sprintf("Invalid %s matcher in inhibit rule #%d: '%s' - %v", matcherType, ruleIdx, matcherStr, err),
-				nil,
-				fmt.Sprintf("%s[%d]", fieldPath, i),
-				"inhibit_rules",
-				"",
-				"Check the label name and regex pattern for correctness.",
-				iv.options.DefaultDocsURL+"#inhibit_rule",
-			)
 		}
 	}
 }
 
 // checkBroadInhibitionRule checks if an inhibition rule is too broad.
-func (iv *InhibitionValidator) checkBroadInhibitionRule(rule *config.InhibitRule, ruleIdx int, fieldPath string, result *configvalidator.Result) {
+func (iv *InhibitionValidator) checkBroadInhibitionRule(rule *config.InhibitRule, ruleIdx int, fieldPath string, result *types.Result) {
 	// Check 1: Very few matchers with no 'equal' labels
 	totalMatchers := len(rule.SourceMatchers) + len(rule.TargetMatchers) + len(rule.SourceMatch) + len(rule.SourceMatchRE) + len(rule.TargetMatch) + len(rule.TargetMatchRE)
 
@@ -298,7 +284,7 @@ func (iv *InhibitionValidator) checkBroadInhibitionRule(rule *config.InhibitRule
 }
 
 // detectConflictingRules detects inhibition rules that might conflict with each other.
-func (iv *InhibitionValidator) detectConflictingRules(ctx context.Context, rules []config.InhibitRule, result *configvalidator.Result) {
+func (iv *InhibitionValidator) detectConflictingRules(ctx context.Context, rules []config.InhibitRule, result *types.Result) {
 	if len(rules) < 2 || !iv.options.EnableBestPractices {
 		return
 	}
@@ -357,7 +343,7 @@ func (iv *InhibitionValidator) rulesAreDuplicates(r1, r2 *config.InhibitRule) bo
 }
 
 // detectOverlappingRules detects inhibition rules that might overlap in scope.
-func (iv *InhibitionValidator) detectOverlappingRules(ctx context.Context, rules []config.InhibitRule, result *configvalidator.Result) {
+func (iv *InhibitionValidator) detectOverlappingRules(ctx context.Context, rules []config.InhibitRule, result *types.Result) {
 	if len(rules) < 2 || !iv.options.EnableBestPractices {
 		return
 	}

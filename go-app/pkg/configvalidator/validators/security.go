@@ -8,17 +8,17 @@ import (
 	"strings"
 
 	"github.com/vitaliisemenov/alert-history/internal/alertmanager/config"
-	"github.com/vitaliisemenov/alert-history/pkg/configvalidator"
+	"github.com/vitaliisemenov/alert-history/pkg/configvalidator/types"
 )
 
 // SecurityValidator performs comprehensive security validation of Alertmanager configuration.
 type SecurityValidator struct {
-	options configvalidator.Options
+	options types.Options
 	logger  *slog.Logger
 }
 
 // NewSecurityValidator creates a new SecurityValidator instance.
-func NewSecurityValidator(opts configvalidator.Options, logger *slog.Logger) *SecurityValidator {
+func NewSecurityValidator(opts types.Options, logger *slog.Logger) *SecurityValidator {
 	return &SecurityValidator{
 		options: opts,
 		logger:  logger,
@@ -26,7 +26,7 @@ func NewSecurityValidator(opts configvalidator.Options, logger *slog.Logger) *Se
 }
 
 // Validate performs comprehensive security checks on the entire configuration.
-func (sv *SecurityValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) Validate(ctx context.Context, cfg *config.AlertmanagerConfig, result *types.Result) {
 	if !sv.options.EnableSecurityChecks {
 		sv.logger.Debug("security validation disabled")
 		return
@@ -53,7 +53,7 @@ func (sv *SecurityValidator) Validate(ctx context.Context, cfg *config.Alertmana
 }
 
 // detectExposedSecrets checks for secrets that might be exposed in the configuration.
-func (sv *SecurityValidator) detectExposedSecrets(cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) detectExposedSecrets(cfg *config.AlertmanagerConfig, result *types.Result) {
 	// Check for hardcoded API keys, tokens, passwords in receivers
 	if cfg.Receivers != nil {
 		for i, receiver := range cfg.Receivers {
@@ -100,7 +100,7 @@ func (sv *SecurityValidator) detectExposedSecrets(cfg *config.AlertmanagerConfig
 			}
 
 			// PagerDuty configs
-			for j, pd := range receiver.PagerDutyConfigs {
+			for j, pd := range receiver.PagerdutyConfigs {
 				if pd.RoutingKey != "" && sv.looksLikeAPIKey(pd.RoutingKey) {
 					result.AddWarning(
 						"W302",
@@ -231,7 +231,7 @@ func (sv *SecurityValidator) detectExposedSecrets(cfg *config.AlertmanagerConfig
 }
 
 // checkHTTPConfigForSecrets checks HTTP config for exposed secrets.
-func (sv *SecurityValidator) checkHTTPConfigForSecrets(httpConfig *config.HTTPConfig, fieldPath string, result *configvalidator.Result) {
+func (sv *SecurityValidator) checkHTTPConfigForSecrets(httpConfig *config.HTTPConfig, fieldPath string, result *types.Result) {
 	if httpConfig.BearerToken != "" {
 		result.AddWarning(
 			"W309",
@@ -260,7 +260,7 @@ func (sv *SecurityValidator) checkHTTPConfigForSecrets(httpConfig *config.HTTPCo
 }
 
 // detectInsecureProtocols checks for HTTP URLs that should use HTTPS.
-func (sv *SecurityValidator) detectInsecureProtocols(cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) detectInsecureProtocols(cfg *config.AlertmanagerConfig, result *types.Result) {
 	// This is mostly covered by receiver validator, but we do a final sweep
 	insecureCount := 0
 
@@ -297,7 +297,7 @@ func (sv *SecurityValidator) detectInsecureProtocols(cfg *config.AlertmanagerCon
 }
 
 // detectWeakTLSConfig checks for weak TLS configurations.
-func (sv *SecurityValidator) detectWeakTLSConfig(cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) detectWeakTLSConfig(cfg *config.AlertmanagerConfig, result *types.Result) {
 	insecureSkipVerifyCount := 0
 
 	// Check global HTTP config
@@ -325,7 +325,7 @@ func (sv *SecurityValidator) detectWeakTLSConfig(cfg *config.AlertmanagerConfig,
 			}
 
 			// PagerDuty configs
-			for _, pd := range receiver.PagerDutyConfigs {
+			for _, pd := range receiver.PagerdutyConfigs {
 				if pd.HTTPConfig != nil && pd.HTTPConfig.TLSConfig != nil && pd.HTTPConfig.TLSConfig.InsecureSkipVerify {
 					insecureSkipVerifyCount++
 				}
@@ -376,7 +376,7 @@ func (sv *SecurityValidator) detectWeakTLSConfig(cfg *config.AlertmanagerConfig,
 }
 
 // detectPermissiveConfigs checks for overly permissive configurations.
-func (sv *SecurityValidator) detectPermissiveConfigs(cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) detectPermissiveConfigs(cfg *config.AlertmanagerConfig, result *types.Result) {
 	// Check for receivers with no specific integrations (catch-all)
 	if cfg.Receivers != nil {
 		catchAllReceivers := 0
@@ -440,7 +440,7 @@ func (sv *SecurityValidator) countBroadRoutes(route *config.Route, count int) in
 }
 
 // detectSensitiveDataRisks checks for configurations that might expose sensitive data.
-func (sv *SecurityValidator) detectSensitiveDataRisks(cfg *config.AlertmanagerConfig, result *configvalidator.Result) {
+func (sv *SecurityValidator) detectSensitiveDataRisks(cfg *config.AlertmanagerConfig, result *types.Result) {
 	// Check if templates might expose sensitive labels/annotations
 	if len(cfg.Templates) > 0 {
 		result.AddInfo(

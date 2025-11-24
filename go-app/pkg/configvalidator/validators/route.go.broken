@@ -96,16 +96,16 @@ func (rv *RouteValidator) validateRouteTree(
 ) {
 	// Check max depth (prevent stack overflow)
 	if depth > 100 {
-		result.AddError(
-			"E101",
-			"Route tree too deep (max 100 levels)",
-			&types.Location{Field: path, Section: "route"},
-			path,
-			"route",
-			"",
-			"Flatten route tree or reduce nesting levels",
-			"",
-		)
+		result.AddError(types.Error{
+			Type:    "route",
+			Code:    "E101",
+			Message: "Route tree too deep (max 100 levels)",
+			Location: types.Location{
+				Field:   path,
+				Section: "route",
+			},
+			Suggestion: "Flatten route tree or reduce nesting levels",
+		})
 		return
 	}
 
