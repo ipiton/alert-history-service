@@ -1,0 +1,14 @@
+# Minimal Valid Alertmanager Configuration
+# This is the simplest possible valid configuration
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: [alertname]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: https://example.com/webhook

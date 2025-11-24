@@ -248,3 +248,4 @@ go.work
 **/results/
 k6-results/
 *.json.gz
+go-app/configvalidator

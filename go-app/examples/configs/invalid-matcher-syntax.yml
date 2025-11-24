@@ -1,0 +1,17 @@
+# Invalid Configuration: Wrong Matcher Syntax
+# This will fail validation with error E104
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  matchers:
+    - alertname:critical  # ERROR: Should be '=' not ':'
+    - severity~warning    # ERROR: Missing '=' before '~'
+  group_by: [alertname]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: https://example.com/webhook

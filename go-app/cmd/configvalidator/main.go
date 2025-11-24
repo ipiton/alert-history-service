@@ -435,6 +435,12 @@ func convertToSARIFResults(result *configvalidator.Result) []map[string]interfac
 		results = append(results, issueToSARIF(issue, "note"))
 	}
 
+	// Add suggestions (TN-151 bugfix: suggestions were missing from SARIF output)
+	for _, sugg := range result.Suggestions {
+		issue := suggestionToIssue(&sugg)
+		results = append(results, issueToSARIF(issue, "note"))
+	}
+
 	return results
 }
 

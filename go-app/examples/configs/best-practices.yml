@@ -1,0 +1,154 @@
+# Best Practices Configuration
+# Demonstrates recommended patterns and configurations
+
+global:
+  # Always set a reasonable resolve timeout
+  resolve_timeout: 5m
+
+  # Use TLS for SMTP
+  smtp_smarthost: smtp.example.com:587
+  smtp_from: alertmanager@example.com
+  smtp_require_tls: true
+
+  # Configure HTTP client properly
+  http_config:
+    follow_redirects: true
+    tls_config:
+      insecure_skip_verify: false  # Always verify TLS!
+
+# Use templates for reusable notification content
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  # Always specify a default receiver
+  receiver: default
+
+  # Group alerts intelligently
+  group_by: [alertname, cluster, service]
+
+  # Reasonable timing
+  group_wait: 30s        # Wait for more alerts to batch
+  group_interval: 5m     # How often to send when grouping
+  repeat_interval: 4h    # Don't spam!
+
+  routes:
+    # Use 'continue: true' for multiple destinations
+    - receiver: pagerduty-critical
+      matchers:
+        - severity=critical
+      continue: true
+
+    - receiver: slack-critical
+      matchers:
+        - severity=critical
+
+    # Organize by team/service
+    - receiver: team-backend
+      matchers:
+        - team=backend
+      group_by: [alertname, service, instance]
+
+      # Nested routes for fine-grained control
+      routes:
+        - receiver: backend-oncall
+          matchers:
+            - severity=critical
+            - time_of_day=~(00-08|18-23)
+        - receiver: backend-team
+          matchers:
+            - severity=~warning|info
+
+receivers:
+  - name: default
+    # Always have a catch-all receiver
+    webhook_configs:
+      - url: https://example.com/webhook/default
+        send_resolved: true
+
+  - name: pagerduty-critical
+    pagerduty_configs:
+      # Use *_file variants for secrets!
+      - service_key_file: /run/secrets/pagerduty-key
+        description: '{{ .CommonAnnotations.summary }}'
+        # Include relevant details
+        details:
+          alertname: '{{ .CommonLabels.alertname }}'
+          cluster: '{{ .CommonLabels.cluster }}'
+          severity: '{{ .CommonLabels.severity }}'
+
+  - name: slack-critical
+    slack_configs:
+      # Use *_file variants for secrets!
+      - api_url_file: /run/secrets/slack-webhook
+        channel: "#critical-alerts"
+        # Clear, informative titles
+        title: "🔴 {{ .CommonLabels.severity | toUpper }}: {{ .CommonLabels.alertname }}"
+        # Detailed text
+        text: |
+          *Cluster*: {{ .CommonLabels.cluster }}
+          *Service*: {{ .CommonLabels.service }}
+          *Summary*: {{ .CommonAnnotations.summary }}
+          {{ range .Alerts }}
+          - {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  - name: team-backend
+    # Multiple integration types for redundancy
+    slack_configs:
+      - api_url_file: /run/secrets/slack-webhook-backend
+        channel: "#backend-alerts"
+    email_configs:
+      - to: backend-team@example.com
+        from: alertmanager@example.com
+        headers:
+          Subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+
+  - name: backend-oncall
+    pagerduty_configs:
+      - service_key_file: /run/secrets/pagerduty-backend-oncall
+
+  - name: backend-team
+    slack_configs:
+      - api_url_file: /run/secrets/slack-webhook-backend
+        channel: "#backend-non-critical"
+
+# Always define inhibition rules to reduce noise
+inhibit_rules:
+  # Standard: Critical inhibits warning
+  - source_matchers:
+      - severity=critical
+    target_matchers:
+      - severity=warning
+    equal:
+      - alertname  # Match on alert name
+      - instance   # And instance
+
+  # Host down inhibits everything from that host
+  - source_matchers:
+      - alertname=HostDown
+    target_matchers:
+      - alertname=~.*  # All other alerts
+    equal:
+      - instance  # For the same instance
+
+  # Service down inhibits derivative alerts
+  - source_matchers:
+      - alertname=ServiceDown
+    target_matchers:
+      - alertname=~(HighLatency|HighErrorRate|LowThroughput)
+    equal:
+      - service
+      - instance
+
+# Best Practices Summary:
+# ✅ Use secrets files, not inline secrets
+# ✅ Set reasonable timeouts and intervals
+# ✅ Enable TLS verification
+# ✅ Group alerts intelligently
+# ✅ Use inhibition rules to reduce noise
+# ✅ Have multiple notification channels
+# ✅ Use templates for consistency
+# ✅ Document your configuration
+# ✅ Test with configvalidator!
