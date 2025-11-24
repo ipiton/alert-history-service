@@ -144,7 +144,7 @@ func (h *ConfigRollbackHandler) handleRollbackError(
 
 	default:
 		// Check if version not found
-		if stringContains(err.Error(), "not found") {
+		if configStringContains(err.Error(), "not found") {
 			statusCode = http.StatusNotFound
 			message = fmt.Sprintf("version %d not found", targetVersion)
 		}
@@ -191,8 +191,8 @@ func (h *ConfigRollbackHandler) respondError(w http.ResponseWriter, statusCode i
 	}
 }
 
-// stringContains checks if string contains substring (simple helper)
-func stringContains(s, substr string) bool {
+// configStringContains checks if string contains substring (simple helper)
+func configStringContains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || indexOf(s, substr) >= 0)
 }
 

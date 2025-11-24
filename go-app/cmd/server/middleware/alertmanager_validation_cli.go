@@ -29,12 +29,12 @@ import (
 
 // AlertmanagerValidationCLIMiddleware validates Alertmanager configuration using CLI
 type AlertmanagerValidationCLIMiddleware struct {
-	cliPath        string
-	mode           string
-	enableSecurity bool
+	cliPath             string
+	mode                string
+	enableSecurity      bool
 	enableBestPractices bool
-	skipDryRun     bool
-	logger         *slog.Logger
+	skipDryRun          bool
+	logger              *slog.Logger
 }
 
 // AlertmanagerValidationCLIConfig holds CLI middleware configuration
@@ -182,15 +182,15 @@ func (m *AlertmanagerValidationCLIMiddleware) validateWithCLI(ctx context.Contex
 	args := []string{
 		"validate",
 		"--mode", m.mode,
-		"--format", "json", // Request JSON output
+		"--output", "json", // Request JSON output
 		tmpFile.Name(),
 	}
 
 	if m.enableSecurity {
-		args = append(args, "--enable-security")
+		args = append(args, "--security")
 	}
 	if m.enableBestPractices {
-		args = append(args, "--enable-best-practices")
+		args = append(args, "--best-practices")
 	}
 
 	// Execute CLI with timeout
@@ -273,15 +273,15 @@ func (m *AlertmanagerValidationCLIMiddleware) detectFormat(r *http.Request, body
 // respondValidationError sends validation error response
 func (m *AlertmanagerValidationCLIMiddleware) respondValidationError(w http.ResponseWriter, result *CLIValidationResult) {
 	response := map[string]interface{}{
-		"status":        "validation_failed",
-		"message":       result.Message,
-		"valid":         result.Valid,
-		"should_block":  result.ShouldBlock,
-		"mode":          m.mode,
-		"errors":        result.Errors,
-		"warnings":      result.Warnings,
-		"info":          result.Info,
-		"duration_ms":   result.DurationMs,
+		"status":       "validation_failed",
+		"message":      result.Message,
+		"valid":        result.Valid,
+		"should_block": result.ShouldBlock,
+		"mode":         m.mode,
+		"errors":       result.Errors,
+		"warnings":     result.Warnings,
+		"info":         result.Info,
+		"duration_ms":  result.DurationMs,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -303,26 +303,26 @@ func (m *AlertmanagerValidationCLIMiddleware) respondError(w http.ResponseWriter
 
 // CLIValidationResult represents CLI validation output
 type CLIValidationResult struct {
-	Valid       bool                       `json:"valid"`
-	ShouldBlock bool                       `json:"should_block"`
-	Message     string                     `json:"message"`
-	Errors      []CLIValidationIssue       `json:"errors,omitempty"`
-	Warnings    []CLIValidationIssue       `json:"warnings,omitempty"`
-	Info        []CLIValidationIssue       `json:"info,omitempty"`
-	HasWarnings bool                       `json:"has_warnings"`
-	DurationMs  int64                      `json:"duration_ms"`
+	Valid       bool                 `json:"valid"`
+	ShouldBlock bool                 `json:"should_block"`
+	Message     string               `json:"message"`
+	Errors      []CLIValidationIssue `json:"errors,omitempty"`
+	Warnings    []CLIValidationIssue `json:"warnings,omitempty"`
+	Info        []CLIValidationIssue `json:"info,omitempty"`
+	HasWarnings bool                 `json:"has_warnings"`
+	DurationMs  int64                `json:"duration_ms"`
 }
 
 // CLIValidationIssue represents a single validation issue from CLI
 type CLIValidationIssue struct {
-	Type       string                `json:"type"`
-	Code       string                `json:"code"`
-	Message    string                `json:"message"`
-	FieldPath  string                `json:"field_path,omitempty"`
-	Section    string                `json:"section,omitempty"`
+	Type       string                 `json:"type"`
+	Code       string                 `json:"code"`
+	Message    string                 `json:"message"`
+	FieldPath  string                 `json:"field_path,omitempty"`
+	Section    string                 `json:"section,omitempty"`
 	Location   *CLIValidationLocation `json:"location,omitempty"`
-	Suggestion string                `json:"suggestion,omitempty"`
-	DocsURL    string                `json:"docs_url,omitempty"`
+	Suggestion string                 `json:"suggestion,omitempty"`
+	DocsURL    string                 `json:"docs_url,omitempty"`
 }
 
 // CLIValidationLocation represents exact position in config

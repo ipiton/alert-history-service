@@ -32,6 +32,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/llm"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/repository"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/webhook"
+	internalmetrics "github.com/vitaliisemenov/alert-history/internal/metrics" // TN-152: Config reload metrics
 	"github.com/vitaliisemenov/alert-history/internal/middleware"
 	"github.com/vitaliisemenov/alert-history/internal/ui"        // TN-77: Dashboard Template Engine
 	"github.com/vitaliisemenov/alert-history/internal/realtime" // TN-78: Real-time Updates
@@ -2099,8 +2100,8 @@ func main() {
 			"Source detection (file/env/defaults)",
 		})
 
-	// TN-150: Initialize Config Update Service and register config update endpoint
-	slog.Info("Initializing Config Update Service (TN-150)")
+	// TN-150 & TN-152: Initialize Config Update Service and Reload Coordinator
+	slog.Info("Initializing Config Update Service (TN-150) and Reload Coordinator (TN-152)")
 
 	// Initialize validator
 	configValidator := appconfig.NewConfigValidator()
@@ -2134,6 +2135,33 @@ func main() {
 		slog.Warn("⚠️ Config update service NOT available (database not connected)")
 		slog.Warn("⚠️ POST /api/v2/config endpoint will NOT be registered")
 		slog.Info("To enable: Set DATABASE_URL environment variable or run with PostgreSQL")
+	}
+
+	// TN-152: Initialize Reload Coordinator (for SIGHUP hot reload) - must be before update service
+	var reloadCoordinator *appconfig.ReloadCoordinator
+	if pool != nil {
+		reloadCoordinator = appconfig.NewReloadCoordinator(
+			cfg,
+			resolvedConfigPath,
+			configValidator,
+			configComparator,
+			configReloader,
+			configStorage,
+			configLockManager,
+			appLogger,
+		)
+		slog.Info("✅ Reload Coordinator initialized (TN-152)",
+			"config_path", resolvedConfigPath,
+			"features", []string{
+				"SIGHUP signal handling",
+				"6-phase reload pipeline",
+				"Automatic rollback on failures",
+				"Zero-downtime reload",
+				"Distributed locking",
+			})
+	} else {
+		slog.Warn("⚠️ Reload Coordinator NOT available (database not connected)")
+		slog.Info("Hot reload via SIGHUP will not be available without database")
 	}
 
 	// Initialize update service and register endpoint (only if storage available)
@@ -2233,6 +2261,20 @@ func main() {
 				"config_audit_log (audit trail)",
 				"config_backups (safety backups)",
 				"config_locks (distributed locks)",
+			})
+
+	}
+
+	// TN-152: Register config status endpoint (if coordinator available)
+	if reloadCoordinator != nil {
+		configStatusHandler := handlers.NewConfigStatusHandler(reloadCoordinator)
+		mux.HandleFunc("GET /api/v2/config/status", configStatusHandler.HandleGetStatus)
+		slog.Info("✅ Config status endpoint registered (TN-152)",
+			"endpoint", "GET /api/v2/config/status",
+			"features", []string{
+				"Current version tracking",
+				"Last reload status",
+				"Last reload timestamp",
 			})
 	}
 
@@ -2355,12 +2397,8 @@ func main() {
 		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
 
-	// Channel to listen for interrupt signal
-	done := make(chan bool, 1)
-	quit := make(chan os.Signal, 1)
-
-	// Register interrupt signals
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	// TN-152: Setup signal handlers for graceful shutdown and hot reload
+	setupSignalHandlers(cfg, resolvedConfigPath, reloadCoordinator, server, timerManager, appLogger)
 
 	// Start server in goroutine
 	go func() {
@@ -2371,11 +2409,135 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
-	<-quit
-	slog.Info("Shutting down server...")
+	// Block forever (signal handlers will handle shutdown/reload)
+	select {}
+}
 
-	// Create context with timeout for graceful shutdown from config
+// ================================================================================
+// TN-152: Signal Handlers for Graceful Shutdown and Hot Reload
+// ================================================================================
+
+// setupSignalHandlers sets up signal handlers for graceful shutdown (SIGINT, SIGTERM)
+// and hot reload (SIGHUP).
+//
+// Signals:
+//   - SIGINT (Ctrl+C): Graceful shutdown
+//   - SIGTERM (Kubernetes): Graceful shutdown
+//   - SIGHUP (kill -HUP): Hot reload configuration
+func setupSignalHandlers(
+	cfg *appconfig.Config,
+	configPath string,
+	reloadCoordinator *appconfig.ReloadCoordinator,
+	server *http.Server,
+	timerManager grouping.GroupTimerManager,
+	logger *slog.Logger,
+) {
+	// Channel for shutdown signals (SIGINT, SIGTERM)
+	shutdownSignals := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignals, os.Interrupt, syscall.SIGTERM)
+
+	// Channel for reload signals (SIGHUP)
+	reloadSignals := make(chan os.Signal, 1)
+	signal.Notify(reloadSignals, syscall.SIGHUP)
+
+	// Goroutine for handling signals
+	go func() {
+		for {
+			select {
+			case sig := <-shutdownSignals:
+				logger.Info("shutdown signal received",
+					"signal", sig.String(),
+				)
+				handleGracefulShutdown(cfg, server, timerManager, logger)
+				return
+
+			case sig := <-reloadSignals:
+				logger.Info("reload signal received",
+					"signal", sig.String(),
+					"config_path", configPath,
+				)
+				handleConfigReload(configPath, reloadCoordinator, logger)
+			}
+		}
+	}()
+
+	logger.Info("signal handlers registered",
+		"shutdown_signals", []string{"SIGINT", "SIGTERM"},
+		"reload_signals", []string{"SIGHUP"},
+	)
+}
+
+// handleConfigReload handles SIGHUP signal for configuration reload
+func handleConfigReload(
+	configPath string,
+	coordinator *appconfig.ReloadCoordinator,
+	logger *slog.Logger,
+) {
+	// Check if coordinator is available
+	if coordinator == nil {
+		logger.Warn("config reload requested but coordinator not available",
+			"reason", "database not connected",
+			"solution", "set DATABASE_URL to enable hot reload",
+		)
+		return
+	}
+
+	startTime := time.Now()
+	ctx := context.Background()
+
+	logger.Info("config reload triggered",
+		"trigger", "SIGHUP",
+		"config_path", configPath,
+	)
+
+	// Trigger reload through coordinator
+	result, err := coordinator.ReloadFromFile(ctx, configPath)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		logger.Error("config reload failed",
+			"error", err,
+			"duration_ms", duration.Milliseconds(),
+		)
+		// Increment error metric
+		internalmetrics.ConfigReloadTotal.WithLabelValues("error").Inc()
+		internalmetrics.ConfigReloadErrors.WithLabelValues("reload_failed").Inc()
+		return
+	}
+
+	// Log success
+	logger.Info("config reload successful",
+		"version", result.Version,
+		"components_reloaded", len(result.ComponentsReloaded),
+		"duration_ms", duration.Milliseconds(),
+		"rollback_occurred", result.RolledBack,
+	)
+
+	// Update metrics
+	internalmetrics.ConfigReloadTotal.WithLabelValues("success").Inc()
+	internalmetrics.ConfigReloadDuration.Observe(duration.Seconds())
+	internalmetrics.ConfigReloadLastSuccess.SetToCurrentTime()
+	internalmetrics.ConfigReloadVersion.Set(float64(result.Version))
+
+	// Log component-specific results
+	for _, comp := range result.ComponentsReloaded {
+		logger.Info("component reloaded",
+			"component", comp.Name,
+			"duration_ms", comp.Duration.Milliseconds(),
+			"success", comp.Error == nil,
+		)
+	}
+}
+
+// handleGracefulShutdown handles graceful shutdown (SIGINT, SIGTERM)
+func handleGracefulShutdown(
+	cfg *appconfig.Config,
+	server *http.Server,
+	timerManager grouping.GroupTimerManager,
+	logger *slog.Logger,
+) {
+	logger.Info("shutting down server...")
+
 	shutdownTimeout := cfg.Server.GracefulShutdownTimeout
 	if shutdownTimeout <= 0 {
 		shutdownTimeout = 30 * time.Second
@@ -2393,19 +2555,20 @@ func main() {
 
 	// TN-124: Shutdown timer manager (if initialized)
 	if timerManager != nil {
-		slog.Info("Shutting down timer manager...")
+		logger.Info("shutting down timer manager...")
 		if err := timerManager.Shutdown(ctx); err != nil {
-			slog.Error("Timer manager shutdown error", "error", err)
+			logger.Error("timer manager shutdown error", "error", err)
 		} else {
-			slog.Info("✅ Timer manager stopped")
+			logger.Info("✅ timer manager stopped")
 		}
 	}
 
+	// Shutdown HTTP server
 	if err := server.Shutdown(ctx); err != nil {
-		slog.Error("Server forced to shutdown", "error", err)
+		logger.Error("server forced to shutdown", "error", err)
 		os.Exit(1)
 	}
 
-	close(done)
-	slog.Info("Server exited")
+	logger.Info("server exited")
+	os.Exit(0)
 }
