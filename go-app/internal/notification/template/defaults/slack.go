@@ -40,7 +40,7 @@ const DefaultSlackTitle = `{{ if eq .Status "resolved" }}âœ… RESOLVED{{ else }}ð
 // Example outputs:
 // - "*3 alerts* in this group"
 // - "CPU usage above 90% threshold"
-const DefaultSlackText = `{{ if gt (len .Alerts) 1 }}*{{ len .Alerts }} alerts* in this group{{ else }}{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}{{ end }}`
+const DefaultSlackText = `{{ .CommonAnnotations.summary }}`
 
 // DefaultSlackPretext is the default template for Slack pretext.
 // Shows environment and cluster context.
@@ -91,7 +91,7 @@ const DefaultSlackFieldsSingle = `[
 // ]
 const DefaultSlackFieldsMulti = `[
   {"title": "Severity", "value": "{{ .CommonLabels.severity | upper }}", "short": true},
-  {"title": "Alert Count", "value": "{{ len .Alerts }}", "short": true},
+  {"title": "Status", "value": "{{ .Status | upper }}", "short": true},
   {"title": "Environment", "value": "{{ .CommonLabels.environment | default "unknown" }}", "short": true},
   {"title": "Cluster", "value": "{{ .CommonLabels.cluster | default "N/A" }}", "short": true}
 ]`

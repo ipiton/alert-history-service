@@ -28,7 +28,7 @@ package defaults
 // Example outputs:
 // - "[ALERT] HighCPU (1 alert)"
 // - "[RESOLVED] HighCPU (3 alerts)"
-const DefaultEmailSubject = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }} ({{ len .Alerts }} alert{{ if gt (len .Alerts) 1 }}s{{ end }})`
+const DefaultEmailSubject = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }}`
 
 // DefaultEmailHTML is the default template for HTML email body.
 // Professional, responsive design with inline CSS for maximum compatibility.
@@ -215,7 +215,7 @@ const DefaultEmailHTML = `<!DOCTYPE html>
         <div class="header">
             <h1>{{ if eq .Status "resolved" }}✅ Alerts Resolved{{ else }}🔥 Alert Notification{{ end }}</h1>
             <p><strong>{{ .GroupLabels.alertname }}</strong></p>
-            <p>{{ len .Alerts }} alert{{ if gt (len .Alerts) 1 }}s{{ end }} • {{ .Status | upper }}</p>
+            <p>{{ .Status | upper }}</p>
         </div>
 
         <div class="content">
@@ -231,14 +231,12 @@ const DefaultEmailHTML = `<!DOCTYPE html>
                         </tr>
                     </thead>
                     <tbody>
-                        {{ range .Alerts }}
                         <tr>
                             <td><strong>{{ .Labels.alertname }}</strong></td>
                             <td class="severity-{{ .Labels.severity | lower }}">{{ .Labels.severity | default "unknown" }}</td>
                             <td>{{ .Labels.instance | default "N/A" }}</td>
                             <td>{{ .Annotations.description | default "No description" }}</td>
                         </tr>
-                        {{ end }}
                     </tbody>
                 </table>
             </div>
@@ -276,19 +274,17 @@ const DefaultEmailHTML = `<!DOCTYPE html>
 // Variables: All TemplateData fields
 const DefaultEmailText = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }}
 
-{{ len .Alerts }} alert{{ if gt (len .Alerts) 1 }}s{{ end }} - {{ .Status | upper }}
+{{ .Status | upper }}
 
 ================================================================================
-ALERTS
+ALERT DETAILS
 ================================================================================
-{{ range .Alerts }}
 Alert: {{ .Labels.alertname }}
 Severity: {{ .Labels.severity | upper }}
 Instance: {{ .Labels.instance | default "N/A" }}
 Description: {{ .Annotations.description | default "No description" }}
 {{ if .Annotations.summary }}Summary: {{ .Annotations.summary }}{{ end }}
 
-{{ end }}
 ================================================================================
 COMMON LABELS
 ================================================================================

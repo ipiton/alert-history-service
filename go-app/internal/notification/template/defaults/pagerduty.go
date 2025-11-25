@@ -77,7 +77,6 @@ const DefaultPagerDutyDetailsSingle = `{
 //   "status": "firing"
 // }
 const DefaultPagerDutyDetailsMulti = `{
-  "alert_count": "{{ len .Alerts }}",
   "severity": "{{ .CommonLabels.severity }}",
   "environment": "{{ .CommonLabels.environment | default "unknown" }}",
   "cluster": "{{ .CommonLabels.cluster | default "N/A" }}",

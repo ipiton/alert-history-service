@@ -33,6 +33,9 @@ type TemplateRegistry struct {
 
 	// Email holds all Email default templates
 	Email *EmailTemplates
+
+	// Webhook holds all WebHook default templates
+	Webhook *WebhookTemplates
 }
 
 // GetDefaultTemplates returns the complete default template registry.
@@ -61,6 +64,7 @@ func GetDefaultTemplates() *TemplateRegistry {
 		Slack:     GetDefaultSlackTemplates(),
 		PagerDuty: GetDefaultPagerDutyTemplates(),
 		Email:     GetDefaultEmailTemplates(),
+		Webhook:   GetDefaultWebhookTemplates(),
 	}
 }
 
@@ -169,6 +173,44 @@ func ValidateAllTemplates() error {
 		}
 	}
 
+	// Validate Webhook templates
+	if registry.Webhook.Payload == "" {
+		return &TemplateValidationError{
+			Template: "Webhook.Payload",
+			Reason:   "template is empty",
+		}
+	}
+	if registry.Webhook.MicrosoftTeams == "" {
+		return &TemplateValidationError{
+			Template: "Webhook.MicrosoftTeams",
+			Reason:   "template is empty",
+		}
+	}
+	if registry.Webhook.Discord == "" {
+		return &TemplateValidationError{
+			Template: "Webhook.Discord",
+			Reason:   "template is empty",
+		}
+	}
+	if !ValidateWebhookPayloadSize(registry.Webhook.Payload) {
+		return &TemplateValidationError{
+			Template: "Webhook.Payload",
+			Reason:   "template exceeds 100KB limit",
+		}
+	}
+	if !ValidateTeamsMessageSize(registry.Webhook.MicrosoftTeams) {
+		return &TemplateValidationError{
+			Template: "Webhook.MicrosoftTeams",
+			Reason:   "template exceeds 28KB limit",
+		}
+	}
+	if !ValidateDiscordMessageSize(registry.Webhook.Discord) {
+		return &TemplateValidationError{
+			Template: "Webhook.Discord",
+			Reason:   "template exceeds 6000 char limit",
+		}
+	}
+
 	return nil
 }
 
@@ -198,6 +240,9 @@ type TemplateStats struct {
 	// EmailTemplateCount is the number of Email templates
 	EmailTemplateCount int
 
+	// WebhookTemplateCount is the number of Webhook templates
+	WebhookTemplateCount int
+
 	// TotalSize is the total size of all templates in bytes
 	TotalSize int
 
@@ -209,6 +254,9 @@ type TemplateStats struct {
 
 	// EmailSize is the total size of Email templates
 	EmailSize int
+
+	// WebhookSize is the total size of Webhook templates
+	WebhookSize int
 }
 
 // GetTemplateStats returns statistics about all default templates.
@@ -229,13 +277,19 @@ func GetTemplateStats() *TemplateStats {
 		len(registry.Email.HTML) +
 		len(registry.Email.Text)
 
+	webhookSize := len(registry.Webhook.Payload) +
+		len(registry.Webhook.MicrosoftTeams) +
+		len(registry.Webhook.Discord)
+
 	return &TemplateStats{
 		SlackTemplateCount:     5, // Title, Text, Pretext, FieldsSingle, FieldsMulti
 		PagerDutyTemplateCount: 3, // Description, DetailsSingle, DetailsMulti
 		EmailTemplateCount:     3, // Subject, HTML, Text
-		TotalSize:              slackSize + pagerdutySize + emailSize,
+		WebhookTemplateCount:   3, // Payload, MicrosoftTeams, Discord
+		TotalSize:              slackSize + pagerdutySize + emailSize + webhookSize,
 		SlackSize:              slackSize,
 		PagerDutySize:          pagerdutySize,
 		EmailSize:              emailSize,
+		WebhookSize:            webhookSize,
 	}
 }

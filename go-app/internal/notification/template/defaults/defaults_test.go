@@ -18,6 +18,7 @@ func TestGetDefaultTemplates(t *testing.T) {
 	require.NotNil(t, registry.Slack)
 	require.NotNil(t, registry.PagerDuty)
 	require.NotNil(t, registry.Email)
+	require.NotNil(t, registry.Webhook)
 
 	// Verify Slack templates
 	assert.NotEmpty(t, registry.Slack.Title)
@@ -60,20 +61,23 @@ func TestGetTemplateStats(t *testing.T) {
 	assert.Equal(t, 5, stats.SlackTemplateCount)
 	assert.Equal(t, 3, stats.PagerDutyTemplateCount)
 	assert.Equal(t, 3, stats.EmailTemplateCount)
+	assert.Equal(t, 3, stats.WebhookTemplateCount)
 
 	// Verify sizes are reasonable
 	assert.Greater(t, stats.SlackSize, 0)
 	assert.Greater(t, stats.PagerDutySize, 0)
 	assert.Greater(t, stats.EmailSize, 0)
+	assert.Greater(t, stats.WebhookSize, 0)
 	assert.Greater(t, stats.TotalSize, 0)
 
 	// Verify total is sum of parts
-	assert.Equal(t, stats.SlackSize+stats.PagerDutySize+stats.EmailSize, stats.TotalSize)
+	assert.Equal(t, stats.SlackSize+stats.PagerDutySize+stats.EmailSize+stats.WebhookSize, stats.TotalSize)
 
 	// Verify sizes are reasonable (not too large)
 	assert.Less(t, stats.SlackSize, 10*1024, "Slack templates should be < 10KB")
 	assert.Less(t, stats.PagerDutySize, 5*1024, "PagerDuty templates should be < 5KB")
 	assert.Less(t, stats.EmailSize, 50*1024, "Email templates should be < 50KB")
+	assert.Less(t, stats.WebhookSize, 50*1024, "Webhook templates should be < 50KB")
 }
 
 func TestTemplateRegistryStructure(t *testing.T) {
@@ -105,6 +109,7 @@ func TestTemplateStatsConsistency(t *testing.T) {
 	assert.Equal(t, stats1.SlackTemplateCount, stats2.SlackTemplateCount)
 	assert.Equal(t, stats1.PagerDutyTemplateCount, stats2.PagerDutyTemplateCount)
 	assert.Equal(t, stats1.EmailTemplateCount, stats2.EmailTemplateCount)
+	assert.Equal(t, stats1.WebhookTemplateCount, stats2.WebhookTemplateCount)
 	assert.Equal(t, stats1.TotalSize, stats2.TotalSize)
 }
 
