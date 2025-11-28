@@ -247,7 +247,7 @@ func TestSemanticValidator_MultipleVariables(t *testing.T) {
 func TestSemanticValidator_ContextCancellation(t *testing.T) {
 	validator := NewSemanticValidator()
 	opts := templatevalidator.DefaultValidateOptions()
-	
+
 	// Create cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -259,4 +259,3 @@ func TestSemanticValidator_ContextCancellation(t *testing.T) {
 }
 
 // ================================================================================
-

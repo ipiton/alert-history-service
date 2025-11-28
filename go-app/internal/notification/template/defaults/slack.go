@@ -35,12 +35,12 @@ const DefaultSlackTitle = `{{ if eq .Status "resolved" }}âœ… RESOLVED{{ else }}ð
 //
 // Variables:
 // - .Alerts: Array of alerts in the group
-// - .Annotations.summary: Alert summary
+// - .CommonAnnotations.summary: Alert summary
 //
 // Example outputs:
 // - "*3 alerts* in this group"
 // - "CPU usage above 90% threshold"
-const DefaultSlackText = `{{ .CommonAnnotations.summary }}`
+const DefaultSlackText = `{{ if gt (len .Alerts) 1 }}*{{ len .Alerts }} alerts* in this group{{ else }}{{ .CommonAnnotations.summary }}{{ end }}`
 
 // DefaultSlackPretext is the default template for Slack pretext.
 // Shows environment and cluster context.
@@ -87,10 +87,13 @@ const DefaultSlackFieldsSingle = `[
 // [
 //   {"title": "Severity", "value": "WARNING", "short": true},
 //   {"title": "Alert Count", "value": "5", "short": true},
-//   {"title": "Grouped By", "value": "alertname, cluster", "short": false}
+//   {"title": "Status", "value": "FIRING", "short": true},
+//   {"title": "Environment", "value": "production", "short": true},
+//   {"title": "Cluster", "value": "us-west-1", "short": true}
 // ]
 const DefaultSlackFieldsMulti = `[
   {"title": "Severity", "value": "{{ .CommonLabels.severity | upper }}", "short": true},
+  {"title": "Alert Count", "value": "{{ len .Alerts }}", "short": true},
   {"title": "Status", "value": "{{ .Status | upper }}", "short": true},
   {"title": "Environment", "value": "{{ .CommonLabels.environment | default "unknown" }}", "short": true},
   {"title": "Cluster", "value": "{{ .CommonLabels.cluster | default "N/A" }}", "short": true}

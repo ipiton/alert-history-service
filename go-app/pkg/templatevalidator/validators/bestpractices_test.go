@@ -197,7 +197,7 @@ func TestBestPracticesValidator_NamingConventions(t *testing.T) {
 func TestBestPracticesValidator_ContextCancellation(t *testing.T) {
 	validator := NewBestPracticesValidator()
 	opts := templatevalidator.DefaultValidateOptions()
-	
+
 	// Create cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -249,4 +249,3 @@ func TestBestPracticesValidator_MultipleIssues(t *testing.T) {
 }
 
 // ================================================================================
-

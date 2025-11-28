@@ -158,13 +158,13 @@ func IndentString(s, prefix string) string {
 func RemoveBlankLines(s string) string {
 	lines := strings.Split(s, "\n")
 	filtered := make([]string, 0, len(lines))
-	
+
 	for _, line := range lines {
 		if !IsWhitespace(line) {
 			filtered = append(filtered, line)
 		}
 	}
-	
+
 	return strings.Join(filtered, "\n")
 }
 
@@ -220,4 +220,3 @@ func CalculateComplexity(content string) int {
 }
 
 // ================================================================================
-

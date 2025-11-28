@@ -228,7 +228,7 @@ token: abc123xyz789token
 func TestSecurityValidator_ContextCancellation(t *testing.T) {
 	validator := NewSecurityValidator()
 	opts := templatevalidator.DefaultValidateOptions()
-	
+
 	// Create cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -261,4 +261,3 @@ func TestSecurityValidator_Performance(t *testing.T) {
 }
 
 // ================================================================================
-

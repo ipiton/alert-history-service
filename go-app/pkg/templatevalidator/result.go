@@ -1,6 +1,9 @@
 package templatevalidator
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ================================================================================
 // TN-156: Template Validator - Result Models
@@ -387,10 +390,5 @@ func (r ValidationResult) HighErrorCount() int {
 	}
 	return count
 }
-
-// ================================================================================
-
-// Import for fmt.Sprintf
-import "fmt"
 
 // ================================================================================

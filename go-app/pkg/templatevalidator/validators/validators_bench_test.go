@@ -113,7 +113,7 @@ func BenchmarkBestPracticesValidator_Complex(b *testing.B) {
 // BenchmarkExtractFunctions benchmarks function extraction
 func BenchmarkExtractFunctions(b *testing.B) {
 	engine := &MockTemplateEngine{}
-	validator := NewSyntaxValidator(engine).(*SyntaxValidator)
+	validator := NewSyntaxValidator(engine)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -124,7 +124,7 @@ func BenchmarkExtractFunctions(b *testing.B) {
 // BenchmarkExtractVariables benchmarks variable extraction
 func BenchmarkExtractVariables(b *testing.B) {
 	engine := &MockTemplateEngine{}
-	validator := NewSyntaxValidator(engine).(*SyntaxValidator)
+	validator := NewSyntaxValidator(engine)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

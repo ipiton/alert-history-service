@@ -54,6 +54,20 @@ func createTestTemplateData(status string, alertCount int) *template.TemplateDat
 	data.CommonLabels = labels
 	data.CommonAnnotations = annotations
 
+	// Create Alerts array for multiple alert scenarios
+	data.Alerts = make([]template.Alert, alertCount)
+	for i := 0; i < alertCount; i++ {
+		data.Alerts[i] = template.Alert{
+			Status:       status,
+			Labels:       labels,
+			Annotations:  annotations,
+			StartsAt:     time.Now(),
+			EndsAt:       time.Now().Add(1 * time.Hour),
+			GeneratorURL: "https://prometheus.example.com",
+			Fingerprint:  "",
+		}
+	}
+
 	return data
 }
 
