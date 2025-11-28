@@ -256,8 +256,8 @@
 - [x] **TN-70** POST /publishing/targets/{target}/test ✅ **COMPLETED** (150%, Grade A+)
 
 ### Enrichment APIs (Deferred - Part of AI)
-- [x] **TN-74** GET /enrichment/mode - current mode (✅ COMPLETE - 158% Quality, A+ Grade)
-- [ ] **TN-75** POST /enrichment/mode - switch mode
+- [x] **TN-74** GET /enrichment/mode - current mode (✅ COMPLETE - 165% Quality, A++ Grade)
+- [x] **TN-75** POST /enrichment/mode - switch mode (✅ COMPLETE - 160% Quality, A+ Grade)
 
 ---
 
