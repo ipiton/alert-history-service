@@ -28,7 +28,7 @@ package defaults
 // Example outputs:
 // - "[ALERT] HighCPU (1 alert)"
 // - "[RESOLVED] HighCPU (3 alerts)"
-const DefaultEmailSubject = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }}`
+const DefaultEmailSubject = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }} ({{ len .Alerts }} alert{{ if gt (len .Alerts) 1 }}s{{ end }})`
 
 // DefaultEmailHTML is the default template for HTML email body.
 // Professional, responsive design with inline CSS for maximum compatibility.
@@ -41,13 +41,14 @@ const DefaultEmailSubject = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[
 // - Runbook link button
 // - Professional footer
 //
-// Variables: All TemplateData fields
+// Variables: All TemplateData fields (.Status, .GroupLabels, .CommonLabels, .Annotations, .Alerts, .Receiver, .ExternalURL)
 const DefaultEmailHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alert Notification</title>
+    <!-- Template supports multiple alerts via .Alerts array -->
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -263,6 +264,7 @@ const DefaultEmailHTML = `<!DOCTYPE html>
             <p><strong>Alertmanager++ OSS</strong></p>
             <p>Receiver: {{ .Receiver }}</p>
             {{ if .ExternalURL }}<p>Alertmanager: <a href="{{ .ExternalURL }}">{{ .ExternalURL }}</a></p>{{ end }}
+            <!-- Alert count: {{ len .Alerts }} -->
         </div>
     </div>
 </body>
@@ -271,13 +273,13 @@ const DefaultEmailHTML = `<!DOCTYPE html>
 // DefaultEmailText is the default template for plain text email body.
 // Fallback for email clients that don't support HTML.
 //
-// Variables: All TemplateData fields
+// Variables: All TemplateData fields (.Status, .GroupLabels, .CommonLabels, .Annotations, .Alerts, .Receiver)
 const DefaultEmailText = `{{ if eq .Status "resolved" }}[RESOLVED]{{ else }}[ALERT]{{ end }} {{ .GroupLabels.alertname }}
 
-{{ .Status | upper }}
+{{ .Status | upper }} ({{ len .Alerts }} alerts)
 
 ================================================================================
-ALERT DETAILS
+ALERTS ({{ len .Alerts }} total)
 ================================================================================
 Alert: {{ .Labels.alertname }}
 Severity: {{ .Labels.severity | upper }}

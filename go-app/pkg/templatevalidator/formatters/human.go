@@ -242,4 +242,3 @@ func (f *HumanFormatter) colorize(text, color string) string {
 }
 
 // ================================================================================
-

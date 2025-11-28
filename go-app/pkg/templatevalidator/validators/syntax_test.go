@@ -73,7 +73,7 @@ func TestSyntaxValidator_InvalidSyntax(t *testing.T) {
 
 func TestExtractFunctions(t *testing.T) {
 	engine := &MockTemplateEngine{}
-	validator := NewSyntaxValidator(engine).(*SyntaxValidator)
+	validator := NewSyntaxValidator(engine)
 
 	content := "{{ .Status | toUpper | default \"unknown\" }}"
 	functions := validator.extractFunctions(content)
@@ -92,7 +92,7 @@ func TestExtractFunctions(t *testing.T) {
 
 func TestExtractVariables(t *testing.T) {
 	engine := &MockTemplateEngine{}
-	validator := NewSyntaxValidator(engine).(*SyntaxValidator)
+	validator := NewSyntaxValidator(engine)
 
 	content := "{{ .Status }}: {{ .Labels.alertname }}"
 	variables := validator.extractVariables(content)

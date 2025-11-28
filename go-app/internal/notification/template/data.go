@@ -69,6 +69,12 @@ type TemplateData struct {
 	// Group Fields (for grouped notifications)
 	// ===================================================================
 
+	// Alerts is array of all alerts in the group
+	// For single alerts: array of 1 element
+	// For grouped alerts: array of multiple elements
+	// Example: [Alert{Status: "firing", Labels: {...}}, ...]
+	Alerts []Alert
+
 	// GroupLabels are labels used for grouping
 	// Example: {"alertname": "HighCPU", "cluster": "prod"}
 	GroupLabels map[string]string
