@@ -345,13 +345,15 @@
 ### Helm & Kubernetes
 
 - [x] **TN-24** Basic Helm chart ✅ **COMPLETED** (helm/alert-history-go/)
-- [ ] **TN-96** Production Helm chart with Deployment Profiles (Lite & Standard)
-  - **Lite Profile**: Single-node, PVC-based, embedded storage (SQLite/BadgerDB), no Postgres/Redis
-  - **Standard Profile**: HA-ready, Postgres + Redis, extended history, 2-10 replicas
-  - Add `profile` value with conditional logic
-  - Update values.yaml with profile-specific defaults
-  - Add profile documentation in Helm chart README
-  - See [ROADMAP.md Deployment Profiles](../ROADMAP.md#deployment-profiles) for details
+- [x] **TN-96** Production Helm chart with Deployment Profiles (Lite & Standard) ✅ **COMPLETE** (2025-11-29)
+  - ✅ **Lite Profile**: SQLite + PVC, zero external dependencies (5Gi storage, 250m CPU, 256Mi RAM)
+  - ✅ **Standard Profile**: PostgreSQL + Redis/Valkey, HA-ready (10Gi storage, 500m CPU, 512Mi RAM)
+  - ✅ Added `profile` value with conditional logic (lite/standard)
+  - ✅ Updated values.yaml with profile-specific defaults (`liteProfile` section)
+  - ✅ Updated deployment.yaml with DEPLOYMENT_PROFILE env var and conditional logic
+  - ✅ Comprehensive README documentation with profile comparison table
+  - 📊 **Quality**: A (production-ready, clear documentation)
+  - ⏱️ **Duration**: 1 hour
 - [ ] **TN-97** HPA configuration (2-10 replicas) - **Standard Profile only**
 - [ ] **TN-98** PostgreSQL StatefulSet - **Standard Profile only**
 - [ ] **TN-99** Redis StatefulSet - **Standard Profile only** (optional)
