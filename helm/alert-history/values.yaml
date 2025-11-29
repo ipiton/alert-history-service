@@ -7,6 +7,14 @@ logLevel: info
 namespace: ""
 
 # ===============================
+# Deployment Profile (TN-96)
+# ===============================
+# Profile determines the deployment architecture:
+# - "lite": Single-node, embedded storage (SQLite), memory-only cache, zero external dependencies
+# - "standard": HA-ready, PostgreSQL + Valkey/Redis, distributed cache, 2-10 replicas
+profile: "standard"  # Options: "lite" | "standard"
+
+# ===============================
 # Container Image Configuration
 # ===============================
 image:
@@ -178,10 +186,30 @@ targetDiscovery:
   refreshInterval: "300s"
 
 # ===============================
-# PostgreSQL Database Configuration (Custom)
+# Lite Profile Configuration (TN-96)
 # ===============================
+# Storage for Lite profile (SQLite database)
+liteProfile:
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+    mountPath: "/data"
+  # Resource limits for Lite profile
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# ===============================
+# PostgreSQL Database Configuration (Standard Profile Only)
+# ===============================
+# Automatically disabled for Lite profile
 postgresql:
-  enabled: true
+  enabled: true  # Overridden by profile in deployment.yaml
   # Database configuration
   database: "alert_history"
   username: "alert_history"
@@ -201,10 +229,11 @@ postgresql:
     storageClass: ""
 
 # ===============================
-# Valkey Cache Configuration (Redis-compatible)
+# Valkey Cache Configuration (Redis-compatible, Standard Profile Only)
 # ===============================
+# Automatically disabled for Lite profile (uses memory-only cache)
 cache:
-  enabled: true
+  enabled: true  # Overridden by profile in deployment.yaml
   # Valkey connection details
   host: "{{ include \"alerthistory.fullname\" . }}-valkey"  # Service name of Valkey
   port: 6379

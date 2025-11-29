@@ -63,8 +63,12 @@ spec:
             - name: SERVICE_VERSION
               value: {{ .Chart.AppVersion | quote }}
 
+            # TN-96: Deployment Profile Configuration
+            - name: DEPLOYMENT_PROFILE
+              value: {{ .Values.profile | quote }}
+
             # Database Configuration
-            {{- if .Values.postgresql.enabled }}
+            {{- if and .Values.postgresql.enabled (eq .Values.profile "standard") }}
             - name: POSTGRES_HOST
               value: {{ include "alert-history.postgresql.fullname" . }}
             - name: POSTGRES_PORT
@@ -88,8 +92,8 @@ spec:
               value: "sqlite:///data/alert_history.sqlite3"
             {{- end }}
 
-            # Valkey/Redis Configuration
-            {{- if .Values.cache.enabled }}
+            # Valkey/Redis Configuration (Standard Profile Only)
+            {{- if and .Values.cache.enabled (eq .Values.profile "standard") }}
             - name: REDIS_HOST
               value: {{ .Values.cache.host | quote }}
             - name: REDIS_PORT
@@ -205,13 +209,13 @@ spec:
           # Graceful shutdown: rely on SIGTERM handling in application
           # No preStop hook needed - our app handles SIGTERM properly
 
-          {{- if not .Values.postgresql.enabled }}
+          {{- if eq .Values.profile "lite" }}
           volumeMounts:
             - name: data
-              mountPath: /data
+              mountPath: {{ .Values.liteProfile.persistence.mountPath }}
           {{- end }}
 
-      {{- if not .Values.postgresql.enabled }}
+      {{- if eq .Values.profile "lite" }}
       volumes:
         - name: data
           persistentVolumeClaim:
