@@ -300,12 +300,19 @@
   - ✅ **Independent audit completed 2025-11-29**: 162% actual quality (claimed 155%)
   - 📊 **Audit Report**: TN-200-INDEPENDENT-COMPREHENSIVE-AUDIT-2025-11-29.md
 
-- [ ] **TN-201** Storage Backend Selection Logic
-  - Implement conditional storage initialization based on profile
-  - **Lite Profile**: SQLite/BadgerDB embedded storage (PVC-based)
-  - **Standard Profile**: PostgreSQL external storage
-  - Add storage backend detection and fallback logic
-  - Ensure all components work with both backends
+- [~] **TN-201** Storage Backend Selection Logic ⏳ **IN PROGRESS** (90% complete, 2025-11-29)
+  - ✅ Implement conditional storage initialization based on profile
+  - ✅ **Lite Profile**: SQLite embedded storage (PVC-based, WAL mode)
+  - ✅ **Standard Profile**: PostgreSQL external storage
+  - ✅ Add storage backend detection and fallback logic (Memory on failure)
+  - ✅ Storage Factory pattern (NewStorage with profile detection)
+  - ✅ Interface adaptation (core.AlertStorage compliance)
+  - ✅ Main.go integration (conditional initialization complete)
+  - ⏳ Comprehensive tests (unit + integration, 85%+ coverage) ← NEXT
+  - ⏳ Documentation finalization (guides + completion report)
+  - 📊 **Progress**: 4/5 phases complete, 1,669 LOC production code (209%)
+  - 📁 **Branch**: feature/TN-201-storage-backend-150pct (4 commits)
+  - 📄 **Docs**: TN-201-PROGRESS-REPORT-PHASE-4.md
 
 - [ ] **TN-202** Redis Conditional Initialization
   - Add conditional Redis initialization (Standard Profile only)
