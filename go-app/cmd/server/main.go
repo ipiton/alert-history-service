@@ -310,10 +310,22 @@ func main() {
 		}
 	}
 
-	// Initialize Redis cache for enrichment mode
+	// TN-202: Initialize Redis cache based on deployment profile
+	// - Lite Profile: Skip Redis (memory-only cache, zero external dependencies)
+	// - Standard Profile: Initialize Redis (L2 cache for distributed systems)
 	var redisCache cache.Cache
-	if cfg.Redis.Addr != "" {
-		slog.Info("Initializing Redis cache", "addr", cfg.Redis.Addr)
+
+	if cfg.Profile == appconfig.ProfileLite {
+		// Lite profile: Skip Redis initialization (memory-only)
+		slog.Info("Skipping Redis initialization (Lite profile uses memory-only cache)",
+			"profile", cfg.Profile)
+		redisCache = nil
+	} else if cfg.Profile == appconfig.ProfileStandard && cfg.Redis.Addr != "" {
+		// Standard profile: Initialize Redis
+		slog.Info("Initializing Redis cache (Standard profile)",
+			"profile", cfg.Profile,
+			"addr", cfg.Redis.Addr)
+
 		cacheConfig := cache.CacheConfig{
 			Addr:                  cfg.Redis.Addr,
 			Password:              cfg.Redis.Password,
@@ -333,7 +345,7 @@ func main() {
 		var err error
 		redisCache, err = cache.NewRedisCache(&cacheConfig, appLogger)
 		if err != nil {
-			slog.Warn("Failed to initialize Redis cache, enrichment mode will fallback to ENV/default",
+			slog.Warn("Failed to initialize Redis cache, enrichment mode will fallback to memory-only",
 				"error", err)
 			redisCache = nil
 		} else {
@@ -341,15 +353,18 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := redisCache.Ping(ctx); err != nil {
-				slog.Warn("Redis ping failed, enrichment mode will fallback to ENV/default",
+				slog.Warn("Redis ping failed, enrichment mode will fallback to memory-only",
 					"error", err)
 				redisCache = nil
 			} else {
-				slog.Info("✅ Redis cache initialized successfully")
+				slog.Info("✅ Redis cache initialized successfully (Standard profile)")
 			}
 		}
 	} else {
-		slog.Info("Redis not configured, enrichment mode will use ENV/default fallback")
+		// Redis not configured for Standard profile
+		slog.Info("Redis not configured, enrichment mode will use memory-only fallback",
+			"profile", cfg.Profile)
+		redisCache = nil
 	}
 
 	// Initialize Prometheus metrics if enabled (legacy MetricsManager for backward compatibility)
