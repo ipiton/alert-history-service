@@ -9,6 +9,100 @@ Helm chart для деплоя Alert History Service (Intelligent Alert Proxy)
 - **Dynamic Target Discovery** (Rootly, PagerDuty, Slack)
 - **Prometheus метрики** и ServiceMonitor
 - **Horizontal Scaling** - PostgreSQL + Redis for stateless design
+- **Deployment Profiles** - Two profiles for different use cases (Lite & Standard)
+
+## Deployment Profiles (TN-96)
+
+This Helm chart supports **two deployment profiles** to fit different use cases and infrastructure requirements:
+
+### 🪶 Lite Profile
+
+**Use Case:** Development, testing, small deployments, single-node setups
+
+**Features:**
+- **Embedded Storage:** SQLite database (no external PostgreSQL required)
+- **Memory-Only Cache:** No Redis/Valkey required
+- **Zero External Dependencies:** Single binary deployment
+- **PVC-Based:** Uses PersistentVolumeClaim for SQLite database
+- **Resource Efficient:** Lower CPU/memory requirements
+
+**Configuration:**
+```yaml
+profile: lite
+
+liteProfile:
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+    mountPath: "/data"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+```
+
+**Installation:**
+```bash
+helm install alert-history ./helm/alert-history \
+  --set profile=lite \
+  --set image.repository=<your-registry>/alert-history \
+  --set image.tag=latest
+```
+
+### ⚡ Standard Profile (Default)
+
+**Use Case:** Production, high-availability, distributed systems, 2-10 replicas
+
+**Features:**
+- **PostgreSQL Storage:** External database for HA
+- **Redis/Valkey L2 Cache:** Distributed caching
+- **Horizontal Scaling:** 2-10 replicas with HPA
+- **Production-Grade:** Full observability, metrics, ServiceMonitor
+
+**Configuration:**
+```yaml
+profile: standard
+
+postgresql:
+  enabled: true
+  database: "alert_history"
+  username: "alert_history"
+  password: "secure_password_123"
+  persistence:
+    enabled: true
+    size: 10Gi
+
+cache:
+  enabled: true
+  host: "{{ include \"alerthistory.fullname\" . }}-valkey"
+  port: 6379
+```
+
+**Installation:**
+```bash
+helm install alert-history ./helm/alert-history \
+  --set profile=standard \
+  --set image.repository=<your-registry>/alert-history \
+  --set image.tag=latest \
+  --set postgresql.enabled=true \
+  --set cache.enabled=true
+```
+
+### Profile Comparison
+
+| Feature | 🪶 Lite Profile | ⚡ Standard Profile |
+|---------|----------------|-------------------|
+| **Storage** | SQLite (embedded) | PostgreSQL (external) |
+| **Cache** | Memory-only (L1) | Redis L2 + Memory L1 |
+| **External Deps** | **Zero** | Postgres + Redis |
+| **Replicas** | 1 (single-node) | 2-10 (HA) |
+| **Use Case** | Dev, test, small | Production, HA |
+| **Resource Usage** | Low (250m CPU, 256Mi RAM) | Higher (500m CPU, 512Mi RAM+) |
+| **Data Persistence** | PVC (local) | PostgreSQL (distributed) |
 
 ## Monitoring and Metrics
 
