@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"                           // TN-201: pgxpool.Pool type
 	_ "github.com/prometheus/client_golang/prometheus/promhttp" // Imported for side effects
 	"github.com/vitaliisemenov/alert-history/cmd/server/handlers"
 	proxyhandlers "github.com/vitaliisemenov/alert-history/cmd/server/handlers/proxy"
@@ -25,7 +26,6 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/core/services"
 	"github.com/vitaliisemenov/alert-history/internal/database"
 	"github.com/vitaliisemenov/alert-history/internal/database/postgres"
-	"github.com/vitaliisemenov/alert-history/internal/infrastructure"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/cache"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/grouping"
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/inhibition"
@@ -34,6 +34,7 @@ import (
 	"github.com/vitaliisemenov/alert-history/internal/infrastructure/webhook"
 	internalmetrics "github.com/vitaliisemenov/alert-history/internal/metrics" // TN-152: Config reload metrics
 	"github.com/vitaliisemenov/alert-history/internal/middleware"
+	"github.com/vitaliisemenov/alert-history/internal/storage"  // TN-201: Storage backend selection
 	"github.com/vitaliisemenov/alert-history/internal/ui"        // TN-77: Dashboard Template Engine
 	"github.com/vitaliisemenov/alert-history/internal/realtime" // TN-78: Real-time Updates
 
@@ -224,9 +225,16 @@ func main() {
 	}
 	// HealthCheckPeriod остается дефолтным, пока не добавим в общий конфиг
 
-	// Initialize database connection and run migrations
-	slog.Info("Initializing database connection...",
-		"host", dbCfg.Host, "port", dbCfg.Port, "db", dbCfg.Database, "user", dbCfg.User)
+	// TN-201: Initialize storage backend based on deployment profile
+	// Supports two profiles:
+	//   - lite: SQLite (embedded, single-node, no external dependencies)
+	//   - standard: PostgreSQL (HA, multi-node, requires external database)
+	//
+	// Graceful degradation: If primary storage fails, fallback to in-memory storage
+	// (data will NOT persist, but service remains operational for monitoring)
+	slog.Info("Initializing storage backend...",
+		"profile", cfg.Profile,
+		"storage_backend", cfg.Storage.Backend)
 
 	// Check if we should use mock mode for performance testing
 	useMockMode := os.Getenv("MOCK_MODE") == "true" || os.Getenv("PERFORMANCE_TEST") == "true"
@@ -239,41 +247,50 @@ func main() {
 	if useMockMode {
 		slog.Info("🚀 Running in MOCK MODE for performance testing - no database required")
 	} else {
-		pool = postgres.NewPostgresPool(dbCfg, appLogger)
-
 		ctx := context.Background()
-		if err := pool.Connect(ctx); err != nil {
-			slog.Warn("Failed to connect to database, switching to MOCK MODE", "error", err)
-			useMockMode = true
+
+		// TN-201: For standard profile, initialize PostgreSQL pool first
+		if cfg.Profile == appconfig.ProfileStandard {
+			slog.Info("Initializing PostgreSQL pool (standard profile)...",
+				"host", dbCfg.Host, "port", dbCfg.Port, "db", dbCfg.Database)
+
+			pool = postgres.NewPostgresPool(dbCfg, appLogger)
+			if err := pool.Connect(ctx); err != nil {
+				slog.Error("Failed to connect to PostgreSQL", "error", err)
+				slog.Warn("Attempting graceful degradation to Memory storage...")
+				pool = nil
+			} else {
+				slog.Info("✅ Successfully connected to PostgreSQL!")
+
+				// Run database migrations
+				if err := database.RunMigrations(ctx, pool, appLogger); err != nil {
+					slog.Error("Failed to run database migrations", "error", err)
+					slog.Warn("Continuing without migrations - manual intervention may be required")
+				} else {
+					slog.Info("✅ Database migrations completed successfully")
+				}
+			}
+		}
+
+		// TN-201: Initialize AlertStorage via storage factory
+		// Factory automatically selects backend based on profile and handles fallback
+		var storageErr error
+		var pgxPool *pgxpool.Pool
+		if pool != nil {
+			pgxPool = pool.Pool()
+		}
+		alertStorage, storageErr = storage.NewStorage(ctx, cfg, pgxPool, appLogger)
+		if storageErr != nil {
+			slog.Error("Failed to initialize storage backend", "error", storageErr)
+			slog.Warn("Service starting with degraded storage (in-memory fallback)")
+			// alertStorage will be nil, handlers should check for this
 		} else {
-			slog.Info("✅ Successfully connected to PostgreSQL!")
+			slog.Info("✅ Storage backend initialized successfully",
+				"backend", cfg.Storage.Backend,
+				"profile", cfg.Profile)
 
-			// Run database migrations
-			if err := database.RunMigrations(ctx, pool, appLogger); err != nil {
-				slog.Error("Failed to run database migrations", "error", err)
-				// Не завершаем работу, если миграции не удались - даем возможность ручного исправления
-				slog.Warn("Continuing without migrations - manual intervention may be required")
-			} else {
-				slog.Info("✅ Database migrations completed successfully")
-			}
-
-			// Initialize AlertStorage (PostgreSQL implementation)
-			pgConfig := &infrastructure.Config{
-				DSN:             fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, dbCfg.Database, dbCfg.SSLMode),
-				MaxOpenConns:    int(dbCfg.MaxConns),
-				MaxIdleConns:    int(dbCfg.MinConns),
-				ConnMaxLifetime: dbCfg.MaxConnLifetime,
-				ConnMaxIdleTime: dbCfg.MaxConnIdleTime,
-				Logger:          appLogger,
-			}
-			pgStorage, err := infrastructure.NewPostgresDatabase(pgConfig)
-			if err != nil {
-				slog.Error("Failed to create PostgreSQL storage", "error", err)
-			} else {
-				// Use the existing pool connection
-				alertStorage = pgStorage
-
-				// TN-038: Initialize Alert History Repository with analytics
+			// TN-038: Initialize Alert History Repository (if Postgres available)
+			if pool != nil && pool.Pool() != nil {
 				historyRepo = repository.NewPostgresHistoryRepository(pool.Pool(), alertStorage, appLogger)
 				slog.Info("✅ Alert History Repository initialized (with analytics: top alerts, flapping detection)")
 
@@ -287,6 +304,8 @@ func main() {
 
 				// Cleanup DB exporter on shutdown (add to graceful shutdown)
 				defer dbExporter.Stop()
+			} else {
+				slog.Warn("Alert History Repository NOT initialized (Postgres pool unavailable)")
 			}
 		}
 	}
