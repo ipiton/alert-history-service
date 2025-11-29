@@ -14,40 +14,36 @@ import (
 
 // ListAlerts implements core.AlertStorage.ListAlerts.
 // Supports filtering, pagination, and sorting.
-//
-// Filters:
-//   - Status: IN (firing, resolved)
-//   - Severity: IN (critical, warning, info, unknown)
-//   - Namespace: IN (...)
-//   - Fingerprints: IN (...)
-//   - Time ranges: starts_at, ends_at (not implemented yet)
-//
-// Pagination:
-//   - Limit: max results (0 = no limit)
-//   - Offset: skip N results
-//
-// Sorting:
-//   - SortBy: created_at, starts_at, updated_at, alert_name
-//   - SortOrder: ASC, DESC (default DESC)
+// Returns *AlertList with pagination metadata.
 //
 // Performance: < 20ms (p95) for 100 rows with filters
 // Thread-safe: Yes (read-only operation)
 func (s *SQLiteStorage) ListAlerts(
 	ctx context.Context,
-	filter core.AlertFilter,
-) ([]*core.Alert, error) {
+	filters *core.AlertFilters,
+) (*core.AlertList, error) {
 	startTime := time.Now()
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Default filters if nil
+	if filters == nil {
+		filters = &core.AlertFilters{}
+	}
+
+	// Get total count (for pagination metadata)
+	total, err := s.CountAlerts(ctx, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count alerts: %w", err)
+	}
+
 	// Build SQL query with filters
-	query, args := s.buildListQuery(filter)
+	query, args := s.buildListQuery(filters)
 
 	// Execute query
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		storage.RecordOperation("list", "sqlite", "error")
 		return nil, fmt.Errorf("failed to list alerts: %w", err)
 	}
 	defer rows.Close()
@@ -57,72 +53,63 @@ func (s *SQLiteStorage) ListAlerts(
 	for rows.Next() {
 		alert, err := s.scanAlert(rows)
 		if err != nil {
-			storage.RecordError("list", "sqlite", storage.ErrorTypeValidation)
 			return nil, fmt.Errorf("failed to scan alert: %w", err)
 		}
 		alerts = append(alerts, alert)
 	}
 
 	if err := rows.Err(); err != nil {
-		storage.RecordOperation("list", "sqlite", "error")
 		return nil, fmt.Errorf("row iteration error: %w", err)
 	}
 
 	// Record success metrics
 	duration := time.Since(startTime)
-	storage.RecordOperation("list", "sqlite", "success")
-	storage.RecordOperationDuration("list", "sqlite", duration.Seconds())
 
 	s.logger.Debug("Alerts listed",
 		"count", len(alerts),
+		"total", total,
 		"duration_ms", duration.Milliseconds(),
-		"has_filters", filter.Status != nil || filter.Severity != nil || filter.Namespace != nil,
 	)
 
-	return alerts, nil
+	// Return AlertList with pagination metadata
+	return &core.AlertList{
+		Alerts: alerts,
+		Total:  total,
+		Limit:  filters.Limit,
+		Offset: filters.Offset,
+	}, nil
 }
 
-// CountAlerts implements core.AlertStorage.CountAlerts.
-// Counts alerts matching filter criteria.
+// CountAlerts counts alerts matching filter criteria (internal helper).
+// Used by ListAlerts for pagination metadata.
 //
 // Performance: < 5ms (p95) with filters
 // Thread-safe: Yes
 func (s *SQLiteStorage) CountAlerts(
 	ctx context.Context,
-	filter core.AlertFilter,
+	filters *core.AlertFilters,
 ) (int, error) {
-	startTime := time.Now()
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	// Default filters if nil
+	if filters == nil {
+		filters = &core.AlertFilters{}
+	}
 
 	// Build COUNT query (reuse filter logic)
-	query, args := s.buildCountQuery(filter)
+	query, args := s.buildCountQuery(filters)
 
 	// Execute query
 	var count int
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
 
 	if err != nil {
-		storage.RecordOperation("count", "sqlite", "error")
 		return 0, fmt.Errorf("failed to count alerts: %w", err)
 	}
-
-	// Record success metrics
-	duration := time.Since(startTime)
-	storage.RecordOperation("count", "sqlite", "success")
-	storage.RecordOperationDuration("count", "sqlite", duration.Seconds())
-
-	s.logger.Debug("Alerts counted",
-		"count", count,
-		"duration_ms", duration.Milliseconds(),
-	)
 
 	return count, nil
 }
 
 // buildListQuery constructs SELECT query with filters, pagination, sorting.
-func (s *SQLiteStorage) buildListQuery(filter core.AlertFilter) (string, []interface{}) {
+func (s *SQLiteStorage) buildListQuery(filters *core.AlertFilters) (string, []interface{}) {
 	// Base query
 	query := `
 SELECT fingerprint, status, severity, namespace, alert_name,
@@ -134,102 +121,79 @@ WHERE 1=1
 	args := []interface{}{}
 
 	// Apply filters
-	query, args = s.applyFilters(query, args, filter)
+	query, args = s.applyFilters(query, args, filters)
 
-	// Sorting
-	sortBy := filter.SortBy
-	if sortBy == "" {
-		sortBy = "created_at" // Default sort by creation time
-	}
-
-	// Validate sort field (prevent SQL injection)
-	validSortFields := map[string]bool{
-		"created_at":  true,
-		"starts_at":   true,
-		"updated_at":  true,
-		"alert_name":  true,
-		"status":      true,
-		"severity":    true,
-		"namespace":   true,
-		"fingerprint": true,
-	}
-
-	if !validSortFields[sortBy] {
-		sortBy = "created_at" // Fallback to default
-	}
-
-	sortOrder := "DESC"
-	if strings.ToUpper(filter.SortOrder) == "ASC" {
-		sortOrder = "ASC"
-	}
+	// Sorting (AlertFilters doesn't have SortBy, use default)
+	sortBy := "created_at"   // Default sort field
+	sortOrder := "DESC"      // Default sort order
 
 	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
 
 	// Pagination
-	if filter.Limit > 0 {
+	if filters.Limit > 0 {
 		query += " LIMIT ?"
-		args = append(args, filter.Limit)
+		args = append(args, filters.Limit)
 	}
 
-	if filter.Offset > 0 {
+	if filters.Offset > 0 {
 		query += " OFFSET ?"
-		args = append(args, filter.Offset)
+		args = append(args, filters.Offset)
 	}
 
 	return query, args
 }
 
 // buildCountQuery constructs COUNT query with same filters as list query.
-func (s *SQLiteStorage) buildCountQuery(filter core.AlertFilter) (string, []interface{}) {
+func (s *SQLiteStorage) buildCountQuery(filters *core.AlertFilters) (string, []interface{}) {
 	query := "SELECT COUNT(*) FROM alerts WHERE 1=1"
 	args := []interface{}{}
 
 	// Apply same filters as list query (but no sorting/pagination)
-	query, args = s.applyFilters(query, args, filter)
+	query, args = s.applyFilters(query, args, filters)
 
 	return query, args
 }
 
 // applyFilters adds WHERE clauses based on filter parameters.
-func (s *SQLiteStorage) applyFilters(query string, args []interface{}, filter core.AlertFilter) (string, []interface{}) {
-	// Filter by status (firing, resolved)
-	if len(filter.Status) > 0 {
-		placeholders := s.placeholders(len(filter.Status))
-		query += " AND status IN (" + placeholders + ")"
-		for _, status := range filter.Status {
-			args = append(args, status)
-		}
+// AlertFilters uses pointer fields, so need to check for nil.
+func (s *SQLiteStorage) applyFilters(query string, args []interface{}, filters *core.AlertFilters) (string, []interface{}) {
+	// Filter by status (pointer field)
+	if filters.Status != nil {
+		query += " AND status = ?"
+		args = append(args, string(*filters.Status))
 	}
 
-	// Filter by severity (critical, warning, info, unknown)
-	if len(filter.Severity) > 0 {
-		placeholders := s.placeholders(len(filter.Severity))
-		query += " AND severity IN (" + placeholders + ")"
-		for _, severity := range filter.Severity {
-			args = append(args, severity)
-		}
+	// Filter by severity (pointer field)
+	if filters.Severity != nil {
+		query += " AND severity = ?"
+		args = append(args, *filters.Severity)
 	}
 
-	// Filter by namespace
-	if len(filter.Namespace) > 0 {
-		placeholders := s.placeholders(len(filter.Namespace))
-		query += " AND namespace IN (" + placeholders + ")"
-		for _, ns := range filter.Namespace {
-			args = append(args, ns)
-		}
+	// Filter by namespace (pointer field)
+	if filters.Namespace != nil {
+		query += " AND namespace = ?"
+		args = append(args, *filters.Namespace)
 	}
 
-	// Filter by fingerprints (useful for bulk operations)
-	if len(filter.Fingerprints) > 0 {
-		placeholders := s.placeholders(len(filter.Fingerprints))
-		query += " AND fingerprint IN (" + placeholders + ")"
-		for _, fp := range filter.Fingerprints {
-			args = append(args, fp)
-		}
+	// Filter by labels (map field)
+	// Simple implementation: match ALL labels (AND logic)
+	// Uses SQL LIKE for simple matching (more efficient than JSON extraction)
+	for key, value := range filters.Labels {
+		query += " AND labels LIKE ?"
+		args = append(args, "%\""+key+"\":\""+value+"\"%")
 	}
 
-	// TODO: Add time range filters (starts_at, ends_at)
-	// This would require additional filter fields in core.AlertFilter
+	// Filter by time range (pointer field)
+	if filters.TimeRange != nil {
+		if filters.TimeRange.From != nil {
+			query += " AND starts_at >= ?"
+			args = append(args, filters.TimeRange.From.UnixMilli())
+		}
+		if filters.TimeRange.To != nil {
+			query += " AND starts_at <= ?"
+			args = append(args, filters.TimeRange.To.UnixMilli())
+		}
+	}
 
 	return query, args
 }
@@ -254,21 +218,22 @@ func (s *SQLiteStorage) placeholders(count int) string {
 func (s *SQLiteStorage) scanAlert(rows *sql.Rows) (*core.Alert, error) {
 	var alert core.Alert
 	var labelsJSON, annotationsJSON string
+	var severity, namespace string
 	var startsAt, createdAt, updatedAt int64
-	var endsAt *int64
+	var endsAtMs sql.NullInt64
 	var generatorURL sql.NullString
 
 	// Scan all columns
 	if err := rows.Scan(
 		&alert.Fingerprint,
 		&alert.Status,
-		&alert.Severity,
-		&alert.Namespace,
+		&severity,
+		&namespace,
 		&alert.AlertName,
 		&labelsJSON,
 		&annotationsJSON,
 		&startsAt,
-		&endsAt,
+		&endsAtMs,
 		&generatorURL,
 		&createdAt,
 		&updatedAt,
@@ -285,17 +250,28 @@ func (s *SQLiteStorage) scanAlert(rows *sql.Rows) (*core.Alert, error) {
 		return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 	}
 
+	// Set severity and namespace in labels (where they're stored)
+	if alert.Labels == nil {
+		alert.Labels = make(map[string]string)
+	}
+	if severity != "" {
+		alert.Labels["severity"] = severity
+	}
+	if namespace != "" {
+		alert.Labels["namespace"] = namespace
+	}
+
 	// Convert Unix milliseconds to time.Time
 	alert.StartsAt = time.UnixMilli(startsAt)
-	if endsAt != nil {
-		alert.EndsAt = time.UnixMilli(*endsAt)
+	if endsAtMs.Valid {
+		endsAt := time.UnixMilli(endsAtMs.Int64)
+		alert.EndsAt = &endsAt
 	}
-	alert.CreatedAt = time.UnixMilli(createdAt)
-	alert.UpdatedAt = time.UnixMilli(updatedAt)
 
 	// Handle nullable generator_url
 	if generatorURL.Valid {
-		alert.GeneratorURL = generatorURL.String
+		genURL := generatorURL.String
+		alert.GeneratorURL = &genURL
 	}
 
 	return &alert, nil

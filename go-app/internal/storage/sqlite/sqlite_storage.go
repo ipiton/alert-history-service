@@ -208,13 +208,13 @@ CREATE INDEX IF NOT EXISTS idx_alerts_starts_at ON alerts(starts_at);
 	return nil
 }
 
-// CreateAlert implements core.AlertStorage.CreateAlert.
+// SaveAlert implements core.AlertStorage.SaveAlert.
 // Uses UPSERT logic (INSERT ... ON CONFLICT DO UPDATE) for idempotency.
 // If fingerprint already exists, updates status, severity, timestamps.
 //
 // Performance: < 3ms (p95)
 // Thread-safe: Yes (SQLite handles locking)
-func (s *SQLiteStorage) CreateAlert(ctx context.Context, alert *core.Alert) error {
+func (s *SQLiteStorage) SaveAlert(ctx context.Context, alert *core.Alert) error {
 	startTime := time.Now()
 
 	s.mu.RLock()
@@ -223,13 +223,11 @@ func (s *SQLiteStorage) CreateAlert(ctx context.Context, alert *core.Alert) erro
 	// Serialize labels and annotations to JSON
 	labelsJSON, err := json.Marshal(alert.Labels)
 	if err != nil {
-		storage.RecordError("create", "sqlite", storage.ErrorTypeValidation)
 		return fmt.Errorf("failed to marshal labels: %w", err)
 	}
 
 	annotationsJSON, err := json.Marshal(alert.Annotations)
 	if err != nil {
-		storage.RecordError("create", "sqlite", storage.ErrorTypeValidation)
 		return fmt.Errorf("failed to marshal annotations: %w", err)
 	}
 
@@ -271,17 +269,13 @@ ON CONFLICT(fingerprint) DO UPDATE SET
 	)
 
 	if err != nil {
-		// Record error metric
-		storage.RecordOperation("create", "sqlite", "error")
-		return fmt.Errorf("failed to create alert: %w", err)
+		return fmt.Errorf("failed to save alert: %w", err)
 	}
 
 	// Record success metrics
 	duration := time.Since(startTime)
-	storage.RecordOperation("create", "sqlite", "success")
-	storage.RecordOperationDuration("create", "sqlite", duration.Seconds())
 
-	s.logger.Debug("Alert created/updated",
+	s.logger.Debug("Alert saved/updated",
 		"fingerprint", alert.Fingerprint,
 		"status", alert.Status,
 		"duration_ms", duration.Milliseconds(),
@@ -290,12 +284,12 @@ ON CONFLICT(fingerprint) DO UPDATE SET
 	return nil
 }
 
-// GetAlert implements core.AlertStorage.GetAlert.
+// GetAlertByFingerprint implements core.AlertStorage.GetAlertByFingerprint.
 // Retrieves alert by fingerprint (primary key).
 //
 // Performance: < 1ms (p95, indexed lookup)
 // Thread-safe: Yes (read-only operation)
-func (s *SQLiteStorage) GetAlert(ctx context.Context, fingerprint string) (*core.Alert, error) {
+func (s *SQLiteStorage) GetAlertByFingerprint(ctx context.Context, fingerprint string) (*core.Alert, error) {
 	startTime := time.Now()
 
 	s.mu.RLock()
@@ -311,20 +305,21 @@ WHERE fingerprint = ?
 
 	var alert core.Alert
 	var labelsJSON, annotationsJSON string
+	var severity, namespace string
 	var startsAt, createdAt, updatedAt int64
-	var endsAt *int64
+	var endsAtMs sql.NullInt64
 	var generatorURL sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, fingerprint).Scan(
 		&alert.Fingerprint,
 		&alert.Status,
-		&alert.Severity,
-		&alert.Namespace,
+		&severity,
+		&namespace,
 		&alert.AlertName,
 		&labelsJSON,
 		&annotationsJSON,
 		&startsAt,
-		&endsAt,
+		&endsAtMs,
 		&generatorURL,
 		&createdAt,
 		&updatedAt,
@@ -332,52 +327,62 @@ WHERE fingerprint = ?
 
 	if err == sql.ErrNoRows {
 		// Alert not found (not an error, expected case)
-		storage.RecordOperation("get", "sqlite", "not_found")
-		return nil, core.ErrAlertNotFound{Fingerprint: fingerprint}
+		return nil, core.ErrAlertNotFound
 	}
 
 	if err != nil {
 		// Actual error (connection, query, etc.)
-		storage.RecordOperation("get", "sqlite", "error")
 		return nil, fmt.Errorf("failed to get alert: %w", err)
 	}
 
 	// Deserialize JSON fields
 	if err := json.Unmarshal([]byte(labelsJSON), &alert.Labels); err != nil {
-		storage.RecordError("get", "sqlite", storage.ErrorTypeValidation)
 		return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
 	}
 
 	if err := json.Unmarshal([]byte(annotationsJSON), &alert.Annotations); err != nil {
-		storage.RecordError("get", "sqlite", storage.ErrorTypeValidation)
 		return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+	}
+
+	// Set severity and namespace in labels (where they're stored)
+	if alert.Labels == nil {
+		alert.Labels = make(map[string]string)
+	}
+	if severity != "" {
+		alert.Labels["severity"] = severity
+	}
+	if namespace != "" {
+		alert.Labels["namespace"] = namespace
 	}
 
 	// Convert timestamps
 	alert.StartsAt = time.UnixMilli(startsAt)
-	if endsAt != nil {
-		alert.EndsAt = time.UnixMilli(*endsAt)
+	if endsAtMs.Valid {
+		endsAt := time.UnixMilli(endsAtMs.Int64)
+		alert.EndsAt = &endsAt
 	}
-	alert.CreatedAt = time.UnixMilli(createdAt)
-	alert.UpdatedAt = time.UnixMilli(updatedAt)
 
 	// Handle nullable generator_url
 	if generatorURL.Valid {
-		alert.GeneratorURL = generatorURL.String
+		genURL := generatorURL.String
+		alert.GeneratorURL = &genURL
 	}
 
 	// Record success metrics
 	duration := time.Since(startTime)
-	storage.RecordOperation("get", "sqlite", "success")
-	storage.RecordOperationDuration("get", "sqlite", duration.Seconds())
+
+	s.logger.Debug("Alert retrieved",
+		"fingerprint", fingerprint,
+		"duration_ms", duration.Milliseconds(),
+	)
 
 	return &alert, nil
 }
 
 // UpdateAlert implements core.AlertStorage.UpdateAlert.
-// Reuses CreateAlert logic (UPSERT handles both insert and update).
+// Reuses SaveAlert logic (UPSERT handles both insert and update).
 func (s *SQLiteStorage) UpdateAlert(ctx context.Context, alert *core.Alert) error {
-	return s.CreateAlert(ctx, alert)
+	return s.SaveAlert(ctx, alert)
 }
 
 // DeleteAlert implements core.AlertStorage.DeleteAlert.
@@ -395,21 +400,17 @@ func (s *SQLiteStorage) DeleteAlert(ctx context.Context, fingerprint string) err
 	result, err := s.db.ExecContext(ctx, query, fingerprint)
 
 	if err != nil {
-		storage.RecordOperation("delete", "sqlite", "error")
 		return fmt.Errorf("failed to delete alert: %w", err)
 	}
 
 	// Check if alert existed
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		storage.RecordOperation("delete", "sqlite", "not_found")
-		return core.ErrAlertNotFound{Fingerprint: fingerprint}
+		return core.ErrAlertNotFound
 	}
 
 	// Record success metrics
 	duration := time.Since(startTime)
-	storage.RecordOperation("delete", "sqlite", "success")
-	storage.RecordOperationDuration("delete", "sqlite", duration.Seconds())
 
 	s.logger.Debug("Alert deleted",
 		"fingerprint", fingerprint,
@@ -435,7 +436,6 @@ func (s *SQLiteStorage) Close() error {
 		}
 
 		s.logger.Info("SQLite storage closed", "path", s.path)
-		storage.SetHealthStatus("sqlite", 0) // 0 = unhealthy (closed)
 	}
 
 	return nil
@@ -451,18 +451,114 @@ func (s *SQLiteStorage) Health(ctx context.Context) error {
 	defer s.mu.RUnlock()
 
 	if s.db == nil {
-		storage.SetHealthStatus("sqlite", 0) // unhealthy
 		return fmt.Errorf("database connection is nil")
 	}
 
 	err := s.db.PingContext(ctx)
 	if err != nil {
-		storage.SetHealthStatus("sqlite", 0) // unhealthy
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
-	storage.SetHealthStatus("sqlite", 1) // healthy
 	return nil
+}
+
+// GetAlertStats implements core.AlertStorage.GetAlertStats.
+// Aggregates statistics about alerts by status and severity.
+//
+// Performance: < 10ms (simple COUNT queries)
+// Thread-safe: Yes (read-only operation)
+func (s *SQLiteStorage) GetAlertStats(ctx context.Context) (*core.AlertStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	stats := &core.AlertStats{
+		AlertsByStatus:   make(map[string]int),
+		AlertsBySeverity: make(map[string]int),
+	}
+
+	// Get total count
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM alerts").Scan(&stats.TotalAlerts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total count: %w", err)
+	}
+
+	// Get alerts by status
+	rows, err := s.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM alerts GROUP BY status")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan status row: %w", err)
+		}
+		stats.AlertsByStatus[status] = count
+	}
+
+	// Get alerts by severity
+	rows, err = s.db.QueryContext(ctx, "SELECT severity, COUNT(*) FROM alerts WHERE severity != '' GROUP BY severity")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get severity counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var severity string
+		var count int
+		if err := rows.Scan(&severity, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan severity row: %w", err)
+		}
+		stats.AlertsBySeverity[severity] = count
+	}
+
+	s.logger.Debug("Alert stats retrieved",
+		"total", stats.TotalAlerts,
+		"by_status", stats.AlertsByStatus,
+		"by_severity", stats.AlertsBySeverity,
+	)
+
+	return stats, nil
+}
+
+// CleanupOldAlerts implements core.AlertStorage.CleanupOldAlerts.
+// Removes resolved alerts older than retentionDays.
+// Only resolved alerts are deleted (firing alerts are kept).
+//
+// Performance: < 100ms for 10K alerts (indexed DELETE)
+// Thread-safe: Yes (write lock)
+func (s *SQLiteStorage) CleanupOldAlerts(ctx context.Context, retentionDays int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Calculate cutoff timestamp (Unix milliseconds)
+	cutoffTime := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+
+	// Delete only resolved alerts older than retention period
+	// Firing alerts are never deleted (they represent active issues)
+	query := `
+		DELETE FROM alerts
+		WHERE status = ?
+		  AND updated_at < ?
+	`
+	result, err := s.db.ExecContext(ctx, query, string(core.StatusResolved), cutoffTime)
+	if err != nil {
+		return 0, fmt.Errorf("failed to cleanup old alerts: %w", err)
+	}
+
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	s.logger.Info("Cleaned up old resolved alerts",
+		"retention_days", retentionDays,
+		"deleted_count", deleted,
+	)
+
+	return int(deleted), nil
 }
 
 // GetFileSize returns current SQLite file size in bytes.

@@ -63,7 +63,7 @@ type ErrConnectionFailed struct {
 }
 
 func (e *ErrConnectionFailed) Error() string {
-	return fmt.Errorf("storage connection failed (%s): %w", e.Backend, e.Cause)
+	return fmt.Sprintf("storage connection failed (%s): %v", e.Backend, e.Cause)
 }
 
 func (e *ErrConnectionFailed) Unwrap() error {
