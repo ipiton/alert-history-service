@@ -55,6 +55,11 @@ func NewStorage(
 	// Record start time for metrics
 	startTime := time.Now()
 
+	// Nil check (defensive programming)
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
 	// Validate profile configuration (uses TN-200 validation)
 	// This ensures profile + storage.backend combination is valid
 	if err := cfg.Validate(); err != nil {
