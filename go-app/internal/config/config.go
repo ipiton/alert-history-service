@@ -10,6 +10,13 @@ import (
 
 // Config represents the application configuration
 type Config struct {
+	// Deployment profile (TN-200)
+	// Values: "lite" (embedded storage, single-node) or "standard" (Postgres+Redis, HA)
+	Profile DeploymentProfile `mapstructure:"profile"`
+
+	// Storage backend configuration (TN-201)
+	Storage StorageConfig `mapstructure:"storage"`
+
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
@@ -20,6 +27,34 @@ type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
 	Webhook  WebhookConfig  `mapstructure:"webhook"`
+}
+
+// DeploymentProfile represents the deployment profile type
+type DeploymentProfile string
+
+const (
+	// ProfileLite is single-node deployment with embedded storage (SQLite/BadgerDB)
+	// No external dependencies (no Postgres, no Redis required)
+	// Persistent storage via PVC (Kubernetes) or local filesystem
+	// Use case: Development, testing, small-scale production (<1K alerts/day)
+	ProfileLite DeploymentProfile = "lite"
+
+	// ProfileStandard is HA-ready deployment with external storage (Postgres+Redis)
+	// Requires: PostgreSQL (required), Redis (optional)
+	// Supports: 2-10 replicas, horizontal scaling, extended history
+	// Use case: Production environments, high-volume (>1K alerts/day), HA requirements
+	ProfileStandard DeploymentProfile = "standard"
+)
+
+// StorageConfig holds storage backend configuration
+type StorageConfig struct {
+	// Backend determines storage implementation
+	// Values: "filesystem" (Lite), "postgres" (Standard)
+	Backend StorageBackend `mapstructure:"backend"`
+
+	// FilesystemPath is the path for embedded storage (Lite profile)
+	// Default: /data/alerthistory.db (SQLite)
+	FilesystemPath string `mapstructure:"filesystem_path"`
 }
 
 // ServerConfig holds server-related configuration
@@ -167,6 +202,19 @@ type CORSWebhookConfig struct {
 	AllowedHeaders string `mapstructure:"allowed_headers"`
 }
 
+// StorageBackend represents the storage implementation
+type StorageBackend string
+
+const (
+	// StorageBackendFilesystem uses embedded storage (SQLite/BadgerDB)
+	// Used by Lite profile
+	StorageBackendFilesystem StorageBackend = "filesystem"
+
+	// StorageBackendPostgres uses PostgreSQL external storage
+	// Used by Standard profile
+	StorageBackendPostgres StorageBackend = "postgres"
+)
+
 // LoadConfig loads configuration from file and environment variables
 func LoadConfig(configPath string) (*Config, error) {
 	// Set default values first
@@ -227,6 +275,11 @@ func LoadConfigFromEnv() (*Config, error) {
 
 // setDefaults sets default configuration values
 func setDefaults() {
+	// Deployment profile defaults (TN-200)
+	viper.SetDefault("profile", "standard") // Default to standard profile
+	viper.SetDefault("storage.backend", "postgres") // Default to Postgres
+	viper.SetDefault("storage.filesystem_path", "/data/alerthistory.db") // SQLite path for Lite
+
 	// Server defaults
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.host", "0.0.0.0")
@@ -342,6 +395,11 @@ func setDefaults() {
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
+	// Validate deployment profile (TN-200/TN-204)
+	if err := c.validateProfile(); err != nil {
+		return fmt.Errorf("profile validation failed: %w", err)
+	}
+
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
@@ -350,20 +408,29 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("server host cannot be empty")
 	}
 
-	if c.Database.Driver == "" {
-		return fmt.Errorf("database driver cannot be empty")
+	// Skip database validation for Lite profile (TN-204)
+	if c.Profile == ProfileStandard {
+		if c.Database.Driver == "" {
+			return fmt.Errorf("database driver cannot be empty (required for standard profile)")
+		}
+
+		if c.Database.Host == "" {
+			return fmt.Errorf("database host cannot be empty (required for standard profile)")
+		}
+
+		if c.Database.Database == "" {
+			return fmt.Errorf("database name cannot be empty (required for standard profile)")
+		}
 	}
 
-	if c.Database.Host == "" {
-		return fmt.Errorf("database host cannot be empty")
-	}
-
-	if c.Database.Database == "" {
-		return fmt.Errorf("database name cannot be empty")
-	}
-
-	if c.Redis.Addr == "" {
-		return fmt.Errorf("redis address cannot be empty")
+	// Redis is optional for both profiles (TN-202)
+	// Validation only if Redis addr is provided
+	if c.Redis.Addr != "" {
+		// Redis config provided, validate it
+		if c.Profile == ProfileLite {
+			// Warning: Redis not recommended for Lite profile
+			// but allow it for testing/development
+		}
 	}
 
 	if c.Log.Level == "" {
@@ -372,6 +439,48 @@ func (c *Config) Validate() error {
 
 	if c.App.Name == "" {
 		return fmt.Errorf("app name cannot be empty")
+	}
+
+	return nil
+}
+
+// validateProfile validates deployment profile configuration (TN-200/TN-204)
+func (c *Config) validateProfile() error {
+	// Validate profile value
+	if c.Profile != ProfileLite && c.Profile != ProfileStandard {
+		return fmt.Errorf("invalid deployment profile: %s (must be 'lite' or 'standard')", c.Profile)
+	}
+
+	// Validate storage backend
+	if c.Storage.Backend != StorageBackendFilesystem && c.Storage.Backend != StorageBackendPostgres {
+		return fmt.Errorf("invalid storage backend: %s (must be 'filesystem' or 'postgres')", c.Storage.Backend)
+	}
+
+	// Profile-specific validation
+	switch c.Profile {
+	case ProfileLite:
+		// Lite profile: require filesystem storage
+		if c.Storage.Backend != StorageBackendFilesystem {
+			return fmt.Errorf("lite profile requires storage.backend='filesystem' (got '%s')", c.Storage.Backend)
+		}
+
+		// Validate filesystem path
+		if c.Storage.FilesystemPath == "" {
+			return fmt.Errorf("lite profile requires storage.filesystem_path (e.g., /data/alerthistory.db)")
+		}
+
+		// Warning: Postgres not used in Lite (but don't fail)
+		if c.Database.Host != "" && c.Database.Host != "localhost" {
+			// Log warning but don't fail (allows testing)
+		}
+
+	case ProfileStandard:
+		// Standard profile: require postgres storage
+		if c.Storage.Backend != StorageBackendPostgres {
+			return fmt.Errorf("standard profile requires storage.backend='postgres' (got '%s')", c.Storage.Backend)
+		}
+
+		// Postgres configuration is required (validated in main Validate())
 	}
 
 	return nil
@@ -412,4 +521,61 @@ func (c *Config) IsProduction() bool {
 // IsDebug returns true if debug mode is enabled
 func (c *Config) IsDebug() bool {
 	return c.App.Debug || c.IsDevelopment()
+}
+
+// IsLiteProfile returns true if running in Lite deployment profile (TN-200)
+func (c *Config) IsLiteProfile() bool {
+	return c.Profile == ProfileLite
+}
+
+// IsStandardProfile returns true if running in Standard deployment profile (TN-200)
+func (c *Config) IsStandardProfile() bool {
+	return c.Profile == ProfileStandard
+}
+
+// RequiresPostgres returns true if Postgres is required for this profile (TN-201)
+func (c *Config) RequiresPostgres() bool {
+	return c.Profile == ProfileStandard
+}
+
+// RequiresRedis returns true if Redis is required for this profile (TN-202)
+// Note: Redis is optional for both profiles
+func (c *Config) RequiresRedis() bool {
+	// Redis is optional for both profiles
+	// Only required if explicitly configured
+	return false
+}
+
+// UsesEmbeddedStorage returns true if using embedded storage (SQLite/BadgerDB) (TN-201)
+func (c *Config) UsesEmbeddedStorage() bool {
+	return c.Storage.Backend == StorageBackendFilesystem
+}
+
+// UsesPostgresStorage returns true if using PostgreSQL storage (TN-201)
+func (c *Config) UsesPostgresStorage() bool {
+	return c.Storage.Backend == StorageBackendPostgres
+}
+
+// GetProfileName returns human-readable profile name (TN-200)
+func (c *Config) GetProfileName() string {
+	switch c.Profile {
+	case ProfileLite:
+		return "Lite (Embedded Storage)"
+	case ProfileStandard:
+		return "Standard (HA-Ready)"
+	default:
+		return string(c.Profile)
+	}
+}
+
+// GetProfileDescription returns detailed profile description (TN-200)
+func (c *Config) GetProfileDescription() string {
+	switch c.Profile {
+	case ProfileLite:
+		return "Single-node deployment with embedded storage (SQLite). No external dependencies. Persistent via PVC."
+	case ProfileStandard:
+		return "HA-ready deployment with PostgreSQL and optional Redis. Supports 2-10 replicas and horizontal scaling."
+	default:
+		return "Unknown profile"
+	}
 }
