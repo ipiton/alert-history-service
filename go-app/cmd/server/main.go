@@ -185,12 +185,53 @@ func main() {
 	})
 	slog.SetDefault(appLogger)
 
-	slog.Info("Starting Alert History Service",
-		"service", serviceName,
+	// TN-203: Startup banner with profile information
+	slog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	slog.Info("🚀 Alert History Service - Starting")
+	slog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	slog.Info("Service Info",
+		"name", serviceName,
 		"version", serviceVersion,
 		"env", cfg.App.Environment,
 		"debug", cfg.IsDebug(),
 	)
+
+	// TN-203: Profile-based deployment information
+	profileIcon := "🪶" // Default (Lite)
+	profileDesc := "Lightweight, single-node, zero external dependencies"
+	if cfg.Profile == appconfig.ProfileStandard {
+		profileIcon = "⚡"
+		profileDesc = "High-availability, distributed, production-grade"
+	}
+	slog.Info("Deployment Profile",
+		"icon", profileIcon,
+		"profile", cfg.Profile,
+		"description", profileDesc,
+	)
+
+	// TN-203: Storage backend info (from TN-201)
+	slog.Info("Storage Configuration",
+		"backend", cfg.Storage.Backend,
+		"profile_compatible", true, // TN-200 validates this
+	)
+
+	// TN-203: Cache backend info (from TN-202)
+	cacheBackend := "memory-only"
+	if cfg.Profile == appconfig.ProfileStandard && cfg.Redis.Addr != "" {
+		cacheBackend = "Redis L2 + Memory L1"
+	}
+	slog.Info("Cache Configuration",
+		"backend", cacheBackend,
+		"profile", cfg.Profile,
+	)
+
+	// TN-203: Explicit profile validation (TN-204 already validates in config.Validate())
+	if err := cfg.Validate(); err != nil {
+		slog.Error("Profile validation failed", "error", err, "profile", cfg.Profile)
+		os.Exit(1)
+	}
+	slog.Info("✅ Profile validation passed", "profile", cfg.Profile)
+	slog.Info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	// TN-181: Initialize unified Metrics Registry (150% quality)
 	// Initialize early so it's available for DB Pool exporter and other components
