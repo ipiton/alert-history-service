@@ -78,8 +78,75 @@ curl http://localhost:8080/healthz
 - ✅ **Health checks** для Kubernetes
 - ✅ **Static binary** без зависимостей
 - ✅ **Production-ready** containerization
+- ✅ **Deployment Profiles** (Lite & Standard)
 
 📖 **[Подробная документация Go версии](go-app/README.md)**
+
+---
+
+## 🎯 Deployment Profiles (New in 2025-11-29)
+
+Alert History Service now supports **two deployment profiles** for different use cases:
+
+### 🪶 Lite Profile
+**For:** Development, testing, small deployments, single-node setups
+
+**Features:**
+- **Embedded Storage:** SQLite database (no PostgreSQL required)
+- **Memory-Only Cache:** No Redis/Valkey required
+- **Zero External Dependencies:** Single binary + PVC
+- **Resource Efficient:** 250m CPU, 256Mi RAM
+- **Perfect for:** Dev environments, CI/CD, small-scale deployments
+
+```bash
+# Run with Lite profile
+export DEPLOYMENT_PROFILE=lite
+make run
+```
+
+```yaml
+# Helm installation (Lite)
+helm install alert-history ./helm/alert-history \
+  --set profile=lite \
+  --set image.tag=latest
+```
+
+### ⚡ Standard Profile (Default)
+**For:** Production, high-availability, distributed systems
+
+**Features:**
+- **PostgreSQL Storage:** External database for HA
+- **Redis L2 Cache:** Distributed caching
+- **Horizontal Scaling:** 2-10 replicas with HPA
+- **Production-Grade:** Full observability and metrics
+- **Perfect for:** Production environments, multi-region deployments
+
+```bash
+# Run with Standard profile (default)
+export DEPLOYMENT_PROFILE=standard
+make run
+```
+
+```yaml
+# Helm installation (Standard)
+helm install alert-history ./helm/alert-history \
+  --set profile=standard \
+  --set postgresql.enabled=true \
+  --set cache.enabled=true
+```
+
+### Profile Comparison
+
+| Feature | 🪶 Lite | ⚡ Standard |
+|---------|---------|------------|
+| **Storage** | SQLite (embedded) | PostgreSQL (external) |
+| **Cache** | Memory-only | Redis + Memory |
+| **Dependencies** | **Zero** | Postgres + Redis |
+| **Replicas** | 1 (single-node) | 2-10 (HA) |
+| **Resources** | 250m CPU, 256Mi | 500m CPU, 512Mi+ |
+| **Use Case** | Dev, test | Production, HA |
+
+See [helm/alert-history/README.md](helm/alert-history/README.md) for detailed profile documentation.
 
 ---
 
