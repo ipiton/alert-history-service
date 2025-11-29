@@ -234,9 +234,20 @@ func (s *SQLiteStorage) SaveAlert(ctx context.Context, alert *core.Alert) error 
 	// Convert timestamps to Unix milliseconds
 	startsAt := alert.StartsAt.UnixMilli()
 	var endsAt *int64
-	if !alert.EndsAt.IsZero() {
+	if alert.EndsAt != nil && !alert.EndsAt.IsZero() {
 		ms := alert.EndsAt.UnixMilli()
 		endsAt = &ms
+	}
+
+	// Get severity and namespace from methods (they're methods, not fields)
+	severity := alert.Severity()
+	namespace := alert.Namespace()
+	var severityVal, namespaceVal string
+	if severity != nil {
+		severityVal = *severity
+	}
+	if namespace != nil {
+		namespaceVal = *namespace
 	}
 
 	// UPSERT: Insert or update if fingerprint exists
@@ -258,8 +269,8 @@ ON CONFLICT(fingerprint) DO UPDATE SET
 	_, err = s.db.ExecContext(ctx, query,
 		alert.Fingerprint,
 		alert.Status,
-		alert.Severity,
-		alert.Namespace,
+		severityVal,
+		namespaceVal,
 		alert.AlertName,
 		string(labelsJSON),
 		string(annotationsJSON),
