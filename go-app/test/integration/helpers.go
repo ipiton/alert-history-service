@@ -36,7 +36,7 @@ func NewAPITestHelper(infra *TestInfrastructure) *APITestHelper {
 		DB:         infra.DB,
 		Redis:      infra.RedisClient,
 		MockLLM:    infra.MockLLMServer,
-		ctx:        context.Background(),
+		ctx:        infra.Context(), // Use context from infrastructure for proper propagation
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

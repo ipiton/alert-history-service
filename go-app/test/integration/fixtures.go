@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -18,8 +19,18 @@ type Fixtures struct {
 
 // NewFixtures creates fixtures loader
 func NewFixtures() *Fixtures {
-	// Get fixtures path relative to test files
-	basePath := filepath.Join("../fixtures")
+	// Get fixtures path relative to this source file, not CWD
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("failed to get current file path")
+	}
+
+	// Get directory of this file (go-app/test/integration/)
+	currentDir := filepath.Dir(filename)
+
+	// fixtures are at go-app/test/fixtures/
+	basePath := filepath.Join(currentDir, "..", "fixtures")
+
 	return &Fixtures{basePath: basePath}
 }
 

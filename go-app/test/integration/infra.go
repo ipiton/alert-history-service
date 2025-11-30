@@ -26,6 +26,11 @@ type TestInfrastructure struct {
 	ctx               context.Context
 }
 
+// Context returns the infrastructure context
+func (ti *TestInfrastructure) Context() context.Context {
+	return ti.ctx
+}
+
 // SetupTestInfrastructure starts all required infrastructure
 func SetupTestInfrastructure(ctx context.Context) (*TestInfrastructure, error) {
 	infra := &TestInfrastructure{
