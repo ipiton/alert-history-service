@@ -282,6 +282,18 @@ postgresql:
 # Valkey Cache Configuration (Redis-compatible, Standard Profile Only)
 # ===============================
 # Automatically disabled for Lite profile (uses memory-only cache)
+# ===============================
+# External Secrets Operator (TN-100: Production Security)
+# ===============================
+# Enable External Secrets Operator for production secret management
+# Integrates with AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, HashiCorp Vault
+externalSecrets:
+  enabled: false  # Set to true in production with ESO installed
+  secretStore: "default"  # Name of SecretStore or ClusterSecretStore
+  secretStoreKind: "SecretStore"  # SecretStore or ClusterSecretStore
+  refreshInterval: "1h"  # How often to sync secrets
+  keyPath: "alertmanager-plus-plus"  # Path in secret manager
+
 cache:
   enabled: true  # Overridden by profile in deployment.yaml
   # Valkey connection details
