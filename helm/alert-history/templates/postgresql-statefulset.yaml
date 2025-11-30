@@ -44,11 +44,22 @@ spec:
               key: password
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
+        {{- if .Values.postgresql.config }}
+        - name: POSTGRES_INITDB_ARGS
+          value: "-c config_file=/etc/postgresql/postgresql.conf"
+        {{- end }}
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
         - name: postgres-config
           mountPath: /etc/postgresql
+          readOnly: true
+        {{- if .Values.postgresql.config }}
+        - name: custom-config
+          mountPath: /docker-entrypoint-initdb.d/postgresql.conf
+          subPath: postgresql.conf
+          readOnly: true
+        {{- end }}
         resources:
           {{- toYaml .Values.postgresql.resources | nindent 10 }}
         livenessProbe:
@@ -86,8 +97,13 @@ spec:
           runAsGroup: 999
       volumes:
       - name: postgres-config
+        emptyDir: {}
+      {{- if .Values.postgresql.config }}
+      - name: custom-config
         configMap:
           name: {{ include "alert-history.postgresql.fullname" . }}-config
+          optional: false
+      {{- end }}
   volumeClaimTemplates:
   - metadata:
       name: postgres-data
