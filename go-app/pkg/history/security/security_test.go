@@ -37,12 +37,12 @@ func TestInputValidator_ValidateQueryParams(t *testing.T) {
 		},
 		{
 			name:    "SQL injection attempt",
-			url:     "/api/v2/history?status='; DROP TABLE alerts; --",
+			url:     "/api/v2/history?status=%27%3B%20DROP%20TABLE%20alerts%3B%20--", // URL-encoded: '; DROP TABLE alerts; --
 			wantErr: true,
 		},
 		{
 			name:    "XSS attempt",
-			url:     "/api/v2/history?status=<script>alert('xss')</script>",
+			url:     "/api/v2/history?status=%3Cscript%3Ealert%28%27xss%27%29%3C%2Fscript%3E", // URL-encoded: <script>alert('xss')</script>
 			wantErr: true,
 		},
 	}
@@ -69,7 +69,7 @@ func TestInputValidator_ValidateFingerprint(t *testing.T) {
 	}{
 		{
 			name:        "valid fingerprint",
-			fingerprint: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890",
+			fingerprint: "a1b2c3d4e5f67890123456789012345678901234567890123456789012345678", // 64 hex chars
 			wantErr:     false,
 		},
 		{

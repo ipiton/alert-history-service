@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -34,10 +35,16 @@ type Metrics struct {
 	Latency   *prometheus.HistogramVec
 }
 
-// NewMetrics creates new cache metrics
+var (
+	metricsInstance *Metrics
+	metricsOnce     sync.Once
+)
+
+// NewMetrics creates new cache metrics (singleton pattern to avoid duplicate registration)
 func NewMetrics() *Metrics {
-	return &Metrics{
-		Hits: promauto.NewCounterVec(
+	metricsOnce.Do(func() {
+		metricsInstance = &Metrics{
+			Hits: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "alert_history",
 				Subsystem: "api_history_cache",
@@ -82,17 +89,19 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"cache_layer"},
 		),
-		Latency: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "alert_history",
-				Subsystem: "api_history_cache",
-				Name:      "operation_duration_seconds",
-				Help:      "Cache operation duration in seconds",
-				Buckets:   []float64{.0001, .0005, .001, .005, .01, .025, .05, .1, .25, .5, 1},
-			},
-			[]string{"cache_layer", "operation", "status"},
-		),
-	}
+			Latency: promauto.NewHistogramVec(
+				prometheus.HistogramOpts{
+					Namespace: "alert_history",
+					Subsystem: "api_history_cache",
+					Name:      "operation_duration_seconds",
+					Help:      "Cache operation duration in seconds",
+					Buckets:   []float64{.0001, .0005, .001, .005, .01, .025, .05, .1, .25, .5, 1},
+				},
+				[]string{"cache_layer", "operation", "status"},
+			),
+		}
+	})
+	return metricsInstance
 }
 
 // NewManager creates a new cache manager

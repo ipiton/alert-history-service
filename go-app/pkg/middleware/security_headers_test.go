@@ -48,6 +48,7 @@ func TestSecurityHeaders(t *testing.T) {
 			},
 			useTLS:       true,
 			expectedHSTS: false,
+			expectedCSP:  "default-src 'self'",
 		},
 		{
 			name: "Empty CSP",
