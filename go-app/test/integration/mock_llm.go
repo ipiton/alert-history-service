@@ -100,10 +100,14 @@ func (m *MockLLMServer) handleClassify(w http.ResponseWriter, r *http.Request) {
 	// Track request
 	m.requests = append(m.requests, &req)
 
-	// Get configured response or return default
+	// Get configured response: try alert name first, then default ("")
 	resp, exists := m.responses[req.AlertName]
 	if !exists {
-		// Default response
+		// Try default response (configured with "")
+		resp, exists = m.responses[""]
+	}
+	if !exists {
+		// Fallback to hardcoded default
 		resp = &ClassificationResponse{
 			Severity:     "warning",
 			Category:     "infrastructure",

@@ -118,12 +118,13 @@ func (h *APITestHelper) GetAlertByFingerprint(ctx context.Context, fingerprint s
 	var labelsJSON, annotationsJSON []byte
 	var classificationJSON []byte
 	var endsAt *time.Time
+	var namespace sql.NullString
 
 	err := h.DB.QueryRowContext(ctx, query, fingerprint).Scan(
 		&alert.Fingerprint,
 		&alert.AlertName,
 		&alert.Status,
-		&alert.Namespace,
+		&namespace,
 		&labelsJSON,
 		&annotationsJSON,
 		&alert.StartsAt,
@@ -131,6 +132,10 @@ func (h *APITestHelper) GetAlertByFingerprint(ctx context.Context, fingerprint s
 		&alert.CreatedAt,
 		&classificationJSON,
 	)
+
+	if namespace.Valid {
+		alert.Namespace = namespace.String
+	}
 
 	if err != nil {
 		return nil, err
