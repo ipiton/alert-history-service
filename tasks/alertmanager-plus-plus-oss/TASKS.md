@@ -400,10 +400,13 @@
   - ✅ **Delivered**: Lite & Standard profiles, K8s setup, production checklist
   - 🎯 **Quality**: Production-ready documentation
 - [x] **TN-118** Operations runbook - **COMPLETE** (2025-11-30)
-  - 📊 **Status**: 900+ LOC comprehensive runbook
+  - 📊 **Status**: 821 LOC comprehensive runbook
   - ✅ **Delivered**: Daily ops, monitoring, incident response, backup/recovery
   - 🎯 **Quality**: Production-ready operations guide
-- [ ] **TN-119** Troubleshooting guide
+- [x] **TN-119** Troubleshooting guide - **COMPLETE** (2025-11-30)
+  - 📊 **Status**: 850+ LOC comprehensive guide
+  - ✅ **Delivered**: 15+ issues with diagnosis & solutions, log analysis, quick reference
+  - 🎯 **Quality**: Production-ready troubleshooting guide
 - [ ] **TN-120** Architecture documentation
 - [ ] **TN-176** Migration Guide (Alertmanager → Alert History)
 - [ ] **TN-177** Operations Runbook (detailed)
