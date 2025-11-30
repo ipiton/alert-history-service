@@ -6,16 +6,16 @@ Security hardening: Allow only app pods and Prometheus to connect
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis
+  name: {{ include "alert-history.fullname" . }}-redis
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-network-policy
 spec:
   # Apply to Redis pods
   podSelector:
     matchLabels:
-      {{- include "alerthistory.selectorLabels" . | nindent 6 }}
+      {{- include "alert-history.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: redis
 
   # Policy types
@@ -31,7 +31,7 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          {{- include "alerthistory.selectorLabels" . | nindent 10 }}
+          {{- include "alert-history.selectorLabels" . | nindent 10 }}
           app.kubernetes.io/component: application
     ports:
     - protocol: TCP
@@ -76,7 +76,7 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          {{- include "alerthistory.selectorLabels" . | nindent 10 }}
+          {{- include "alert-history.selectorLabels" . | nindent 10 }}
           app.kubernetes.io/component: redis
     ports:
     - protocol: TCP

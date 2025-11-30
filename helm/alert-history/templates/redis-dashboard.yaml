@@ -6,10 +6,10 @@ Import this ConfigMap to Grafana or use Dashboard ID 11835 for full-featured das
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis-dashboard
+  name: {{ include "alert-history.fullname" . }}-redis-dashboard
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-dashboard
     grafana_dashboard: "1"  # Grafana sidecar auto-discovery label
 data:

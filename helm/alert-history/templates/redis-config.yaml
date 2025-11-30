@@ -6,10 +6,10 @@ Comprehensive redis.conf with production-grade settings
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis-config
+  name: {{ include "alert-history.fullname" . }}-redis-config
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-config
 data:
   redis.conf: |

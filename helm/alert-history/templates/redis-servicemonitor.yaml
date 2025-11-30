@@ -6,16 +6,16 @@ Enables auto-discovery and scraping of Redis metrics from redis-exporter sidecar
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis
+  name: {{ include "alert-history.fullname" . }}-redis
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-monitoring
 spec:
   # Selector to match the metrics Service
   selector:
     matchLabels:
-      {{- include "alerthistory.selectorLabels" . | nindent 6 }}
+      {{- include "alert-history.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: redis-metrics
 
   # Endpoint configuration

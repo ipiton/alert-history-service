@@ -7,16 +7,16 @@ Includes redis-exporter sidecar for Prometheus metrics
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis
+  name: {{ include "alert-history.fullname" . }}-redis
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
     app.kubernetes.io/part-of: cache-layer
 spec:
   # StatefulSet Configuration
   replicas: {{ .Values.valkey.replicas | default 1 }}
-  serviceName: {{ include "alerthistory.fullname" . }}-redis-headless
+  serviceName: {{ include "alert-history.fullname" . }}-redis-headless
   podManagementPolicy: OrderedReady  # Sequential startup for deterministic primary selection
 
   # Update Strategy
@@ -28,14 +28,14 @@ spec:
   # Selector
   selector:
     matchLabels:
-      {{- include "alerthistory.selectorLabels" . | nindent 6 }}
+      {{- include "alert-history.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: redis
 
   # Pod Template
   template:
     metadata:
       labels:
-        {{- include "alerthistory.selectorLabels" . | nindent 8 }}
+        {{- include "alert-history.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: redis
       annotations:
         # ConfigMap checksum triggers pod restart on config changes
@@ -46,7 +46,7 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       # Service Account
-      serviceAccountName: {{ include "alerthistory.serviceAccountName" . }}
+      serviceAccountName: {{ include "alert-history.serviceAccountName" . }}
 
       # Security Context (Pod-level)
       securityContext:
@@ -112,7 +112,7 @@ spec:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "alerthistory.fullname" . }}-redis-secret
+              name: {{ include "alert-history.fullname" . }}-redis-secret
               key: password
 
         # Resource Limits
@@ -189,7 +189,7 @@ spec:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "alerthistory.fullname" . }}-redis-secret
+              name: {{ include "alert-history.fullname" . }}-redis-secret
               key: password
 
         # Ports
@@ -236,10 +236,10 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: {{ include "alerthistory.fullname" . }}-redis-config
+          name: {{ include "alert-history.fullname" . }}-redis-config
       - name: redis-secret
         secret:
-          secretName: {{ include "alerthistory.fullname" . }}-redis-secret
+          secretName: {{ include "alert-history.fullname" . }}-redis-secret
 
       # Node Selector (optional, values.yaml controlled)
       {{- with .Values.nodeSelector }}
@@ -274,7 +274,7 @@ spec:
   - metadata:
       name: redis-data
       labels:
-        {{- include "alerthistory.labels" . | nindent 8 }}
+        {{- include "alert-history.labels" . | nindent 8 }}
         app.kubernetes.io/component: redis-storage
     spec:
       accessModes:

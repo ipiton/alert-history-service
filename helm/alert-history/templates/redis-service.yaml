@@ -15,16 +15,16 @@ Three services:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis-headless
+  name: {{ include "alert-history.fullname" . }}-redis-headless
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-headless
 spec:
   type: ClusterIP
   clusterIP: None  # Headless service (no ClusterIP assigned)
   selector:
-    {{- include "alerthistory.selectorLabels" . | nindent 4 }}
+    {{- include "alert-history.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: redis
   ports:
   - name: redis
@@ -41,10 +41,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis
+  name: {{ include "alert-history.fullname" . }}-redis
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
   annotations:
     # Service description
@@ -52,11 +52,11 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    {{- include "alerthistory.selectorLabels" . | nindent 4 }}
+    {{- include "alert-history.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: redis
     # Route to primary pod only (pod-0)
     # Future HA: Remove this selector to load-balance reads across all replicas
-    statefulset.kubernetes.io/pod-name: {{ include "alerthistory.fullname" . }}-redis-0
+    statefulset.kubernetes.io/pod-name: {{ include "alert-history.fullname" . }}-redis-0
   ports:
   - name: redis
     port: 6379
@@ -72,10 +72,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "alerthistory.fullname" . }}-redis-metrics
+  name: {{ include "alert-history.fullname" . }}-redis-metrics
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "alerthistory.labels" . | nindent 4 }}
+    {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-metrics
   annotations:
     # Prometheus scraping annotations (fallback if ServiceMonitor not used)
@@ -87,7 +87,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    {{- include "alerthistory.selectorLabels" . | nindent 4 }}
+    {{- include "alert-history.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: redis
   ports:
   - name: metrics
