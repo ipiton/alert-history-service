@@ -396,10 +396,13 @@
   - ✅ **Delivered**: Complete API specification, schemas, examples
   - 🎯 **Quality**: Structurally correct, YAML validated
 - [x] **TN-117** Deployment guide - **COMPLETE** (2025-11-30)
-  - 📊 **Status**: 700+ LOC comprehensive guide
+  - 📊 **Status**: 676 LOC comprehensive guide
   - ✅ **Delivered**: Lite & Standard profiles, K8s setup, production checklist
   - 🎯 **Quality**: Production-ready documentation
-- [ ] **TN-118** Operations runbook
+- [x] **TN-118** Operations runbook - **COMPLETE** (2025-11-30)
+  - 📊 **Status**: 900+ LOC comprehensive runbook
+  - ✅ **Delivered**: Daily ops, monitoring, incident response, backup/recovery
+  - 🎯 **Quality**: Production-ready operations guide
 - [ ] **TN-119** Troubleshooting guide
 - [ ] **TN-120** Architecture documentation
 - [ ] **TN-176** Migration Guide (Alertmanager → Alert History)
