@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -82,8 +83,8 @@ func (ti *TestInfrastructure) startPostgres(ctx context.Context) error {
 		return fmt.Errorf("failed to get connection string: %w", err)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", connStr)
+	// Connect to database (using pgx driver)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
