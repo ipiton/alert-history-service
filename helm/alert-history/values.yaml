@@ -265,6 +265,16 @@ postgresql:
         cpu: 250m
         memory: 256Mi
 
+  # PostgreSQL Monitoring (TN-98: 150% observability)
+  monitoring:
+    prometheusRules:
+      enabled: true  # Enable Prometheus alerting rules
+    # Grafana dashboard: Import from https://grafana.com/grafana/dashboards/9628 (PostgreSQL Database)
+
+  # PostgreSQL Network Policy (TN-98: Security hardening)
+  networkPolicy:
+    enabled: false  # Enable in production for network isolation
+
   # PostgreSQL Configuration (TN-97 + TN-98: optimized for HPA cluster mode)
   # CRITICAL: These settings prevent connection pool exhaustion at scale
   # Connection calculation: 10 replicas × 20 conns/pod + 50 reserved = 250 max_connections
