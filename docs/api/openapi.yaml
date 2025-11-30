@@ -1,767 +1,1568 @@
 openapi: 3.0.3
 info:
-  title: Alert History - Intelligent Proxy Webhook API
+  title: Alertmanager++ API
   description: |
-    Enterprise-grade intelligent proxy webhook endpoint for Alertmanager with advanced capabilities:
+    **Alertmanager++ OSS Edition** - Enterprise-grade alert management system with intelligent classification, routing, and publishing capabilities.
 
     ## Features
-    - **LLM-Powered Classification**: Automatic alert categorization using AI
-    - **Advanced Filtering**: 7 filter types (severity, time, geo, label, regex, frequency, health)
-    - **Parallel Publishing**: Multi-target publishing (Rootly, PagerDuty, Slack)
-    - **High Performance**: p95 < 50ms, 66K+ req/s throughput
-    - **Enterprise Security**: OWASP Top 10 compliant (95%), security headers
-    - **Comprehensive Observability**: 18 Prometheus metrics, 6 alerting rules
+    - 🔍 Intelligent alert classification (LLM-powered)
+    - 🎯 Advanced routing engine (label-based, regex support)
+    - 📨 Multi-target publishing (Slack, PagerDuty, Rootly, Webhooks)
+    - 📊 Historical analytics & trend detection
+    - ⚙️  Configuration management with hot reload
+    - 🔐 Enterprise-grade security & observability
 
-    ## Quality Standard
-    This API achieves **150% Enterprise Quality** across all dimensions:
-    - Performance: 3,333x faster than targets
-    - Security: Grade A (95% OWASP compliance)
-    - Tests: 50+ unit tests, 30+ benchmarks
-    - Documentation: Complete OpenAPI 3.0 spec
+    ## API Versioning
+    - **Current Version**: v2.0.0
+    - **Base Path**: `/api/v2`
+    - **Header**: `X-API-Version: 2.0.0`
 
-  version: 1.0.0
+    ## Authentication
+    Currently no authentication required (add API key support in future versions).
+
+    ## Rate Limiting
+    - Default: 1000 requests/minute per IP
+    - Header: `X-RateLimit-Remaining`
+
+    ## Error Handling
+    All errors follow standardized format with request ID tracing.
+
+  version: 2.0.0
   contact:
-    name: Alert History Team
-    email: team@alerthistory.io
-    url: https://docs.alerthistory.io
+    name: Alertmanager++ Support
+    url: https://github.com/ipiton/alert-history-service
   license:
-    name: Proprietary
-    url: https://alerthistory.io/license
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 servers:
-  - url: https://api.alerthistory.io/v1
-    description: Production server
-  - url: https://staging-api.alerthistory.io/v1
-    description: Staging server
-  - url: http://localhost:8080/v1
+  - url: http://localhost:8080/api/v2
     description: Local development server
+  - url: https://api.alertmanager-plus.example.com/api/v2
+    description: Production server
 
 tags:
-  - name: Webhook
-    description: Intelligent proxy webhook operations
-  - name: Health
-    description: Health check endpoints
+  - name: System
+    description: System health and status endpoints
+  - name: Publishing
+    description: Alert publishing and target management
+  - name: Classification
+    description: LLM-powered alert classification
+  - name: Enrichment
+    description: Alert enrichment mode management
+  - name: History
+    description: Alert history and analytics
+  - name: Configuration
+    description: Configuration management and hot reload
 
-paths:
-  /webhook/proxy:
-    post:
-      summary: Intelligent Proxy Webhook
-      description: |
-        Process Alertmanager webhooks with intelligent classification, filtering, and publishing.
-
-        This endpoint receives alerts from Alertmanager, processes them through three pipelines:
-        1. **Classification Pipeline**: LLM-powered categorization with two-tier caching
-        2. **Filtering Pipeline**: Rule-based filtering (7 filter types)
-        3. **Publishing Pipeline**: Parallel publishing to configured targets
-
-        ## Processing Flow
-        ```
-        Request → Validation → Classification → Filtering → Publishing → Response
-        ```
-
-        ## Performance
-        - Average processing time: ~15µs (without external calls)
-        - With LLM (cached): ~100µs
-        - With LLM (uncached): ~15ms
-        - With publishing: ~15-50ms (depending on targets)
-
-        ## Reliability
-        - Automatic retries (3 attempts)
-        - Circuit breaker for LLM
-        - Graceful degradation
-        - Continue on partial failures
-
-      operationId: processProxyWebhook
-      tags:
-        - Webhook
-      security:
-        - ApiKeyAuth: []
-        - BearerAuth: []
-      parameters:
-        - name: X-Request-ID
-          in: header
-          description: Optional request ID for tracking
-          schema:
-            type: string
-            format: uuid
+components:
+  schemas:
+    # ============================================================================
+    # Error Responses
+    # ============================================================================
+    Error:
+      type: object
+      required:
+        - status_code
+        - code
+        - message
+      properties:
+        status_code:
+          type: integer
+          description: HTTP status code
+          example: 400
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "VALIDATION_ERROR"
+          enum:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - INTERNAL_ERROR
+            - BAD_REQUEST
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - CONFLICT
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid request body: missing required field 'query'"
+        details:
+          type: string
+          description: Additional error details
+          example: "Field 'pagination.page' must be positive integer"
+        request_id:
+          type: string
+          format: uuid
+          description: Unique request identifier for debugging
           example: "550e8400-e29b-41d4-a716-446655440000"
 
+    # ============================================================================
+    # System Health
+    # ============================================================================
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - uptime_seconds
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall system health status
+          example: "healthy"
+        version:
+          type: string
+          description: Application version
+          example: "2.0.0"
+        uptime_seconds:
+          type: integer
+          description: Server uptime in seconds
+          example: 86400
+        checks:
+          type: object
+          description: Individual health checks
+          properties:
+            database:
+              type: string
+              enum: [pass, fail]
+              example: "pass"
+            redis:
+              type: string
+              enum: [pass, fail]
+              example: "pass"
+            llm:
+              type: string
+              enum: [pass, fail]
+              example: "pass"
+
+    # ============================================================================
+    # Publishing
+    # ============================================================================
+    PublishingTarget:
+      type: object
+      required:
+        - name
+        - type
+        - endpoint
+        - health_status
+      properties:
+        name:
+          type: string
+          description: Target name (from K8s Secret label)
+          example: "slack-engineering"
+        type:
+          type: string
+          enum: [slack, pagerduty, rootly, webhook]
+          description: Target type
+          example: "slack"
+        endpoint:
+          type: string
+          format: uri
+          description: Target endpoint URL
+          example: "https://hooks.slack.com/services/..."
+        health_status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Target health status
+          example: "healthy"
+        last_check:
+          type: string
+          format: date-time
+          description: Last health check timestamp
+          example: "2025-11-30T12:00:00Z"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Target-specific metadata
+
+
+paths:
+  # ==========================================================================
+  # System Health
+  # ==========================================================================
+  /health:
+    get:
+      tags: [System]
+      summary: Get system health status
+      description: |
+        Returns overall system health including component checks (database, Redis, LLM).
+        Used by Kubernetes readiness/liveness probes.
+      operationId: getHealth
+      responses:
+        '200':
+          description: System health retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                version: "2.0.0"
+                uptime_seconds: 86400
+                checks:
+                  database: "pass"
+                  redis: "pass"
+                  llm: "pass"
+
+  # ==========================================================================
+  # Publishing - Target Management
+  # ==========================================================================
+  /publishing/targets:
+    get:
+      tags: [Publishing]
+      summary: List all publishing targets
+      description: |
+        Returns all discovered publishing targets from Kubernetes Secrets.
+        Auto-discovers targets with label `publishing-target=true`.
+      operationId: listPublishingTargets
+      parameters:
+        - name: type
+          in: query
+          description: Filter by target type
+          schema:
+            type: string
+            enum: [slack, pagerduty, rootly, webhook]
+        - name: health_status
+          in: query
+          description: Filter by health status
+          schema:
+            type: string
+            enum: [healthy, degraded, unhealthy]
+      responses:
+        '200':
+          description: Targets retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  targets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublishingTarget'
+                  count:
+                    type: integer
+              example:
+                targets:
+                  - name: "slack-engineering"
+                    type: "slack"
+                    endpoint: "https://hooks.slack.com/..."
+                    health_status: "healthy"
+                  - name: "pagerduty-oncall"
+                    type: "pagerduty"
+                    endpoint: "https://events.pagerduty.com/..."
+                    health_status: "healthy"
+                count: 2
+
+  /publishing/targets/{name}:
+    get:
+      tags: [Publishing]
+      summary: Get target by name
+      operationId: getPublishingTarget
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Target name
+          example: "slack-engineering"
+      responses:
+        '200':
+          description: Target details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishingTarget'
+        '404':
+          description: Target not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /publishing/targets/refresh:
+    post:
+      tags: [Publishing]
+      summary: Refresh target discovery
+      description: |
+        Manually trigger target discovery from Kubernetes Secrets.
+        Rate limited to 1 request per minute.
+      operationId: refreshTargets
+      responses:
+        '202':
+          description: Refresh triggered successfully (async)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Target refresh initiated"
+                  status:
+                    type: string
+                    example: "in_progress"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /classification/stats:
+    get:
+      tags: [Classification]
+      summary: Get classification statistics
+      description: |
+        Returns aggregate classification statistics including:
+        - Total classifications
+        - Cache hit rate (L1 + L2)
+        - Average confidence score
+        - LLM performance metrics
+      operationId: getClassificationStats
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_classifications:
+                    type: integer
+                    example: 10523
+                  cache_hit_rate:
+                    type: number
+                    format: float
+                    example: 0.95
+                  avg_confidence:
+                    type: number
+                    format: float
+                    example: 0.87
+                  l1_hit_rate:
+                    type: number
+                    example: 0.65
+                  l2_hit_rate:
+                    type: number
+                    example: 0.30
+
+  /classification/classify:
+    post:
+      tags: [Classification]
+      summary: Classify alert manually
+      description: |
+        Manually trigger LLM classification for a specific alert.
+        Supports cache bypass with `force=true` parameter.
+      operationId: classifyAlert
+      parameters:
+        - name: force
+          in: query
+          description: Bypass cache and force re-classification
+          schema:
+            type: boolean
+            default: false
       requestBody:
-        description: Alertmanager webhook payload
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProxyWebhookRequest'
-            examples:
-              singleAlert:
-                summary: Single firing alert
-                value:
-                  receiver: "webhook-receiver"
-                  status: "firing"
-                  alerts:
-                    - status: "firing"
-                      labels:
-                        alertname: "HighCPUUsage"
-                        severity: "critical"
-                        instance: "server-01"
-                        job: "node-exporter"
-                      annotations:
-                        summary: "CPU usage above 90%"
-                        description: "Server server-01 CPU usage is 95%"
-                      startsAt: "2025-11-16T10:00:00Z"
-                      generatorURL: "https://prometheus/graph?g0.expr=..."
-                  groupLabels:
-                    alertname: "HighCPUUsage"
-                  commonLabels:
-                    severity: "critical"
-                  externalURL: "https://alertmanager.company.com"
-
-              multipleAlerts:
-                summary: Multiple alerts in batch
-                value:
-                  receiver: "webhook-receiver"
-                  status: "firing"
-                  alerts:
-                    - status: "firing"
-                      labels:
-                        alertname: "HighMemoryUsage"
-                        severity: "warning"
-                        instance: "server-02"
-                      annotations:
-                        summary: "Memory usage above 80%"
-                      startsAt: "2025-11-16T10:00:00Z"
-                    - status: "firing"
-                      labels:
-                        alertname: "DiskSpaceLow"
-                        severity: "warning"
-                        instance: "server-03"
-                      annotations:
-                        summary: "Disk space below 20%"
-                      startsAt: "2025-11-16T10:01:00Z"
-                  groupKey: "{}:{alertname=\"HighMemoryUsage\"}"
-
-              resolvedAlert:
-                summary: Resolved alert
-                value:
-                  receiver: "webhook-receiver"
-                  status: "resolved"
-                  alerts:
-                    - status: "resolved"
-                      labels:
-                        alertname: "HighCPUUsage"
-                        severity: "critical"
-                        instance: "server-01"
-                      annotations:
-                        summary: "CPU usage back to normal"
-                      startsAt: "2025-11-16T10:00:00Z"
-                      endsAt: "2025-11-16T10:15:00Z"
-
+              $ref: '#/components/schemas/Alert'
       responses:
         '200':
-          description: Request processed successfully
-          headers:
-            X-Request-ID:
-              description: Request tracking ID
-              schema:
-                type: string
-            X-Processing-Time:
-              description: Processing time in milliseconds
-              schema:
-                type: integer
+          description: Classification completed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProxyWebhookResponse'
-              examples:
-                success:
-                  summary: All alerts processed successfully
-                  value:
-                    status: "success"
-                    message: "All alerts processed successfully"
-                    timestamp: "2025-11-16T10:00:00Z"
-                    processing_time_ms: 15
-                    alerts_summary:
-                      total_received: 1
-                      total_processed: 1
-                      total_classified: 1
-                      total_filtered: 0
-                      total_published: 1
-                      total_failed: 0
-                    alert_results:
-                      - fingerprint: "abc123"
-                        alert_name: "HighCPUUsage"
-                        status: "success"
-                        classification:
-                          category: "performance"
-                          severity: "high"
-                          confidence: 0.95
-                          cached: true
-                        filtering:
-                          action: "allow"
-                          matched_rules: []
-                        publishing:
-                          published_to: ["rootly", "pagerduty"]
-                          failed_to: []
-                    publishing_summary:
-                      total_targets: 2
-                      successful_targets: 2
-                      failed_targets: 0
-                      total_publish_time_ms: 250
+                $ref: '#/components/schemas/ClassificationResult'
 
-                partial:
-                  summary: Some alerts failed
-                  value:
-                    status: "partial"
-                    message: "Some alerts failed processing"
-                    timestamp: "2025-11-16T10:00:00Z"
-                    processing_time_ms: 20
-                    alerts_summary:
-                      total_received: 2
-                      total_processed: 2
-                      total_classified: 2
-                      total_filtered: 1
-                      total_published: 1
-                      total_failed: 0
-                    alert_results:
-                      - fingerprint: "abc123"
-                        alert_name: "HighCPUUsage"
-                        status: "success"
-                        classification:
-                          category: "performance"
-                          severity: "high"
-                          confidence: 0.95
-                        filtering:
-                          action: "allow"
-                        publishing:
-                          published_to: ["rootly"]
-                          failed_to: []
-                      - fingerprint: "def456"
-                        alert_name: "TestAlert"
-                        status: "filtered"
-                        classification:
-                          category: "test"
-                          severity: "low"
-                          confidence: 0.85
-                        filtering:
-                          action: "deny"
-                          matched_rules: ["severity_filter"]
-                          reason: "Severity below threshold"
-                    publishing_summary:
-                      total_targets: 1
-                      successful_targets: 1
-                      failed_targets: 0
-
-        '400':
-          description: Bad request - validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                validationError:
-                  summary: Validation error
-                  value:
-                    error:
-                      code: "VALIDATION_ERROR"
-                      message: "Request validation failed"
-                      details:
-                        - field: "alerts[0].labels"
-                          error: "required field missing"
-                        - field: "alerts[0].startsAt"
-                          error: "required field missing"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-                payloadTooLarge:
-                  summary: Payload too large
-                  value:
-                    error:
-                      code: "PAYLOAD_TOO_LARGE"
-                      message: "Request body exceeds 10MB limit"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-        '401':
-          description: Unauthorized - authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                unauthorized:
-                  summary: Missing or invalid authentication
-                  value:
-                    error:
-                      code: "AUTHENTICATION_ERROR"
-                      message: "Invalid or missing API key"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-        '429':
-          description: Too many requests - rate limit exceeded
-          headers:
-            X-RateLimit-Limit:
-              description: Rate limit per second
-              schema:
-                type: integer
-            X-RateLimit-Remaining:
-              description: Remaining requests
-              schema:
-                type: integer
-            X-RateLimit-Reset:
-              description: Time when limit resets (Unix timestamp)
-              schema:
-                type: integer
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                rateLimit:
-                  summary: Rate limit exceeded
-                  value:
-                    error:
-                      code: "RATE_LIMIT_ERROR"
-                      message: "Rate limit exceeded: 100 requests per second"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                internalError:
-                  summary: Internal server error
-                  value:
-                    error:
-                      code: "INTERNAL_ERROR"
-                      message: "An internal error occurred"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-        '503':
-          description: Service unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                serviceUnavailable:
-                  summary: Service unavailable
-                  value:
-                    error:
-                      code: "SERVICE_UNAVAILABLE"
-                      message: "Service temporarily unavailable"
-                      timestamp: "2025-11-16T10:00:00Z"
-                      request_id: "550e8400-e29b-41d4-a716-446655440000"
-
-  /health:
+  /enrichment/mode:
     get:
-      summary: Health Check
-      description: Check service health status
-      operationId: healthCheck
-      tags:
-        - Health
+      tags: [Enrichment]
+      summary: Get current enrichment mode
+      operationId: getEnrichmentMode
       responses:
         '200':
-          description: Service is healthy
+          description: Current mode retrieved
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
+                  mode:
                     type: string
-                    enum: [healthy]
-                  timestamp:
-                    type: string
-                    format: date-time
-                example:
-                  status: "healthy"
-                  timestamp: "2025-11-16T10:00:00Z"
-        '503':
-          description: Service is unhealthy
+                    enum: [transparent, enriched, transparent_with_recommendations]
+                    example: "enriched"
+    post:
+      tags: [Enrichment]
+      summary: Set enrichment mode
+      operationId: setEnrichmentMode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mode
+              properties:
+                mode:
+                  type: string
+                  enum: [transparent, enriched, transparent_with_recommendations]
+                  example: "enriched"
+      responses:
+        '200':
+          description: Mode updated successfully
+        '400':
+          description: Invalid mode
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [unhealthy]
-                  timestamp:
-                    type: string
-                    format: date-time
-                  errors:
-                    type: array
-                    items:
-                      type: string
+                $ref: '#/components/schemas/Error'
 
-components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
-      description: API key authentication
-
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: JWT token authentication
-
-  schemas:
-    ProxyWebhookRequest:
-      type: object
-      required:
-        - receiver
-        - status
-        - alerts
-      properties:
-        receiver:
-          type: string
-          description: Alertmanager receiver name
-          example: "webhook-receiver"
-        status:
-          type: string
-          enum: [firing, resolved]
-          description: Alert status
-        alerts:
-          type: array
-          items:
-            $ref: '#/components/schemas/AlertPayload'
-          minItems: 1
-          maxItems: 100
-          description: Array of alerts (max 100 per request)
-        groupKey:
-          type: string
-          description: Alertmanager group key
-        groupLabels:
-          type: object
-          additionalProperties:
+  /history:
+    get:
+      tags: [History]
+      summary: Get alert history with filtering
+      description: |
+        Returns paginated alert history with advanced filtering options.
+        Supports filtering by status, severity, namespace, time range, labels.
+      operationId: getHistory
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: status
+          in: query
+          schema:
             type: string
-          description: Common labels for the group
-        commonLabels:
-          type: object
-          additionalProperties:
+            enum: [firing, resolved]
+        - name: severity
+          in: query
+          schema:
             type: string
-          description: Labels common to all alerts
-        commonAnnotations:
-          type: object
-          additionalProperties:
+            enum: [critical, warning, info]
+        - name: namespace
+          in: query
+          schema:
             type: string
-          description: Annotations common to all alerts
-        externalURL:
-          type: string
-          format: uri
-          description: Alertmanager external URL
-        version:
-          type: string
-          description: Alertmanager version
-        truncatedAlerts:
-          type: integer
-          description: Number of truncated alerts
-
-    AlertPayload:
-      type: object
-      required:
-        - status
-        - labels
-        - startsAt
-      properties:
-        status:
-          type: string
-          enum: [firing, resolved]
-          description: Alert status
-        labels:
-          type: object
-          additionalProperties:
+        - name: from
+          in: query
+          schema:
             type: string
-          minProperties: 1
-          description: Alert labels
-          example:
-            alertname: "HighCPUUsage"
-            severity: "critical"
-            instance: "server-01"
-        annotations:
-          type: object
-          additionalProperties:
+            format: date-time
+        - name: to
+          in: query
+          schema:
             type: string
-          description: Alert annotations
-          example:
-            summary: "CPU usage above 90%"
-            description: "Detailed description"
-        startsAt:
-          type: string
-          format: date-time
-          description: Alert start time
-        endsAt:
-          type: string
-          format: date-time
-          description: Alert end time (for resolved alerts)
-        generatorURL:
-          type: string
-          format: uri
-          description: URL to alert generator
-        fingerprint:
-          type: string
-          description: Alert fingerprint (auto-generated if not provided)
+            format: date-time
+      responses:
+        '200':
+          description: History retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
 
-    ProxyWebhookResponse:
-      type: object
-      required:
-        - status
-        - message
-        - timestamp
-        - processing_time_ms
-        - alerts_summary
-        - publishing_summary
-      properties:
-        status:
-          type: string
-          enum: [success, partial, failed]
-          description: Overall processing status
-        message:
-          type: string
-          description: Human-readable message
-        timestamp:
-          type: string
-          format: date-time
-          description: Response timestamp
-        processing_time_ms:
-          type: number
-          format: double
-          description: Total processing time in milliseconds
-        alerts_summary:
-          $ref: '#/components/schemas/AlertsProcessingSummary'
-        alert_results:
-          type: array
-          items:
-            $ref: '#/components/schemas/AlertProcessingResult'
-          description: Per-alert processing results
-        publishing_summary:
-          $ref: '#/components/schemas/PublishingSummary'
-
-    AlertsProcessingSummary:
-      type: object
-      required:
-        - total_received
-        - total_processed
-      properties:
-        total_received:
-          type: integer
-          description: Total alerts received
-        total_processed:
-          type: integer
-          description: Total alerts processed
-        total_classified:
-          type: integer
-          description: Alerts successfully classified
-        total_filtered:
-          type: integer
-          description: Alerts filtered out
-        total_published:
-          type: integer
-          description: Alerts successfully published
-        total_failed:
-          type: integer
-          description: Alerts that failed processing
-
-    AlertProcessingResult:
+    # ============================================================================
+    # Core Domain Models
+    # ============================================================================
+    Alert:
       type: object
       required:
         - fingerprint
         - alert_name
         - status
+        - starts_at
       properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
         fingerprint:
           type: string
-          description: Alert fingerprint
+          minLength: 64
+          maxLength: 64
+          description: SHA-256 fingerprint (64 hex chars)
+          example: "a1b2c3d4e5f67890123456789012345678901234567890123456789012345678"
         alert_name:
           type: string
-          description: Alert name from labels
+          example: "HighMemoryUsage"
         status:
           type: string
-          enum: [success, filtered, failed]
-          description: Processing status
+          enum: [firing, resolved]
+          example: "firing"
+        severity:
+          type: string
+          enum: [critical, warning, info]
+          example: "critical"
+        namespace:
+          type: string
+          example: "production"
+        starts_at:
+          type: string
+          format: date-time
+          example: "2025-11-30T12:00:00Z"
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-11-30T13:00:00Z"
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            alertname: "HighMemoryUsage"
+            severity: "critical"
+            namespace: "production"
+            pod: "api-server-abc123"
+        annotations:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            summary: "Memory usage at 95%"
+            description: "Pod api-server-abc123 memory at 95%"
+            runbook_url: "https://runbooks.example.com/memory"
         classification:
           $ref: '#/components/schemas/ClassificationResult'
-        filtering:
-          $ref: '#/components/schemas/FilteringResult'
-        publishing:
-          $ref: '#/components/schemas/PublishingResult'
-        error:
-          type: string
-          description: Error message (if failed)
 
     ClassificationResult:
       type: object
+      description: LLM-powered alert classification result
       properties:
-        category:
-          type: string
-          description: Alert category
-          example: "performance"
         severity:
           type: string
-          enum: [low, medium, high, critical]
-          description: Classified severity
+          enum: [critical, high, medium, low]
+          example: "critical"
+        category:
+          type: string
+          example: "Infrastructure"
         confidence:
           type: number
-          format: double
+          format: float
           minimum: 0
           maximum: 1
-          description: Classification confidence score
-        cached:
-          type: boolean
-          description: Whether result was from cache
-        duration_ms:
-          type: number
-          description: Classification duration
-
-    FilteringResult:
-      type: object
-      required:
-        - action
-      properties:
-        action:
+          example: 0.92
+        reasoning:
           type: string
-          enum: [allow, deny]
-          description: Filter decision
-        matched_rules:
+          example: "High memory usage in production pod indicates potential OOM risk"
+        action_items:
           type: array
           items:
             type: string
-          description: Rules that matched
-        reason:
-          type: string
-          description: Reason for filtering (if denied)
-
-    PublishingResult:
-      type: object
-      properties:
-        published_to:
-          type: array
-          items:
-            type: string
-          description: Targets successfully published to
-          example: ["rootly", "pagerduty"]
-        failed_to:
-          type: array
-          items:
-            type: string
-          description: Targets that failed
-        details:
-          type: array
-          items:
-            $ref: '#/components/schemas/TargetPublishingResult'
-
-    TargetPublishingResult:
-      type: object
-      required:
-        - target_name
-        - target_type
-        - success
-      properties:
-        target_name:
-          type: string
-          description: Target name
-        target_type:
-          type: string
-          enum: [rootly, pagerduty, slack, webhook]
-          description: Target type
-        success:
-          type: boolean
-          description: Whether publishing succeeded
-        status_code:
-          type: integer
-          description: HTTP status code
-        processing_time_ms:
-          type: number
-          description: Publishing time
-        error:
-          type: string
-          description: Error message (if failed)
-
-    PublishingSummary:
-      type: object
-      required:
-        - total_targets
-        - successful_targets
-        - failed_targets
-      properties:
-        total_targets:
-          type: integer
-          description: Total publishing targets
-        successful_targets:
-          type: integer
-          description: Successfully published targets
-        failed_targets:
-          type: integer
-          description: Failed publishing targets
-        total_publish_time_ms:
-          type: number
-          description: Total publishing time
-
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          $ref: '#/components/schemas/ErrorDetail'
-
-    ErrorDetail:
-      type: object
-      required:
-        - code
-        - message
-        - timestamp
-        - request_id
-      properties:
-        code:
-          type: string
-          enum:
-            - VALIDATION_ERROR
-            - AUTHENTICATION_ERROR
-            - AUTHORIZATION_ERROR
-            - RATE_LIMIT_ERROR
-            - SERVICE_UNAVAILABLE
-            - INTERNAL_ERROR
-            - TIMEOUT_ERROR
-            - PAYLOAD_TOO_LARGE
-            - UNSUPPORTED_MEDIA_TYPE
-          description: Error code
-        message:
-          type: string
-          description: Human-readable error message
-        details:
-          type: array
-          items:
-            $ref: '#/components/schemas/FieldErrorDetail'
-          description: Field-level error details
-        timestamp:
+          example:
+            - "Check memory limits in deployment"
+            - "Review application memory leaks"
+            - "Consider vertical pod autoscaling"
+        classified_at:
           type: string
           format: date-time
-          description: Error timestamp
-        request_id:
+          example: "2025-11-30T12:00:05Z"
+        model:
           type: string
-          description: Request tracking ID
+          example: "gpt-4"
 
-    FieldErrorDetail:
+    HistoryResponse:
       type: object
       required:
-        - field
-        - error
+        - alerts
+        - total
+        - page
+        - per_page
       properties:
-        field:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+        total:
+          type: integer
+          description: Total number of alerts matching filters
+          example: 1523
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 50
+        total_pages:
+          type: integer
+          example: 31
+        has_next:
+          type: boolean
+          example: true
+        has_prev:
+          type: boolean
+          example: false
+
+
+  /history/recent:
+    get:
+      tags: [History]
+      summary: Get recent alerts
+      operationId: getRecentAlerts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Recent alerts retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  count:
+                    type: integer
+
+  /history/{fingerprint}:
+    get:
+      tags: [History]
+      summary: Get alert timeline by fingerprint
+      operationId: getAlertTimeline
+      parameters:
+        - name: fingerprint
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 64
+            maxLength: 64
+          example: "a1b2c3d4e5f67890123456789012345678901234567890123456789012345678"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Timeline retrieved
+        '400':
+          description: Invalid fingerprint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /history/top:
+    get:
+      tags: [History]
+      summary: Get top firing alerts
+      operationId: getTopAlerts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Top alerts retrieved
+
+  /history/flapping:
+    get:
+      tags: [History]
+      summary: Get flapping alerts
+      operationId: getFlappingAlerts
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: integer
+            default: 5
+            maximum: 100
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Flapping alerts retrieved
+
+  /history/stats:
+    get:
+      tags: [History]
+      summary: Get aggregated statistics
+      operationId: getAggregatedStats
+      responses:
+        '200':
+          description: Statistics retrieved
+
+  /config:
+    get:
+      tags: [Configuration]
+      summary: Export current configuration
+      operationId: getConfig
+      responses:
+        '200':
+          description: Configuration exported
+          content:
+            application/yaml:
+              schema:
+                type: string
+    post:
+      tags: [Configuration]
+      summary: Update configuration
+      operationId: updateConfig
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Configuration updated
+        '400':
+          description: Invalid configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /config/rollback:
+    post:
+      tags: [Configuration]
+      summary: Rollback to previous configuration
+      operationId: rollbackConfig
+      parameters:
+        - name: version
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Rolled back successfully
+        '404':
+          description: Version not found
+
+  /alerts:
+    post:
+      tags: [System]
+      summary: Receive Prometheus alerts (Alertmanager-compatible)
+      description: |
+        Alertmanager-compatible webhook endpoint.
+        Supports Prometheus Alertmanager v0.25+ format.
+      operationId: receiveAlerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Alerts received successfully
+        '207':
+          description: Partial success (some alerts failed)
+        '400':
+          description: Invalid payload
+
+
+  /silences:
+    get:
+      tags: [Silences]
+      summary: List silences
+      description: Alertmanager-compatible silence listing
+      operationId: listSilences
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Filter silences by matcher
+      responses:
+        '200':
+          description: Silences retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Silence'
+    post:
+      tags: [Silences]
+      summary: Create silence
+      operationId: createSilence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SilenceCreate'
+      responses:
+        '201':
+          description: Silence created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Silence'
+        '400':
+          description: Invalid silence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /silences/{id}:
+    get:
+      tags: [Silences]
+      summary: Get silence by ID
+      operationId: getSilence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Silence retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Silence'
+        '404':
+          description: Silence not found
+    put:
+      tags: [Silences]
+      summary: Update silence
+      operationId: updateSilence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SilenceUpdate'
+      responses:
+        '200':
+          description: Silence updated
+    delete:
+      tags: [Silences]
+      summary: Delete silence
+      operationId: deleteSilence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Silence deleted
+        '404':
+          description: Silence not found
+
+  /silences/check:
+    post:
+      tags: [Silences]
+      summary: Check if alert would be silenced
+      operationId: checkSilence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Check completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  silenced:
+                    type: boolean
+                  silence_ids:
+                    type: array
+                    items:
+                      type: string
+
+    Silence:
+      type: object
+      required:
+        - id
+        - matchers
+        - starts_at
+        - ends_at
+        - created_by
+      properties:
+        id:
           type: string
-          description: Field path
-          example: "alerts[0].labels"
-        error:
+          format: uuid
+        matchers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: string
+              is_regex:
+                type: boolean
+        starts_at:
           type: string
-          description: Field-specific error message
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        comment:
+          type: string
+        created_by:
+          type: string
+        status:
+          type: string
+          enum: [active, pending, expired]
+
+    SilenceCreate:
+      type: object
+      required:
+        - matchers
+        - starts_at
+        - ends_at
+        - created_by
+      properties:
+        matchers:
+          type: array
+          items:
+            type: object
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        comment:
+          type: string
+        created_by:
+          type: string
+
+
+  /inhibition/rules:
+    get:
+      tags: [Inhibition]
+      summary: List loaded inhibition rules
+      description: Returns all inhibition rules from configuration
+      operationId: getInhibitionRules
+      responses:
+        '200':
+          description: Rules retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                  count:
+                    type: integer
+
+  /inhibition/status:
+    get:
+      tags: [Inhibition]
+      summary: Get active inhibition relationships
+      description: Returns current inhibition state (which alerts are inhibiting others)
+      operationId: getInhibitionStatus
+      responses:
+        '200':
+          description: Status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_inhibitions:
+                    type: integer
+                  relationships:
+                    type: array
+                    items:
+                      type: object
+
+  /inhibition/check:
+    post:
+      tags: [Inhibition]
+      summary: Check if alert would be inhibited
+      operationId: checkInhibition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Check completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inhibited:
+                    type: boolean
+                  inhibiting_alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Render modern dashboard page (HTML)
+      description: Server-side rendered dashboard with real-time updates
+      operationId: getDashboard
+      responses:
+        '200':
+          description: Dashboard HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /ui/alerts:
+    get:
+      tags: [Dashboard]
+      summary: Alert list page (HTML)
+      description: Server-side rendered alert list with filtering
+      operationId: getAlertListUI
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert list HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/dashboard/overview:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard overview statistics
+      operationId: getDashboardOverview
+      responses:
+        '200':
+          description: Overview statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_alerts:
+                    type: integer
+                  firing_count:
+                    type: integer
+                  resolved_count:
+                    type: integer
+                  avg_resolution_time_seconds:
+                    type: number
+
+  /api/dashboard/health:
+    get:
+      tags: [Dashboard]
+      summary: System health summary
+      operationId: getDashboardHealth
+      responses:
+        '200':
+          description: Health summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  components:
+                    type: object
+
+  /api/v2/events/stream:
+    get:
+      tags: [Dashboard]
+      summary: Server-Sent Events stream
+      description: Real-time alert event stream (SSE)
+      operationId: getEventStream
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /ws/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: WebSocket for real-time updates
+      description: Dashboard WebSocket connection
+      operationId: getDashboardWebSocket
+      responses:
+        '101':
+          description: WebSocket upgrade
+
+
+  /webhook:
+    post:
+      tags: [System]
+      summary: Universal webhook endpoint
+      description: |
+        Auto-detects webhook type (Alertmanager, Prometheus, Generic)
+        and routes to appropriate handler.
+        Backward compatible with legacy webhook format.
+      operationId: receiveWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Alert'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Webhook processed
+        '207':
+          description: Partial success
+        '400':
+          description: Invalid payload
+
+  /webhook/proxy:
+    post:
+      tags: [System]
+      summary: Intelligent webhook proxy
+      description: |
+        Explicit intelligent proxy with:
+        - LLM classification
+        - Advanced filtering
+        - Multi-target publishing
+      operationId: proxyWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Alerts processed and published
+
+  /publishing/queue/status:
+    get:
+      tags: [Publishing]
+      summary: Get queue status
+      operationId: getQueueStatus
+      responses:
+        '200':
+          description: Queue status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+                  processing:
+                    type: integer
+                  completed_total:
+                    type: integer
+                  failed_total:
+                    type: integer
+
+  /publishing/queue/stats:
+    get:
+      tags: [Publishing]
+      summary: Get detailed queue statistics
+      operationId: getQueueStats
+      responses:
+        '200':
+          description: Statistics retrieved
+
+  /publishing/queue/submit:
+    post:
+      tags: [Publishing]
+      summary: Submit alert to publishing queue
+      operationId: submitToQueue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - alert
+                - targets
+              properties:
+                alert:
+                  $ref: '#/components/schemas/Alert'
+                targets:
+                  type: array
+                  items:
+                    type: string
+                priority:
+                  type: string
+                  enum: [high, normal, low]
+      responses:
+        '202':
+          description: Job submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+
+  /publishing/queue/jobs:
+    get:
+      tags: [Publishing]
+      summary: List queue jobs
+      operationId: listQueueJobs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Jobs retrieved
+
+  /publishing/queue/jobs/{id}:
+    get:
+      tags: [Publishing]
+      summary: Get job by ID
+      operationId: getQueueJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job details
+        '404':
+          description: Job not found
+
+  /publishing/dlq:
+    get:
+      tags: [Publishing]
+      summary: List Dead Letter Queue entries
+      operationId: listDLQ
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: DLQ entries retrieved
+
+  /publishing/dlq/{id}/replay:
+    post:
+      tags: [Publishing]
+      summary: Replay DLQ entry
+      operationId: replayDLQEntry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Replay initiated
+        '404':
+          description: Entry not found
+
+  /publishing/dlq/purge:
+    delete:
+      tags: [Publishing]
+      summary: Purge old DLQ entries
+      operationId: purgeDLQ
+      parameters:
+        - name: older_than
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Delete entries older than this timestamp
+      responses:
+        '200':
+          description: Purge completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: Prometheus metrics endpoint
+      description: Exposes metrics in Prometheus format
+      operationId: getPrometheusMetrics
+      responses:
+        '200':
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+
+  /publishing/parallel/targets:
+    post:
+      tags: [Publishing]
+      summary: Publish to specific targets (parallel)
+      operationId: publishParallelTargets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alert:
+                  $ref: '#/components/schemas/Alert'
+                targets:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Published successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  successful:
+                    type: integer
+                  failed:
+                    type: integer
+                  results:
+                    type: array
+
+  /publishing/parallel/all:
+    post:
+      tags: [Publishing]
+      summary: Publish to all targets (parallel)
+      operationId: publishParallelAll
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alert:
+                  $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Published to all targets
+
+  /publishing/parallel/healthy:
+    post:
+      tags: [Publishing]
+      summary: Publish to healthy targets only
+      operationId: publishParallelHealthy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alert:
+                  $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Published to healthy targets
+
+  /publishing/stats:
+    get:
+      tags: [Publishing]
+      summary: Get publishing statistics
+      operationId: getPublishingStats
+      responses:
+        '200':
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_published:
+                    type: integer
+                  successful:
+                    type: integer
+                  failed:
+                    type: integer
+                  by_target:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+  /publishing/mode:
+    get:
+      tags: [Publishing]
+      summary: Get publishing mode
+      operationId: getPublishingMode
+      responses:
+        '200':
+          description: Mode retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum: [active, metrics_only]
+
+    SilenceUpdate:
+      type: object
+      properties:
+        matchers:
+          type: array
+          items:
+            type: object
+        ends_at:
+          type: string
+          format: date-time
+        comment:
+          type: string
+
+
+# ==============================================================================
+# Additional Response Examples
+# ==============================================================================
+# This section demonstrates comprehensive request/response examples
+
+# Example: Classification Response
+# POST /classification/classify
+# Response:
+#   {
+#     "severity": "critical",
+#     "category": "Infrastructure",
+#     "confidence": 0.92,
+#     "reasoning": "High memory usage in production pod indicates potential OOM risk",
+#     "action_items": [
+#       "Check memory limits in deployment",
+#       "Review application memory leaks",
+#       "Consider vertical pod autoscaling"
+#     ],
+#     "classified_at": "2025-11-30T12:00:05Z",
+#     "model": "gpt-4"
+#   }
+
+# Example: Publishing Stats Response
+# GET /publishing/stats
+# Response:
+#   {
+#     "total_published": 15234,
+#     "successful": 15100,
+#     "failed": 134,
+#     "by_target": {
+#       "slack-engineering": 5000,
+#       "pagerduty-oncall": 4500,
+#       "webhook-general": 5600
+#     }
+#   }
+
+# Example: Silence Response
+# GET /silences/{id}
+# Response:
+#   {
+#     "id": "550e8400-e29b-41d4-a716-446655440000",
+#     "matchers": [
+#       {"name": "alertname", "value": "HighMemoryUsage", "is_regex": false},
+#       {"name": "namespace", "value": "production", "is_regex": false}
+#     ],
+#     "starts_at": "2025-11-30T12:00:00Z",
+#     "ends_at": "2025-12-01T12:00:00Z",
+#     "comment": "Maintenance window",
+#     "created_by": "ops-team",
+#     "status": "active"
+#   }
