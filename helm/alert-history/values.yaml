@@ -214,19 +214,63 @@ postgresql:
   database: "alert_history"
   username: "alert_history"
   password: "secure_password_123"
-  # Resource limits
+  # Resource limits (increased for HPA cluster mode with max_connections=250)
   resources:
     limits:
       cpu: 1000m
-      memory: 1Gi
+      memory: 2Gi          # Increased from 1Gi for connection pool
     requests:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi          # Increased from 512Mi
   # Storage configuration
   persistence:
     enabled: true
     size: 10Gi
     storageClass: ""
+
+  # PostgreSQL Configuration (optimized for HPA cluster mode: 2-10 replicas)
+  # CRITICAL: These settings prevent connection pool exhaustion at scale
+  # Connection calculation: 10 replicas × 20 conns/pod + 50 reserved = 250 max_connections
+  config:
+    # Connection Settings (CRITICAL for HPA)
+    maxConnections: 250                      # Up from 100 default (supports 10 replicas)
+    superuserReservedConnections: 10
+
+    # Memory Settings (tuned for max_connections=250)
+    sharedBuffers: "256MB"                   # 25% of maxConnections
+    effectiveCacheSize: "1GB"                # 50% of total memory
+    workMem: "4MB"                           # Per-operation memory
+    maintenanceWorkMem: "64MB"               # For VACUUM, indexes
+
+    # WAL Settings
+    walBuffers: "16MB"
+    maxWalSize: "1GB"
+    minWalSize: "80MB"
+    checkpointCompletionTarget: 0.9
+
+    # Query Planning (SSD-optimized)
+    randomPageCost: 1.1                      # Down from 4.0 (HDD default)
+    effectiveIoConcurrency: 200              # Up from 1 (HDD default)
+
+    # Monitoring
+    sharedPreloadLibraries: "pg_stat_statements"
+    trackActivities: "on"
+    trackCounts: "on"
+    trackIoTiming: "on"
+
+    # Logging (adjust for debugging connection issues)
+    logConnections: "off"                    # Enable for debugging (performance hit)
+    logDisconnections: "off"
+    logLinePrefix: "%m [%p] %u@%d "
+    logMinDurationStatement: 1000            # Log queries > 1s
+
+    # Autovacuum (critical for high-write alert ingestion)
+    autovacuum: "on"
+    autovacuumMaxWorkers: 3
+    autovacuumNaptime: "1min"
+
+    # Security
+    ssl: "off"                               # Enable in production with certs
 
 # ===============================
 # Valkey Cache Configuration (Redis-compatible, Standard Profile Only)
