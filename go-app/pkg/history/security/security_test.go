@@ -69,7 +69,7 @@ func TestInputValidator_ValidateFingerprint(t *testing.T) {
 	}{
 		{
 			name:        "valid fingerprint",
-			fingerprint: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567890",
+			fingerprint: "a1b2c3d4e5f67890123456789012345678901234567890123456789012345678", // 64 hex chars
 			wantErr:     false,
 		},
 		{
