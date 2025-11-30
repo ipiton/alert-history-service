@@ -301,6 +301,36 @@ cache:
       memory: 256Mi
 
 # ===============================
+# Valkey Subchart Configuration (TN-99: Production-Ready)
+# ===============================
+# Valkey is a Redis-compatible cache used by Standard Profile only
+# Connection pool: 50 conns/pod × 10 replicas = 500 connections
+# Valkey maxclients: 10,000 (default) → 5% utilization at max scale ✅
+valkey:
+  enabled: true  # Managed by profile in deployment
+
+  # Resource limits (TN-99: production-sized)
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  # Persistence (TN-99: enabled for durability)
+  storage:
+    className: ""
+    requestedSize: 5Gi
+
+  # Valkey settings (production-tuned for Standard Profile + HPA)
+  settings:
+    maxmemory: 384mb  # 75% of 512Mi limit
+    maxmemoryPolicy: allkeys-lru  # Evict least recently used
+    appendonly: "yes"  # AOF persistence
+    appendfsync: everysec  # Balance performance/durability
+
+# ===============================
 # Alert Processing Configuration
 # ===============================
 alerts:
