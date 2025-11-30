@@ -210,23 +210,73 @@ liteProfile:
 # Automatically disabled for Lite profile
 postgresql:
   enabled: true  # Overridden by profile in deployment.yaml
+  replicas: 1  # Single instance for Standard Profile
   # Database configuration
   database: "alert_history"
   username: "alert_history"
   password: "secure_password_123"
-  # Resource limits
+  # Resource limits (TN-98: increased for production)
   resources:
     limits:
       cpu: 1000m
-      memory: 1Gi
+      memory: 2Gi  # Increased from 1Gi for max_connections=250
     requests:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi  # Increased from 512Mi
   # Storage configuration
   persistence:
     enabled: true
     size: 10Gi
     storageClass: ""
+
+  # Pod Disruption Budget (TN-98: HA support)
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1  # Keep at least 1 pod available during voluntary disruptions
+
+  # PostgreSQL Configuration (TN-97 + TN-98: optimized for HPA cluster mode)
+  # CRITICAL: These settings prevent connection pool exhaustion at scale
+  # Connection calculation: 10 replicas × 20 conns/pod + 50 reserved = 250 max_connections
+  config:
+    # Connection Settings (TN-97: CRITICAL for HPA)
+    maxConnections: 250  # Up from 100 default (supports 10 replicas)
+    superuserReservedConnections: 10
+
+    # Memory Settings (tuned for max_connections=250)
+    sharedBuffers: "256MB"  # 25% of maxConnections
+    effectiveCacheSize: "1GB"  # 50% of total memory
+    workMem: "4MB"  # Per-operation memory
+    maintenanceWorkMem: "64MB"  # For VACUUM, indexes
+
+    # WAL Settings
+    walBuffers: "16MB"
+    maxWalSize: "4GB"
+    minWalSize: "1GB"
+    checkpointCompletionTarget: 0.9
+
+    # Query Planning (SSD-optimized, TN-97)
+    randomPageCost: 1.1  # Down from 4.0 (HDD default)
+    effectiveIoConcurrency: 200  # Up from 1 (HDD default)
+
+    # Monitoring (TN-97: pg_stat_statements)
+    sharedPreloadLibraries: "pg_stat_statements"
+    trackActivities: "on"
+    trackCounts: "on"
+    trackIoTiming: "on"
+
+    # Logging (adjust for debugging connection issues)
+    loggingCollector: "on"
+    logConnections: "off"  # Enable for debugging (performance hit)
+    logDisconnections: "off"
+    logMinDurationStatement: 1000  # Log queries > 1s
+
+    # Autovacuum (TN-97: critical for high-write alert ingestion)
+    autovacuum: "on"
+    autovacuumMaxWorkers: 3
+    autovacuumNaptime: "1min"
+
+    # Security (TN-98: production hardening)
+    ssl: "off"  # Enable in production with certs
 
 # ===============================
 # Valkey Cache Configuration (Redis-compatible, Standard Profile Only)

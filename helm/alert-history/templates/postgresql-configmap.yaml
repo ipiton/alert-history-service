@@ -9,51 +9,86 @@ metadata:
     app.kubernetes.io/component: database
 data:
   postgresql.conf: |
-    # PostgreSQL configuration
+    # =============================================================================
+    # PostgreSQL Production Configuration - HPA Cluster Mode (TN-97 + TN-98)
+    # =============================================================================
+    # Optimized for: Alert History Standard Profile with HPA (2-10 replicas)
+    # TN-97: Connection pool sizing for cluster mode
+    # TN-98: Production hardening and performance tuning
+    # =============================================================================
+
+    # -----------------------------------------------------------------------------
+    # Connection Settings (TN-97: CRITICAL for HPA cluster mode)
+    # -----------------------------------------------------------------------------
     listen_addresses = '*'
     port = 5432
-    max_connections = 100
-    shared_buffers = 256MB
-    effective_cache_size = 1GB
-    maintenance_work_mem = 64MB
-    checkpoint_completion_target = 0.9
-    wal_buffers = 16MB
+    max_connections = {{ .Values.postgresql.config.maxConnections | default 250 }}
+    # TN-97: Increased from 100 to 250 for HPA cluster mode
+    # Formula: (replicas × conns_per_pod) + reserved = (10 × 20) + 50 = 250
+    superuser_reserved_connections = {{ .Values.postgresql.config.superuserReservedConnections | default 10 }}
+
+    # -----------------------------------------------------------------------------
+    # Memory Settings (tuned for max_connections=250)
+    # -----------------------------------------------------------------------------
+    shared_buffers = {{ .Values.postgresql.config.sharedBuffers | default "256MB" }}
+    effective_cache_size = {{ .Values.postgresql.config.effectiveCacheSize | default "1GB" }}
+    work_mem = {{ .Values.postgresql.config.workMem | default "4MB" }}
+    maintenance_work_mem = {{ .Values.postgresql.config.maintenanceWorkMem | default "64MB" }}
+
+    # -----------------------------------------------------------------------------
+    # WAL (Write-Ahead Log) Settings
+    # -----------------------------------------------------------------------------
+    wal_buffers = {{ .Values.postgresql.config.walBuffers | default "16MB" }}
+    min_wal_size = {{ .Values.postgresql.config.minWalSize | default "1GB" }}
+    max_wal_size = {{ .Values.postgresql.config.maxWalSize | default "4GB" }}
+    checkpoint_completion_target = {{ .Values.postgresql.config.checkpointCompletionTarget | default 0.9 }}
+
+    # -----------------------------------------------------------------------------
+    # Query Planning (SSD-optimized, TN-97)
+    # -----------------------------------------------------------------------------
+    random_page_cost = {{ .Values.postgresql.config.randomPageCost | default 1.1 }}
+    effective_io_concurrency = {{ .Values.postgresql.config.effectiveIoConcurrency | default 200 }}
     default_statistics_target = 100
-    random_page_cost = 1.1
-    effective_io_concurrency = 200
-    work_mem = 4MB
-    min_wal_size = 1GB
-    max_wal_size = 4GB
+
+    # -----------------------------------------------------------------------------
+    # Parallel Query Settings
+    # -----------------------------------------------------------------------------
     max_worker_processes = 8
     max_parallel_workers_per_gather = 4
     max_parallel_workers = 8
     max_parallel_maintenance_workers = 4
 
-    # Logging
+    # -----------------------------------------------------------------------------
+    # Logging (TN-98: Production monitoring)
+    # -----------------------------------------------------------------------------
     log_destination = 'stderr'
-    logging_collector = on
+    logging_collector = {{ .Values.postgresql.config.loggingCollector | default "on" }}
     log_directory = 'pg_log'
     log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
     log_rotation_age = 1d
     log_rotation_size = 100MB
-    log_min_duration_statement = 1000
+    log_min_duration_statement = {{ .Values.postgresql.config.logMinDurationStatement | default 1000 }}
     log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
     log_checkpoints = on
-    log_connections = on
-    log_disconnections = on
+    log_connections = {{ .Values.postgresql.config.logConnections | default "off" }}
+    log_disconnections = {{ .Values.postgresql.config.logDisconnections | default "off" }}
     log_lock_waits = on
     log_temp_files = 0
 
-    # Security
-    ssl = off
+    # -----------------------------------------------------------------------------
+    # Performance Monitoring (TN-97: pg_stat_statements)
+    # -----------------------------------------------------------------------------
+    shared_preload_libraries = '{{ .Values.postgresql.config.sharedPreloadLibraries | default "pg_stat_statements" }}'
+    track_activities = {{ .Values.postgresql.config.trackActivities | default "on" }}
+    track_counts = {{ .Values.postgresql.config.trackCounts | default "on" }}
+    track_io_timing = {{ .Values.postgresql.config.trackIoTiming | default "on" }}
 
-    # Memory settings
-    shared_preload_libraries = ''
-
-    # Autovacuum
-    autovacuum = on
-    autovacuum_max_workers = 3
-    autovacuum_naptime = 1min
+    # -----------------------------------------------------------------------------
+    # Autovacuum (TN-97: tuned for high-write workloads)
+    # -----------------------------------------------------------------------------
+    autovacuum = {{ .Values.postgresql.config.autovacuum | default "on" }}
+    autovacuum_max_workers = {{ .Values.postgresql.config.autovacuumMaxWorkers | default 3 }}
+    autovacuum_naptime = {{ .Values.postgresql.config.autovacuumNaptime | default "1min" }}
     autovacuum_vacuum_threshold = 50
     autovacuum_analyze_threshold = 50
     autovacuum_vacuum_scale_factor = 0.2
@@ -62,4 +97,14 @@ data:
     autovacuum_multixact_freeze_max_age = 400000000
     autovacuum_vacuum_cost_delay = 20ms
     autovacuum_vacuum_cost_limit = 200
+
+    # -----------------------------------------------------------------------------
+    # Security (TN-98: Production hardening)
+    # -----------------------------------------------------------------------------
+    ssl = {{ .Values.postgresql.config.ssl | default "off" }}
+    # Set to 'on' in production with proper cert management
+
+    # =============================================================================
+    # End of PostgreSQL Configuration
+    # =============================================================================
 {{- end }}
