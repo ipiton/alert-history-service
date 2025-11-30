@@ -107,4 +107,152 @@ data:
     # =============================================================================
     # End of PostgreSQL Configuration
     # =============================================================================
+
+  # =============================================================================
+  # pg_hba.conf - Host-Based Authentication Configuration (TN-98: Security)
+  # =============================================================================
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    # =============================================================================
+    # "local" is for Unix domain socket connections only
+    local   all             all                                     trust
+    # IPv4 local connections:
+    host    all             all             127.0.0.1/32            trust
+    # IPv6 local connections:
+    host    all             all             ::1/128                 trust
+    # =============================================================================
+    # Allow connections from Kubernetes pods (Standard Profile)
+    # TN-98: Restricted to cluster CIDR for security
+    # =============================================================================
+    # Alert History application pods (Standard Profile)
+    host    {{ .Values.postgresql.database }}  {{ .Values.postgresql.username }}  10.0.0.0/8       md5
+    host    {{ .Values.postgresql.database }}  {{ .Values.postgresql.username }}  172.16.0.0/12    md5
+    host    {{ .Values.postgresql.database }}  {{ .Values.postgresql.username }}  192.168.0.0/16   md5
+    # =============================================================================
+    # Postgres Exporter sidecar (localhost only)
+    # =============================================================================
+    host    all             {{ .Values.postgresql.username }}  127.0.0.1/32            md5
+    # =============================================================================
+    # Replication connections (for future HA setup)
+    # =============================================================================
+    host    replication     all             10.0.0.0/8              md5
+    host    replication     all             172.16.0.0/12           md5
+    host    replication     all             192.168.0.0/16          md5
+    # =============================================================================
+    # Reject all other connections
+    # =============================================================================
+    host    all             all             all                     reject
+
+  # =============================================================================
+  # init.sql - Database Initialization Script (TN-98: Production setup)
+  # =============================================================================
+  init.sql: |
+    -- =========================================================================
+    -- PostgreSQL Initialization Script for Alert History Service
+    -- TN-98: Production-Ready Setup for 150% Quality
+    -- =========================================================================
+
+    -- -------------------------------------------------------------------------
+    -- 1. CREATE EXTENSIONS (Critical for monitoring and performance)
+    -- -------------------------------------------------------------------------
+    -- pg_stat_statements: Track query execution statistics (required for TN-97)
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+    -- pg_trgm: Trigram indexing for fast text search (future enhancement)
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+    -- btree_gin: GIN indexes on btree-indexable columns (future enhancement)
+    CREATE EXTENSION IF NOT EXISTS btree_gin;
+
+    -- -------------------------------------------------------------------------
+    -- 2. GRANT PERMISSIONS (Secure access for application user)
+    -- -------------------------------------------------------------------------
+    -- Grant usage on public schema
+    GRANT USAGE ON SCHEMA public TO {{ .Values.postgresql.username }};
+
+    -- Grant all privileges on database
+    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.postgresql.database }} TO {{ .Values.postgresql.username }};
+
+    -- Grant permissions on future tables
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {{ .Values.postgresql.username }};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {{ .Values.postgresql.username }};
+
+    -- -------------------------------------------------------------------------
+    -- 3. CREATE PERFORMANCE INDEXES (TN-98: Query optimization)
+    -- -------------------------------------------------------------------------
+    -- Note: These will be created AFTER tables are created by migrations
+    -- This is a template for reference
+
+    -- Index on alerts.fingerprint for fast deduplication lookups
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_fingerprint ON alerts(fingerprint);
+
+    -- Index on alerts.status for filtering active/resolved alerts
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_status ON alerts(status);
+
+    -- Index on alerts.created_at for time-based queries
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
+
+    -- Composite index for common query patterns
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_status_created ON alerts(status, created_at DESC);
+
+    -- GIN index on labels JSONB column for fast label matching
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_labels_gin ON alerts USING gin(labels jsonb_path_ops);
+
+    -- -------------------------------------------------------------------------
+    -- 4. CONFIGURE pg_stat_statements (TN-97: Query monitoring)
+    -- -------------------------------------------------------------------------
+    -- Set pg_stat_statements parameters (if not in postgresql.conf)
+    ALTER SYSTEM SET pg_stat_statements.max = 10000;
+    ALTER SYSTEM SET pg_stat_statements.track = 'all';
+    ALTER SYSTEM SET pg_stat_statements.track_utility = 'on';
+
+    -- -------------------------------------------------------------------------
+    -- 5. CREATE MONITORING VIEWS (TN-98: Observability)
+    -- -------------------------------------------------------------------------
+    -- View for database size monitoring
+    CREATE OR REPLACE VIEW v_database_size AS
+    SELECT
+      datname AS database,
+      pg_size_pretty(pg_database_size(datname)) AS size_pretty,
+      pg_database_size(datname) AS size_bytes
+    FROM pg_database
+    WHERE datname = '{{ .Values.postgresql.database }}';
+
+    -- View for table sizes
+    CREATE OR REPLACE VIEW v_table_sizes AS
+    SELECT
+      schemaname AS schema,
+      tablename AS table,
+      pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS total_size,
+      pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS table_size,
+      pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename) - pg_relation_size(schemaname||'.'||tablename)) AS indexes_size,
+      pg_total_relation_size(schemaname||'.'||tablename) AS total_size_bytes
+    FROM pg_tables
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+    ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+    -- View for index usage statistics
+    CREATE OR REPLACE VIEW v_index_usage AS
+    SELECT
+      schemaname AS schema,
+      tablename AS table,
+      indexname AS index,
+      idx_scan AS scans,
+      idx_tup_read AS tuples_read,
+      idx_tup_fetch AS tuples_fetched,
+      pg_size_pretty(pg_relation_size(indexrelid)) AS size
+    FROM pg_stat_user_indexes
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+    ORDER BY idx_scan;
+
+    -- -------------------------------------------------------------------------
+    -- 6. VACUUM ANALYZE (Initial statistics)
+    -- -------------------------------------------------------------------------
+    -- Run VACUUM ANALYZE on initial setup (after tables are created)
+    -- VACUUM ANALYZE;
+
+    -- =========================================================================
+    -- End of Initialization Script
+    -- =========================================================================
+
 {{- end }}

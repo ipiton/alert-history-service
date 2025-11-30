@@ -234,6 +234,20 @@ postgresql:
     enabled: true
     minAvailable: 1  # Keep at least 1 pod available during voluntary disruptions
 
+  # PostgreSQL Exporter (TN-98: 150% quality - 50+ metrics)
+  exporter:
+    enabled: true  # Enable postgres-exporter sidecar
+    image: quay.io/prometheuscommunity/postgres-exporter
+    tag: "v0.15.0"  # Latest stable as of 2024
+    pullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
   # PostgreSQL Configuration (TN-97 + TN-98: optimized for HPA cluster mode)
   # CRITICAL: These settings prevent connection pool exhaustion at scale
   # Connection calculation: 10 replicas × 20 conns/pod + 50 reserved = 250 max_connections
