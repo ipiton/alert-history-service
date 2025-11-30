@@ -248,6 +248,23 @@ postgresql:
         cpu: 50m
         memory: 64Mi
 
+  # PostgreSQL Backup & Disaster Recovery (TN-98: PITR capability)
+  backup:
+    enabled: true  # Enable WAL archiving + base backups
+    schedule: "0 2 * * *"  # Daily at 2 AM UTC
+    retention: 30  # Keep base backups for 30 days
+    walRetention: 7  # Keep WAL archives for 7 days (sufficient for PITR)
+    storage:
+      size: 50Gi  # Backup storage size (adjust based on database size)
+      storageClass: ""  # Use default StorageClass
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
   # PostgreSQL Configuration (TN-97 + TN-98: optimized for HPA cluster mode)
   # CRITICAL: These settings prevent connection pool exhaustion at scale
   # Connection calculation: 10 replicas × 20 conns/pod + 50 reserved = 250 max_connections

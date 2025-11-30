@@ -101,6 +101,10 @@ spec:
           subPath: init.sql
           readOnly: true
         {{- end }}
+        {{- if .Values.postgresql.backup.enabled }}
+        - name: backup
+          mountPath: /backup
+        {{- end }}
         resources:
           {{- toYaml .Values.postgresql.resources | nindent 10 }}
         startupProbe:
@@ -231,6 +235,11 @@ spec:
         configMap:
           name: {{ include "alert-history.postgresql.fullname" . }}-exporter-config
           optional: false
+      {{- end }}
+      {{- if .Values.postgresql.backup.enabled }}
+      - name: backup
+        persistentVolumeClaim:
+          claimName: {{ include "alert-history.postgresql.fullname" . }}-backup
       {{- end }}
   volumeClaimTemplates:
   - metadata:
