@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+//go:build integration || e2e
+// +build integration e2e
 
 package integration
 
@@ -96,6 +96,73 @@ func (h *APITestHelper) MakeRequestWithHeaders(method, path string, body interfa
 	return h.HTTPClient.Do(req)
 }
 
+// GetAlertByFingerprint retrieves alert from database by fingerprint
+func (h *APITestHelper) GetAlertByFingerprint(ctx context.Context, fingerprint string) (*Alert, error) {
+	query := `
+		SELECT a.fingerprint, a.alert_name, a.status, a.namespace,
+		       a.labels, a.annotations, a.starts_at, a.ends_at, a.created_at,
+		       jsonb_build_object(
+		           'severity', ac.severity,
+		           'confidence', ac.confidence,
+		           'reasoning', ac.reasoning,
+		           'recommendations', ac.recommendations
+		       ) as classification
+		FROM alerts a
+		LEFT JOIN alert_classifications ac ON a.fingerprint = ac.alert_fingerprint
+		WHERE a.fingerprint = $1
+		ORDER BY ac.created_at DESC
+		LIMIT 1
+	`
+
+	var alert Alert
+	var labelsJSON, annotationsJSON []byte
+	var classificationJSON []byte
+	var endsAt *time.Time
+
+	err := h.DB.QueryRowContext(ctx, query, fingerprint).Scan(
+		&alert.Fingerprint,
+		&alert.AlertName,
+		&alert.Status,
+		&alert.Namespace,
+		&labelsJSON,
+		&annotationsJSON,
+		&alert.StartsAt,
+		&endsAt,
+		&alert.CreatedAt,
+		&classificationJSON,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse JSON fields
+	if err := json.Unmarshal(labelsJSON, &alert.Labels); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(annotationsJSON, &alert.Annotations); err != nil {
+		return nil, err
+	}
+
+	// Set classification as JSON string (if exists)
+	if len(classificationJSON) > 0 && string(classificationJSON) != "null" {
+		alert.Classification = string(classificationJSON)
+	}
+
+	// Set severity from classification or default
+	if alert.Classification != "" {
+		var classData map[string]interface{}
+		if err := json.Unmarshal(classificationJSON, &classData); err == nil {
+			if sev, ok := classData["severity"].(string); ok {
+				alert.Severity = sev
+			}
+		}
+	}
+
+	alert.EndsAt = endsAt
+	return &alert, nil
+}
+
 // AssertResponse validates HTTP response status code
 func (h *APITestHelper) AssertResponse(t *testing.T, resp *http.Response, expectedStatus int) {
 	t.Helper()
@@ -121,6 +188,110 @@ func (h *APITestHelper) GetResponseBody(resp *http.Response) (string, error) {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 	return string(bodyBytes), nil
+}
+
+// ReadBody reads response body as byte array (alias for E2E compatibility)
+func (h *APITestHelper) ReadBody(resp *http.Response) ([]byte, error) {
+	return io.ReadAll(resp.Body)
+}
+
+// QueryAlerts queries alerts from database with optional filters
+func (h *APITestHelper) QueryAlerts(ctx context.Context, filters map[string]string) ([]*Alert, error) {
+	query := `SELECT fingerprint, alert_name, status, namespace, labels, annotations, starts_at, ends_at, created_at FROM alerts WHERE 1=1`
+	args := []interface{}{}
+	argIdx := 1
+
+	// Build dynamic WHERE clause
+	if status, ok := filters["status"]; ok && status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+	if namespace, ok := filters["namespace"]; ok && namespace != "" {
+		query += fmt.Sprintf(" AND namespace = $%d", argIdx)
+		args = append(args, namespace)
+		argIdx++
+	}
+	if alertName, ok := filters["alert_name"]; ok && alertName != "" {
+		query += fmt.Sprintf(" AND alert_name = $%d", argIdx)
+		args = append(args, alertName)
+		argIdx++
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := h.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query alerts: %w", err)
+	}
+	defer rows.Close()
+
+	var alerts []*Alert
+	for rows.Next() {
+		var alert Alert
+		var labelsJSON, annotationsJSON []byte
+		var endsAt *time.Time
+
+		err := rows.Scan(
+			&alert.Fingerprint,
+			&alert.AlertName,
+			&alert.Status,
+			&alert.Namespace,
+			&labelsJSON,
+			&annotationsJSON,
+			&alert.StartsAt,
+			&endsAt,
+			&alert.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan alert: %w", err)
+		}
+
+		if err := json.Unmarshal(labelsJSON, &alert.Labels); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal labels: %w", err)
+		}
+		if err := json.Unmarshal(annotationsJSON, &alert.Annotations); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+		}
+
+		alert.EndsAt = endsAt
+		alerts = append(alerts, &alert)
+	}
+
+	return alerts, nil
+}
+
+// CountAlerts counts alerts in database with optional filters
+func (h *APITestHelper) CountAlerts(ctx context.Context, filters map[string]string) (int, error) {
+	query := `SELECT COUNT(*) FROM alerts WHERE 1=1`
+	args := []interface{}{}
+	argIdx := 1
+
+	// Build dynamic WHERE clause
+	if status, ok := filters["status"]; ok && status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+	if namespace, ok := filters["namespace"]; ok && namespace != "" {
+		query += fmt.Sprintf(" AND namespace = $%d", argIdx)
+		args = append(args, namespace)
+		argIdx++
+	}
+
+	var count int
+	err := h.DB.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
+// FlushCache flushes all caches (L1 memory + L2 Redis)
+func (h *APITestHelper) FlushCache(ctx context.Context) error {
+	// Flush Redis (L2 cache)
+	if err := h.Redis.FlushAll(ctx).Err(); err != nil {
+		return fmt.Errorf("failed to flush Redis: %w", err)
+	}
+	// L1 cache will be cleared implicitly when service restarts or via FlushL1Cache()
+	return nil
 }
 
 // WaitForCondition waits until condition is true or timeout
@@ -237,6 +408,14 @@ func (h *APITestHelper) RedisKeyExists(ctx context.Context, key string) (bool, e
 	return count > 0, err
 }
 
+// FlushL1Cache flushes L1 (memory) cache via API endpoint (if available)
+func (h *APITestHelper) FlushL1Cache() error {
+	// This would require an admin endpoint like POST /admin/cache/flush
+	// For now, we return an error indicating this feature is not implemented
+	// E2E tests will skip L2 cache tests if this returns an error
+	return fmt.Errorf("L1 cache flush not implemented - requires admin endpoint")
+}
+
 // --- Data Seeding Helpers ---
 
 // SeedTestData inserts test alerts into database
@@ -297,16 +476,17 @@ func (h *APITestHelper) SeedCache(ctx context.Context, key string, value interfa
 
 // Alert represents alert in database
 type Alert struct {
-	Fingerprint string            `json:"fingerprint"`
-	AlertName   string            `json:"alert_name"`
-	Status      string            `json:"status"`
-	Severity    string            `json:"severity"`
-	Namespace   string            `json:"namespace"`
-	Labels      map[string]string `json:"labels"`
-	Annotations map[string]string `json:"annotations"`
-	StartsAt    time.Time         `json:"starts_at"`
-	EndsAt      *time.Time        `json:"ends_at,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
+	Fingerprint    string            `json:"fingerprint"`
+	AlertName      string            `json:"alert_name"`
+	Status         string            `json:"status"`
+	Severity       string            `json:"severity"`
+	Namespace      string            `json:"namespace"`
+	Labels         map[string]string `json:"labels"`
+	Annotations    map[string]string `json:"annotations"`
+	StartsAt       time.Time         `json:"starts_at"`
+	EndsAt         *time.Time        `json:"ends_at,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
+	Classification string            `json:"classification,omitempty"` // JSON string from alert_classifications table
 }
 
 // Silence represents silence in database

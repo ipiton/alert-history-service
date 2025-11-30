@@ -1,5 +1,5 @@
-//go:build integration
-// +build integration
+//go:build integration || e2e
+// +build integration e2e
 
 package integration
 
@@ -201,6 +201,11 @@ func NewAlertmanagerWebhook() *AlertmanagerWebhook {
 	return &AlertmanagerWebhook{
 		Alerts: make([]AlertmanagerAlert, 0),
 	}
+}
+
+// NewAlertmanagerWebhook method on Fixtures for backward compatibility
+func (f *Fixtures) NewAlertmanagerWebhook() *AlertmanagerWebhook {
+	return NewAlertmanagerWebhook()
 }
 
 // AddAlert adds alert to webhook

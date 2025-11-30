@@ -1,10 +1,11 @@
-//go:build integration
-// +build integration
+//go:build integration || e2e
+// +build integration e2e
 
 package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -23,10 +24,10 @@ type MockLLMServer struct {
 
 // ClassificationRequest represents LLM classification request
 type ClassificationRequest struct {
-	AlertName  string                 `json:"alert_name"`
-	Labels     map[string]string      `json:"labels"`
-	Annotations map[string]string     `json:"annotations"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	AlertName   string                 `json:"alert_name"`
+	Labels      map[string]string      `json:"labels"`
+	Annotations map[string]string      `json:"annotations"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ClassificationResponse represents LLM classification response
@@ -44,6 +45,14 @@ type ClassificationResponse struct {
 type ErrorResponse struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
+}
+
+// MockLLMResponse represents a mock response configuration for E2E tests
+type MockLLMResponse struct {
+	StatusCode int                    `json:"status_code"`
+	Body       map[string]interface{} `json:"body"`
+	Latency    time.Duration          `json:"latency"`
+	ErrorRate  float64                `json:"error_rate"` // 0.0 = never fail, 1.0 = always fail
 }
 
 // NewMockLLMServer creates mock LLM server
@@ -207,53 +216,126 @@ func (m *MockLLMServer) WaitForRequests(expected int, timeout time.Duration) boo
 
 // SetDefaultResponses configures common test responses
 func (m *MockLLMServer) SetDefaultResponses() {
-	m.SetResponse("HighMemoryUsage", &ClassificationResponse{
-		Severity:     "critical",
-		Category:     "resource",
-		Confidence:   0.95,
-		Reasoning:    "Memory usage exceeds 95% threshold, immediate action required",
-		ActionItems:  []string{"Scale up pods", "Check for memory leaks", "Review memory limits"},
-		Model:        "mock-llm-v1",
-		ProcessingMS: 45,
-	})
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	m.SetResponse("HighCPUUsage", &ClassificationResponse{
+	// Common test responses
+	m.responses["HighMemoryUsage"] = &ClassificationResponse{
+		Severity:   "critical",
+		Category:   "resource",
+		Confidence: 0.95,
+		Reasoning:  "Memory usage critically high",
+	}
+	m.responses["DiskSpaceWarning"] = &ClassificationResponse{
+		Severity:   "warning",
+		Category:   "resource",
+		Confidence: 0.90,
+		Reasoning:  "Disk space running low",
+	}
+}
+
+// AddResponse configures a mock response for specific path (E2E compatibility)
+func (m *MockLLMServer) AddResponse(path string, response MockLLMResponse) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Set error if ErrorRate is 1.0
+	if response.ErrorRate >= 1.0 {
+		m.errorResp = &ErrorResponse{
+			StatusCode: response.StatusCode,
+			Message:    fmt.Sprintf("%v", response.Body),
+		}
+		return
+	}
+
+	// Set latency if provided
+	if response.Latency > 0 {
+		m.latency = response.Latency
+	}
+
+	// Convert body map to ClassificationResponse
+	resp := &ClassificationResponse{
 		Severity:     "warning",
-		Category:     "resource",
-		Confidence:   0.88,
-		Reasoning:    "CPU usage is elevated but within acceptable range",
-		ActionItems:  []string{"Monitor trends", "Review application efficiency"},
-		Model:        "mock-llm-v1",
-		ProcessingMS: 42,
-	})
-
-	m.SetResponse("DiskSpaceLow", &ClassificationResponse{
-		Severity:     "critical",
-		Category:     "storage",
-		Confidence:   0.92,
-		Reasoning:    "Disk space below 10%, risk of service disruption",
-		ActionItems:  []string{"Clean up old logs", "Expand disk", "Enable log rotation"},
-		Model:        "mock-llm-v1",
-		ProcessingMS: 48,
-	})
-
-	m.SetResponse("ServiceDown", &ClassificationResponse{
-		Severity:     "critical",
-		Category:     "availability",
-		Confidence:   0.98,
-		Reasoning:    "Service is unreachable, impacting users",
-		ActionItems:  []string{"Check service health", "Review logs", "Initiate incident"},
-		Model:        "mock-llm-v1",
-		ProcessingMS: 38,
-	})
-
-	m.SetResponse("HighErrorRate", &ClassificationResponse{
-		Severity:     "warning",
-		Category:     "reliability",
+		Category:     "infrastructure",
 		Confidence:   0.85,
-		Reasoning:    "Error rate increased but below critical threshold",
-		ActionItems:  []string{"Review recent deployments", "Check error logs", "Monitor trends"},
+		Reasoning:    "Mock classification",
+		ActionItems:  []string{"Check logs"},
 		Model:        "mock-llm-v1",
 		ProcessingMS: 50,
-	})
+	}
+
+	// Override defaults with provided body values
+	if sev, ok := response.Body["severity"].(string); ok {
+		resp.Severity = sev
+	}
+	if cat, ok := response.Body["category"].(string); ok {
+		resp.Category = cat
+	}
+	if conf, ok := response.Body["confidence"].(float64); ok {
+		resp.Confidence = conf
+	}
+	if reason, ok := response.Body["reasoning"].(string); ok {
+		resp.Reasoning = reason
+	}
+	if recs, ok := response.Body["recommendations"].([]string); ok {
+		resp.ActionItems = recs
+	}
+
+	// Store response for all alerts (path is ignored, we match by alert name)
+	m.responses[""] = resp
+}
+
+// SetDefaultResponse configures default mock response for all alerts (E2E compatibility)
+func (m *MockLLMServer) SetDefaultResponse(response MockLLMResponse) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Set error if ErrorRate is 1.0
+	if response.ErrorRate >= 1.0 {
+		m.errorResp = &ErrorResponse{
+			StatusCode: response.StatusCode,
+			Message:    fmt.Sprintf("%v", response.Body),
+		}
+		return
+	}
+
+	// Set latency if provided
+	if response.Latency > 0 {
+		m.latency = response.Latency
+	}
+
+	// Convert body map to ClassificationResponse
+	resp := &ClassificationResponse{
+		Severity:     "warning",
+		Category:     "infrastructure",
+		Confidence:   0.85,
+		Reasoning:    "Default mock classification",
+		ActionItems:  []string{"Check logs", "Review metrics"},
+		Model:        "mock-llm-v1",
+		ProcessingMS: 50,
+	}
+
+	// Override defaults with provided body values
+	if sev, ok := response.Body["severity"].(string); ok {
+		resp.Severity = sev
+	}
+	if cat, ok := response.Body["category"].(string); ok {
+		resp.Category = cat
+	}
+	if conf, ok := response.Body["confidence"].(float64); ok {
+		resp.Confidence = conf
+	}
+	if reason, ok := response.Body["reasoning"].(string); ok {
+		resp.Reasoning = reason
+	}
+
+	// Set as default response (empty alert name)
+	m.responses[""] = resp
+}
+
+// ClearRequests clears all recorded requests (for backward compatibility with E2E tests)
+func (m *MockLLMServer) ClearRequests() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.requests = make([]*ClassificationRequest, 0)
 }
