@@ -1,4 +1,4 @@
-{{- if and (eq .Values.profile "standard") .Values.postgresql.enabled }}
+{{- if .Values.postgresql.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,131 +7,101 @@ metadata:
   labels:
     {{- include "alert-history.labels" . | nindent 4 }}
     app.kubernetes.io/component: database
-  annotations:
-    description: "PostgreSQL configuration optimized for HPA cluster mode (2-10 replicas)"
-    managed-by: Helm
-    helm.sh/resource-policy: keep
 data:
   postgresql.conf: |
     # =============================================================================
-    # PostgreSQL Configuration for Alert History - HPA Cluster Mode
+    # PostgreSQL Production Configuration - HPA Cluster Mode (TN-97 + TN-98)
     # =============================================================================
-    # Optimized for: 2-10 application replicas with HPA autoscaling
-    # Connection calculation: 10 replicas × 20 conns/pod = 200 connections
-    # Reserved: 50 connections (monitoring, admin, other services)
-    # Total: 250 max_connections
+    # Optimized for: Alert History Standard Profile with HPA (2-10 replicas)
+    # TN-97: Connection pool sizing for cluster mode
+    # TN-98: Production hardening and performance tuning
     # =============================================================================
 
     # -----------------------------------------------------------------------------
-    # Connection Settings
+    # Connection Settings (TN-97: CRITICAL for HPA cluster mode)
     # -----------------------------------------------------------------------------
+    listen_addresses = '*'
+    port = 5432
     max_connections = {{ .Values.postgresql.config.maxConnections | default 250 }}
-    # Default: 100 (too low for cluster mode)
-    # Recommended: 250 for 10 replicas × 20 conns + 50 reserved
-    # Formula: (replicas × conns_per_pod) + reserved_connections
-    # At 10 replicas: 10 × 20 + 50 = 250
-
+    # TN-97: Increased from 100 to 250 for HPA cluster mode
+    # Formula: (replicas × conns_per_pod) + reserved = (10 × 20) + 50 = 250
     superuser_reserved_connections = {{ .Values.postgresql.config.superuserReservedConnections | default 10 }}
-    # Reserved for superuser maintenance tasks
 
     # -----------------------------------------------------------------------------
-    # Memory Settings (tuned for max_connections = 250)
+    # Memory Settings (tuned for max_connections=250)
     # -----------------------------------------------------------------------------
     shared_buffers = {{ .Values.postgresql.config.sharedBuffers | default "256MB" }}
-    # Rule: ~25% of available memory or 256MB per 100 connections
-    # For max_connections=250: 256MB is optimal
-    # Higher values may cause memory pressure on small instances
-
     effective_cache_size = {{ .Values.postgresql.config.effectiveCacheSize | default "1GB" }}
-    # Rule: ~50-75% of total system memory
-    # Helps query planner make better decisions
-
     work_mem = {{ .Values.postgresql.config.workMem | default "4MB" }}
-    # Per-operation memory (sort, hash)
-    # Rule: (Total RAM - shared_buffers) / (max_connections × 3)
-    # For 2GB RAM, 250 conns: (2GB - 256MB) / (250 × 3) ≈ 2-4MB
-
     maintenance_work_mem = {{ .Values.postgresql.config.maintenanceWorkMem | default "64MB" }}
-    # For VACUUM, CREATE INDEX, etc.
-    # Rule: Total RAM / 16, max 2GB
 
     # -----------------------------------------------------------------------------
-    # Write-Ahead Log (WAL) Settings
+    # WAL (Write-Ahead Log) Settings
     # -----------------------------------------------------------------------------
     wal_buffers = {{ .Values.postgresql.config.walBuffers | default "16MB" }}
-    # Default: -1 (auto, 1/32 of shared_buffers)
-    # Explicit 16MB for better write performance
-
-    max_wal_size = {{ .Values.postgresql.config.maxWalSize | default "1GB" }}
-    min_wal_size = {{ .Values.postgresql.config.minWalSize | default "80MB" }}
-    # Controls checkpoint frequency
-    # Larger = less frequent checkpoints = better performance
-
+    min_wal_size = {{ .Values.postgresql.config.minWalSize | default "1GB" }}
+    max_wal_size = {{ .Values.postgresql.config.maxWalSize | default "4GB" }}
     checkpoint_completion_target = {{ .Values.postgresql.config.checkpointCompletionTarget | default 0.9 }}
-    # Spread checkpoint I/O over 90% of checkpoint interval
 
     # -----------------------------------------------------------------------------
-    # Query Planning
+    # Query Planning (SSD-optimized, TN-97)
     # -----------------------------------------------------------------------------
     random_page_cost = {{ .Values.postgresql.config.randomPageCost | default 1.1 }}
-    # Default: 4.0 (for HDD)
-    # SSD-optimized: 1.1 (encourages index usage)
-
     effective_io_concurrency = {{ .Values.postgresql.config.effectiveIoConcurrency | default 200 }}
-    # Default: 1 (for HDD)
-    # SSD-optimized: 200 (parallel I/O operations)
+    default_statistics_target = 100
 
     # -----------------------------------------------------------------------------
-    # Connection Pooling (Application-Side: pgx)
+    # Parallel Query Settings
     # -----------------------------------------------------------------------------
-    # Note: These settings are complementary to application connection pool
-    # Application (pgx) configuration:
-    #   MaxConns: 20 per pod (configurable via DB_MAX_CONNS)
-    #   MinConns: 2 per pod (configurable via DB_MIN_CONNS)
-    #   MaxConnLifetime: 1h
-    #   MaxConnIdleTime: 5min
-    #
-    # At 10 replicas: 10 × 20 = 200 active connections (80% of max_connections)
+    max_worker_processes = 8
+    max_parallel_workers_per_gather = 4
+    max_parallel_workers = 8
+    max_parallel_maintenance_workers = 4
 
     # -----------------------------------------------------------------------------
-    # Performance Monitoring
+    # Logging (TN-98: Production monitoring)
+    # -----------------------------------------------------------------------------
+    log_destination = 'stderr'
+    logging_collector = {{ .Values.postgresql.config.loggingCollector | default "on" }}
+    log_directory = 'pg_log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_min_duration_statement = {{ .Values.postgresql.config.logMinDurationStatement | default 1000 }}
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = {{ .Values.postgresql.config.logConnections | default "off" }}
+    log_disconnections = {{ .Values.postgresql.config.logDisconnections | default "off" }}
+    log_lock_waits = on
+    log_temp_files = 0
+
+    # -----------------------------------------------------------------------------
+    # Performance Monitoring (TN-97: pg_stat_statements)
     # -----------------------------------------------------------------------------
     shared_preload_libraries = '{{ .Values.postgresql.config.sharedPreloadLibraries | default "pg_stat_statements" }}'
-    # Enable query statistics tracking
-
     track_activities = {{ .Values.postgresql.config.trackActivities | default "on" }}
     track_counts = {{ .Values.postgresql.config.trackCounts | default "on" }}
     track_io_timing = {{ .Values.postgresql.config.trackIoTiming | default "on" }}
-    # Enable performance metrics collection
 
     # -----------------------------------------------------------------------------
-    # Logging (for debugging connection issues)
-    # -----------------------------------------------------------------------------
-    log_connections = {{ .Values.postgresql.config.logConnections | default "off" }}
-    # Enable to debug connection pool issues (disable in production for performance)
-
-    log_disconnections = {{ .Values.postgresql.config.logDisconnections | default "off" }}
-    # Enable to track connection lifecycle
-
-    log_line_prefix = '{{ .Values.postgresql.config.logLinePrefix | default "%m [%p] %u@%d " }}'
-    # Log format: timestamp [pid] user@database
-
-    log_min_duration_statement = {{ .Values.postgresql.config.logMinDurationStatement | default 1000 }}
-    # Log queries slower than 1000ms (1 second)
-
-    # -----------------------------------------------------------------------------
-    # Autovacuum (critical for high-write workloads)
+    # Autovacuum (TN-97: tuned for high-write workloads)
     # -----------------------------------------------------------------------------
     autovacuum = {{ .Values.postgresql.config.autovacuum | default "on" }}
     autovacuum_max_workers = {{ .Values.postgresql.config.autovacuumMaxWorkers | default 3 }}
     autovacuum_naptime = {{ .Values.postgresql.config.autovacuumNaptime | default "1min" }}
-    # More frequent autovacuum for high-write alert ingestion
+    autovacuum_vacuum_threshold = 50
+    autovacuum_analyze_threshold = 50
+    autovacuum_vacuum_scale_factor = 0.2
+    autovacuum_analyze_scale_factor = 0.1
+    autovacuum_freeze_max_age = 200000000
+    autovacuum_multixact_freeze_max_age = 400000000
+    autovacuum_vacuum_cost_delay = 20ms
+    autovacuum_vacuum_cost_limit = 200
 
     # -----------------------------------------------------------------------------
-    # Security
+    # Security (TN-98: Production hardening)
     # -----------------------------------------------------------------------------
     ssl = {{ .Values.postgresql.config.ssl | default "off" }}
-    # Enable SSL/TLS (requires certificates)
     # Set to 'on' in production with proper cert management
 
     # =============================================================================
