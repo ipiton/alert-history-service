@@ -87,17 +87,17 @@ func SecurityHeaders(config SecurityHeadersConfig) func(http.Handler) http.Handl
 				w.Header().Set("Referrer-Policy", config.ReferrerPolicy)
 			}
 
-			// Permissions Policy (formerly Feature-Policy)
-			// Protects against: Unauthorized access to browser features
-			if config.PermissionsPolicy != "" {
-				w.Header().Set("Permissions-Policy", config.PermissionsPolicy)
-			}
+		// Permissions Policy (formerly Feature-Policy)
+		// Protects against: Unauthorized access to browser features
+		if config.PermissionsPolicy != "" {
+			w.Header().Set("Permissions-Policy", config.PermissionsPolicy)
+		}
 
-			// Remove potentially sensitive server information
-			w.Header().Del("Server")
-			w.Header().Del("X-Powered-By")
+		next.ServeHTTP(w, r)
 
-			next.ServeHTTP(w, r)
+		// Remove potentially sensitive server information (after handler runs)
+		w.Header().Del("Server")
+		w.Header().Del("X-Powered-By")
 		})
 	}
 }
