@@ -251,13 +251,22 @@ cache:
       memory: 256Mi
 
 # ===============================
-# Valkey Subchart Configuration (TN-99: Production-Ready)
+# Valkey/Redis StatefulSet Configuration (TN-99: Production-Ready)
 # ===============================
 # Valkey is a Redis-compatible cache used by Standard Profile only
 # Connection pool: 50 conns/pod × 10 replicas = 500 connections
 # Valkey maxclients: 10,000 (default) → 5% utilization at max scale ✅
 valkey:
   enabled: true  # Managed by profile in deployment
+
+  # Deployment configuration
+  replicas: 1  # Expandable to 3 for Sentinel HA in future
+
+  # Container image (Redis or Valkey)
+  image:
+    repository: redis  # Options: "redis" or "valkey/valkey"
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
 
   # Resource limits (TN-99: production-sized)
   resources:
@@ -273,12 +282,41 @@ valkey:
     className: ""
     requestedSize: 5Gi
 
-  # Valkey settings (production-tuned for Standard Profile + HPA)
+  # Redis/Valkey settings (production-tuned for Standard Profile + HPA)
   settings:
-    maxmemory: 384mb  # 75% of 512Mi limit
-    maxmemoryPolicy: allkeys-lru  # Evict least recently used
-    appendonly: "yes"  # AOF persistence
-    appendfsync: everysec  # Balance performance/durability
+    maxmemory: 384mb  # 75% of 512Mi limit (leaves headroom for overhead)
+    maxmemoryPolicy: allkeys-lru  # Evict least recently used keys
+    appendonly: "yes"  # AOF persistence enabled (write-ahead log)
+    appendfsync: everysec  # Fsync every 1s (balance performance/durability, <1s data loss)
+    loglevel: notice  # Options: debug, verbose, notice, warning
+    slowlogThreshold: 10000  # Log queries >10ms (microseconds)
+
+  # redis-exporter Sidecar (Prometheus metrics)
+  exporter:
+    enabled: true
+    image: quay.io/oliver006/redis_exporter
+    tag: v1.55.0
+    pullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+  # Password authentication (Secret management)
+  password:
+    # Use existing Secret (recommended for production)
+    existingSecret: ""  # If empty, creates new Secret
+    secretKey: password
+    # Password value (only used if existingSecret is empty)
+    # In production: Set via Helm values or External Secrets Operator (TN-100)
+    value: ""  # If empty, generates random 32-char password
+
+  # NetworkPolicy (pod isolation)
+  networkPolicy:
+    enabled: false  # Enable in production for security hardening
 
 # ===============================
 # Alert Processing Configuration
