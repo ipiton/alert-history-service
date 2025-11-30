@@ -1,12 +1,9 @@
 package history
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/vitaliisemenov/alert-history/internal/core"
-	"github.com/vitaliisemenov/alert-history/pkg/history/cache"
 	"github.com/vitaliisemenov/alert-history/pkg/history/filters"
 )
 

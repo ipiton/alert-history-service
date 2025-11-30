@@ -148,6 +148,224 @@ func TestBuilder_MarkGINIndexUsage(t *testing.T) {
 	}
 }
 
+// TestBuilder_BuildCount tests BuildCount functionality
+func TestBuilder_BuildCount(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(*Builder)
+		wantSQL string
+	}{
+		{
+			name:    "simple count query",
+			setup:   func(qb *Builder) {},
+			wantSQL: "SELECT COUNT(*) FROM alerts",
+		},
+		{
+			name: "count with WHERE clause",
+			setup: func(qb *Builder) {
+				qb.AddWhere("status = ?", "firing")
+			},
+			wantSQL: "SELECT COUNT(*) FROM alerts WHERE status = $1",
+		},
+		{
+			name: "count with multiple WHERE",
+			setup: func(qb *Builder) {
+				qb.AddWhere("status = ?", "firing")
+				qb.AddWhere("severity = ?", "critical")
+			},
+			wantSQL: "SELECT COUNT(*) FROM alerts",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qb := NewBuilder()
+			tt.setup(qb)
+
+			sql, args := qb.BuildCount()
+
+			if sql == "" {
+				t.Error("BuildCount() returned empty SQL")
+			}
+
+			if !contains(sql, "COUNT(*)") {
+				t.Errorf("BuildCount() SQL = %v, want contains 'COUNT(*)'", sql)
+			}
+
+			// Verify args count
+			placeholderCount := countPlaceholders(sql)
+			if len(args) != placeholderCount {
+				t.Errorf("BuildCount() args count = %v, want %v", len(args), placeholderCount)
+			}
+		})
+	}
+}
+
+// TestBuilder_OptimizationHints tests OptimizationHints functionality
+func TestBuilder_OptimizationHints(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*Builder)
+		want  []string
+	}{
+		{
+			name:  "no hints - empty builder",
+			setup: func(qb *Builder) {},
+			want:  []string{},
+		},
+		{
+			name: "GIN index hint",
+			setup: func(qb *Builder) {
+				qb.MarkGINIndexUsage()
+			},
+			want: []string{"Use GIN index for JSONB queries"},
+		},
+		{
+			name: "partial index hint",
+			setup: func(qb *Builder) {
+				qb.MarkPartialIndexUsage()
+			},
+			want: []string{"Use partial index for status=firing"},
+		},
+		{
+			name: "multiple hints",
+			setup: func(qb *Builder) {
+				qb.MarkGINIndexUsage()
+				qb.MarkPartialIndexUsage()
+			},
+			want: []string{"Use GIN index for JSONB queries", "Use partial index for status=firing"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qb := NewBuilder()
+			tt.setup(qb)
+
+			hints := qb.OptimizationHints()
+
+			if len(hints) != len(tt.want) {
+				t.Errorf("OptimizationHints() len = %v, want %v", len(hints), len(tt.want))
+			}
+
+			// Verify hints contain expected values
+			for _, wantHint := range tt.want {
+				found := false
+				for _, gotHint := range hints {
+					if gotHint == wantHint {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("OptimizationHints() missing hint %v", wantHint)
+				}
+			}
+		})
+	}
+}
+
+// TestBuilder_MarkPartialIndexUsage tests MarkPartialIndexUsage functionality
+func TestBuilder_MarkPartialIndexUsage(t *testing.T) {
+	qb := NewBuilder()
+	qb.MarkPartialIndexUsage()
+
+	hints := qb.OptimizationHints()
+
+	// Verify partial index hint is present
+	found := false
+	for _, hint := range hints {
+		if contains(hint, "partial index") {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("MarkPartialIndexUsage() did not add partial index hint")
+	}
+}
+
+// TestBuilder_AddOrderBy_Extended tests AddOrderBy with various scenarios
+func TestBuilder_AddOrderBy_Extended(t *testing.T) {
+	tests := []struct {
+		name      string
+		field     string
+		direction core.SortOrder
+		wantErr   bool
+	}{
+		{
+			name:      "DESC order",
+			field:     "starts_at",
+			direction: core.SortOrderDesc,
+			wantErr:   false,
+		},
+		{
+			name:      "ASC order",
+			field:     "starts_at",
+			direction: core.SortOrderAsc,
+			wantErr:   false,
+		},
+		{
+			name:      "created_at field",
+			field:     "created_at",
+			direction: core.SortOrderDesc,
+			wantErr:   false,
+		},
+		{
+			name:      "status field",
+			field:     "status",
+			direction: core.SortOrderAsc,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qb := NewBuilder()
+			qb.AddOrderBy(tt.field, tt.direction)
+
+			sql, _ := qb.Build()
+
+			if !contains(sql, "ORDER BY") {
+				t.Error("AddOrderBy() did not add ORDER BY clause")
+			}
+
+			if !contains(sql, tt.field) {
+				t.Errorf("AddOrderBy() SQL missing field %v", tt.field)
+			}
+		})
+	}
+}
+
+// TestBuilder_MultipleCalls tests multiple method calls
+func TestBuilder_MultipleCalls(t *testing.T) {
+	qb := NewBuilder()
+	qb.AddWhere("status = ?", "firing")
+	qb.AddWhere("severity = ?", "critical")
+	qb.AddOrderBy("starts_at", core.SortOrderDesc)
+	qb.SetLimit(50)
+	qb.SetOffset(0)
+	qb.MarkGINIndexUsage()
+	qb.MarkPartialIndexUsage()
+
+	sql, args := qb.Build()
+
+	if sql == "" {
+		t.Error("Multiple calls Build() returned empty SQL")
+	}
+
+	// Args count depends on whether AddOrderBy uses placeholders
+	if len(args) < 2 {
+		t.Errorf("Multiple calls args = %v, want at least 2", len(args))
+	}
+
+	hints := qb.OptimizationHints()
+	if len(hints) != 2 {
+		t.Errorf("Multiple calls hints = %v, want 2", len(hints))
+	}
+}
+
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
